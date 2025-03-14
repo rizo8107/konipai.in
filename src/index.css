@@ -1,0 +1,107 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 20 10% 5%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 20 10% 5%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 20 10% 5%;
+
+    --primary: 180 69% 35%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 48 50% 96%;
+    --secondary-foreground: 20 10% 5%;
+
+    --muted: 48 30% 85%;
+    --muted-foreground: 20 10% 40%;
+
+    --accent: 164 27% 65%;
+    --accent-foreground: 20 10% 5%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 48 30% 80%;
+    --input: 48 30% 80%;
+    --ring: 20 10% 5%;
+
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 20 10% 5%;
+    --foreground: 48 43% 93%;
+
+    --card: 20 10% 5%;
+    --card-foreground: 48 43% 93%;
+
+    --popover: 20 10% 5%;
+    --popover-foreground: 48 43% 93%;
+
+    --primary: 180 69% 35%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 20 5% 15%;
+    --secondary-foreground: 48 43% 93%;
+
+    --muted: 20 5% 25%;
+    --muted-foreground: 48 30% 70%;
+
+    --accent: 164 27% 45%;
+    --accent-foreground: 48 43% 93%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 20 5% 25%;
+    --input: 20 5% 25%;
+    --ring: 48 43% 70%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+@layer components {
+  .konipai-container {
+    @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8;
+  }
+  
+  .konipai-btn {
+    @apply inline-flex items-center justify-center px-6 py-2.5 bg-white text-konipai-black hover:bg-konipai-black hover:text-white transition-colors duration-200 gap-2;
+  }
+  
+  .konipai-btn-outline {
+    @apply inline-flex items-center justify-center px-6 py-2.5 border border-konipai-black bg-transparent text-konipai-black hover:bg-konipai-black hover:text-white transition-colors duration-200 gap-2;
+  }
+
+  .konipai-card {
+    @apply border border-konipai-beige bg-white p-6 rounded-lg transition-shadow duration-200 hover:shadow-md;
+  }
+
+  .konipai-section {
+    @apply border-t border-b border-konipai-beige py-12;
+  }
+
+  .konipai-input {
+    @apply border border-konipai-beige rounded-md px-4 py-2 focus:outline-none focus:border-konipai-mint transition-colors duration-200;
+  }
+
+  .konipai-divider {
+    @apply border-t border-konipai-beige my-8;
+  }
+}
