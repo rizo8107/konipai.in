@@ -117,11 +117,11 @@ const Hero = () => {
             
             {(slide.title || slide.description) && (
               <div 
-                className="absolute bottom-20 left-8 right-8 md:left-16 md:right-auto md:max-w-lg p-6 bg-white/80 backdrop-blur-sm rounded-lg z-20"
+                className="absolute bottom-20 left-4 right-4 md:left-16 md:right-auto md:max-w-lg p-6 bg-white/80 backdrop-blur-sm rounded-lg z-20 max-w-full"
                 onClick={(e) => e.stopPropagation()}
               >
-                {slide.title && <h2 className="text-2xl font-bold mb-2">{slide.title}</h2>}
-                {slide.description && <p className="text-gray-700">{slide.description}</p>}
+                {slide.title && <h2 className="text-2xl font-bold mb-2 break-words">{slide.title}</h2>}
+                {slide.description && <p className="text-gray-700 break-words">{slide.description}</p>}
                 {slide.link && (
                   isExternalLink(slide.link) ? (
                     <a 
@@ -164,19 +164,19 @@ const Hero = () => {
           className="bg-white/20 backdrop-blur-sm hover:bg-white/30 p-3 rounded-full text-white transition-all duration-300 pointer-events-auto"
           aria-label="Previous slide"
         >
-          <ArrowLeft className="h-6 w-6" />
+          <ArrowLeft className="h-5 w-5 md:h-6 md:w-6" />
         </button>
         <button 
           onClick={goToNextSlide}
           className="bg-white/20 backdrop-blur-sm hover:bg-white/30 p-3 rounded-full text-white transition-all duration-300 pointer-events-auto"
           aria-label="Next slide"
         >
-          <ArrowRight className="h-6 w-6" />
+          <ArrowRight className="h-5 w-5 md:h-6 md:w-6" />
         </button>
       </div>
       
       {/* Slider Navigation Dots */}
-      <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 flex space-x-3 z-30">
+      <div className="absolute bottom-4 md:bottom-8 left-1/2 transform -translate-x-1/2 flex space-x-2 z-30">
         {sliderImages.map((_, index) => (
           <button
             key={index}
@@ -185,8 +185,8 @@ const Hero = () => {
               e.stopPropagation();
               goToSlide(index);
             }}
-            className={`w-3 h-3 rounded-full transition-all duration-300 ${
-              currentImageIndex === index ? 'bg-white w-10' : 'bg-white/50'
+            className={`w-2 h-2 md:w-3 md:h-3 rounded-full transition-all duration-300 ${
+              currentImageIndex === index ? 'bg-white w-6 md:w-10' : 'bg-white/50'
             } hover:bg-white`}
             aria-label={`Go to slide ${index + 1}`}
           />
