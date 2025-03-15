@@ -1,11 +1,12 @@
+import { RecordModel } from 'pocketbase';
+
 export type ProductColor = {
   name: string;
   value: string;
   hex: string;
 };
 
-export type Product = {
-  $id: string;
+export type Product = RecordModel & {
   name: string;
   description: string;
   price: number;
@@ -21,6 +22,4 @@ export type Product = {
   new: boolean;
   inStock: boolean;
   reviews?: number;
-  createdAt?: string;
-  updatedAt?: string;
 };

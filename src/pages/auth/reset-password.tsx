@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { account } from '@/lib/appwrite';
+import { pocketbase } from '@/lib/pocketbase';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -41,8 +41,7 @@ export default function ResetPasswordPage() {
   const [searchParams] = useSearchParams();
   const [isLoading, setIsLoading] = useState(false);
 
-  const userId = searchParams.get('userId');
-  const secret = searchParams.get('secret');
+  const token = searchParams.get('token');
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -53,16 +52,15 @@ export default function ResetPasswordPage() {
   });
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
-    if (!userId || !secret) {
+    if (!token) {
       toast.error('Invalid reset link');
       return;
     }
 
     try {
       setIsLoading(true);
-      await account.updateRecovery(
-        userId,
-        secret,
+      await pocketbase.collection('users').confirmPasswordReset(
+        token,
         values.password,
         values.confirmPassword
       );
@@ -75,7 +73,7 @@ export default function ResetPasswordPage() {
     }
   }
 
-  if (!userId || !secret) {
+  if (!token) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50">
         <Card className="w-[400px]">

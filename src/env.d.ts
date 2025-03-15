@@ -1,9 +1,10 @@
 /// <reference types="vite/client" />
 
 interface ImportMetaEnv {
-  readonly VITE_APPWRITE_ENDPOINT: string
-  readonly VITE_APPWRITE_PROJECT_ID: string
-  readonly VITE_APPWRITE_API_KEY: string
+  readonly VITE_POCKETBASE_URL: string
+  readonly POCKETBASE_ADMIN_EMAIL: string
+  readonly POCKETBASE_ADMIN_PASSWORD: string
+  readonly NODE_ENV: 'development' | 'production'
 }
 
 interface ImportMeta {

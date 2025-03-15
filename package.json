@@ -11,9 +11,10 @@
     "preview": "vite preview",
     "deploy:appwrite": "node --experimental-json-modules scripts/deploy-appwrite.js",
     "update:permissions": "node --experimental-json-modules scripts/update-permissions.js",
-    "prepare:netlify": "node scripts/prepare-netlify.js",
+    "prepare:netlify": "node scripts/prepare-netlify.cjs",
     "deploy": "npm run prepare:netlify && npm run build",
-    "update:platforms": "node scripts/update-platforms.js"
+    "update:platforms": "node scripts/update-platforms.js",
+    "init:pocketbase": "tsx scripts/init-pocketbase.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
@@ -54,6 +55,7 @@
     "input-otp": "^1.2.4",
     "lucide-react": "^0.462.0",
     "next-themes": "^0.3.0",
+    "pocketbase": "^0.25.2",
     "react": "^18.3.1",
     "react-day-picker": "^8.10.1",
     "react-dom": "^18.3.1",
@@ -85,6 +87,7 @@
     "postcss": "^8.4.47",
     "tailwindcss": "^3.4.11",
     "ts-node": "^10.9.2",
+    "tsx": "^4.19.3",
     "typescript": "^5.8.2",
     "typescript-eslint": "^8.0.1",
     "vite": "^5.4.1"

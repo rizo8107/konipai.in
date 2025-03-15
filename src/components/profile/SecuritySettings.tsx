@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { account } from '@/lib/appwrite';
+import { pocketbase } from '@/lib/pocketbase';
 import { Button } from '@/components/ui/button';
 import {
   Form,
@@ -30,7 +30,9 @@ import {
   CardTitle 
 } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth } from '@/contexts/AuthContext';
+import { Switch } from "@/components/ui/switch";
+import { useNavigate } from "react-router-dom";
 
 const passwordSchema = z.object({
   currentPassword: z.string().min(8, 'Current password is required'),
@@ -60,23 +62,19 @@ export default function SecuritySettings() {
     },
   });
 
-  async function onSubmit(values: z.infer<typeof passwordSchema>) {
-    if (!user) {
-      toast.error('You must be logged in to update your password');
-      return;
-    }
-    
+  const onPasswordSubmit = async (values: z.infer<typeof passwordSchema>) => {
     try {
       setIsLoading(true);
       setError(null);
       
-      console.log('Updating password for user:', user.$id);
+      console.log('Updating password for user:', user.id);
       
-      // Update password using Appwrite account API
-      await account.updatePassword(
-        values.newPassword,
-        values.currentPassword
-      );
+      // Update password using PocketBase
+      await pocketbase.collection('users').update(user.id, {
+        password: values.newPassword,
+        passwordConfirm: values.confirmPassword,
+        oldPassword: values.currentPassword,
+      });
       
       console.log('Password updated successfully');
       toast.success('Password updated successfully');
@@ -95,7 +93,7 @@ export default function SecuritySettings() {
     } finally {
       setIsLoading(false);
     }
-  }
+  };
 
   async function handleLogoutAllDevices() {
     if (!user) {
@@ -107,10 +105,12 @@ export default function SecuritySettings() {
       setIsLogoutLoading(true);
       setError(null);
       
-      console.log('Logging out from all devices for user:', user.$id);
+      console.log('Logging out from all devices for user:', user.id);
       
       // Delete all sessions except current one
-      await account.deleteSessions();
+      await pocketbase.collection('users').update(user.id, {
+        sessions: [],
+      });
       
       console.log('Logged out from all other devices successfully');
       toast.success('Logged out from all other devices');
@@ -146,7 +146,7 @@ export default function SecuritySettings() {
         </CardHeader>
         <CardContent>
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 max-w-md">
+            <form onSubmit={form.handleSubmit(onPasswordSubmit)} className="space-y-4 max-w-md">
               <FormField
                 control={form.control}
                 name="currentPassword"
@@ -239,15 +239,18 @@ export default function SecuritySettings() {
             Add an extra layer of security to your account by enabling two-factor authentication
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <Button variant="outline" className="gap-2 border-gray-200 hover:bg-gray-50">
-            <ShieldCheck className="h-4 w-4" />
-            Enable 2FA
-          </Button>
-          <p className="text-xs text-gray-500 mt-3">
-            Note: Two-factor authentication requires additional setup with Appwrite. 
-            Contact your administrator for more information.
+        <CardContent className="text-center py-10">
+          <h3 className="text-lg font-medium">Two-Factor Authentication</h3>
+          <p className="text-sm text-muted-foreground mt-2">
+            Enhance your account security by enabling two-factor authentication.
+            <br />
+            Note: Two-factor authentication requires additional setup with PocketBase.
           </p>
+          <div className="mt-6 flex justify-center">
+            <Button variant="outline" disabled>
+              Enable 2FA (Coming Soon)
+            </Button>
+          </div>
         </CardContent>
       </Card>
 

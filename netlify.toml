@@ -1,6 +1,10 @@
 [build]
   command = "npm run build"
   publish = "dist"
+  
+[build.environment]
+  # Add Node version to ensure compatibility
+  NODE_VERSION = "18"
 
 # Handle SPA routing by redirecting all paths to index.html
 [[redirects]]
@@ -8,5 +12,13 @@
   to = "/index.html"
   status = 200
 
-# Environment variable configuration will be done in the Netlify UI
-# or using environment variables in the Netlify dashboard 
+# Set cache headers for static assets
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# Environment variable configuration - define placeholders
+# Actual values should be set in the Netlify UI or dashboard
+[template.environment]
+  VITE_POCKETBASE_URL = "Your PocketBase backend URL, e.g., https://backend-pocketbase.example.com" 

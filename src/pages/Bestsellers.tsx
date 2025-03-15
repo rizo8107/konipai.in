@@ -1,6 +1,5 @@
-
 import { useState, useEffect } from 'react';
-import { getProducts } from '@/lib/product-service';
+import { getProducts } from '@/lib/pocketbase';
 import ProductGrid from '@/components/ProductGrid';
 import { Product } from '@/types/product';
 

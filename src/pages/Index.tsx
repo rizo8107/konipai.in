@@ -7,7 +7,7 @@ import ProductGrid from '@/components/ProductGrid';
 import Testimonials from '@/components/Testimonials';
 import Sustainability from '@/components/Sustainability';
 import Newsletter from '@/components/Newsletter';
-import { getBestsellers, getNewArrivals } from '@/lib/product-service';
+import { getProducts } from '@/lib/pocketbase';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Product } from '@/types/product';
@@ -20,23 +20,32 @@ const Index = () => {
   const [activeFeature, setActiveFeature] = useState(0);
   
   useEffect(() => {
+    const controller = new AbortController();
+
     const fetchProducts = async () => {
       try {
         setLoading(true);
         const [bestsellersData, newArrivalsData] = await Promise.all([
-          getBestsellers(),
-          getNewArrivals()
+          getProducts({ bestseller: true }, controller.signal),
+          getProducts({ new: true }, controller.signal)
         ]);
         setBestsellers(bestsellersData);
         setNewArrivals(newArrivalsData);
       } catch (error) {
-        console.error('Error fetching products:', error);
+        // Only log error if it's not an abort error
+        if (!(error instanceof Error) || error.name !== 'AbortError') {
+          console.error('Error fetching products:', error);
+        }
       } finally {
         setLoading(false);
       }
     };
     
     fetchProducts();
+
+    return () => {
+      controller.abort();
+    };
   }, []);
   
   const features = [

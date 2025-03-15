@@ -1,60 +1,31 @@
 import { Link } from 'react-router-dom';
 import { Mail, Instagram, Facebook, Twitter, ShoppingBag } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Logo } from '@/components/Logo';
 
 const Footer = () => {
   return (
     <footer className="bg-[#219898] text-white">
       <div className="konipai-container py-16">
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-12">
-          <div className="md:col-span-4 space-y-6">
-            <div className="flex items-center gap-3">
-              <ShoppingBag className="h-6 w-6" />
-              <h2 className="text-2xl font-bold tracking-tight">KONIPAI</h2>
-            </div>
-            <p className="text-white/80">
-              Sustainable tote bags crafted with care for the modern lifestyle. Making a difference, one bag at a time.
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
+          <div className="md:col-span-4">
+            <Link to="/" className="inline-block mb-6">
+              <Logo variant="light" className="h-8" />
+            </Link>
+            <p className="text-white/80 mb-6">
+              Crafting sustainable, stylish tote bags for the modern minimalist. 
+              Each piece is thoughtfully designed to complement your lifestyle while making a positive impact.
             </p>
-            <div className="flex gap-4">
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                className="rounded-full bg-white/10 hover:bg-white/20 text-white"
-                asChild
-              >
-                <a href="https://instagram.com" aria-label="Follow us on Instagram">
-                  <Instagram size={18} />
-                </a>
+            <div className="flex space-x-4">
+              <Button variant="ghost" size="icon" className="text-white hover:text-white/80">
+                <Facebook className="h-5 w-5" />
               </Button>
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                className="rounded-full bg-white/10 hover:bg-white/20 text-white"
-                asChild
-              >
-                <a href="https://facebook.com" aria-label="Follow us on Facebook">
-                  <Facebook size={18} />
-                </a>
+              <Button variant="ghost" size="icon" className="text-white hover:text-white/80">
+                <Instagram className="h-5 w-5" />
               </Button>
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                className="rounded-full bg-white/10 hover:bg-white/20 text-white"
-                asChild
-              >
-                <a href="https://twitter.com" aria-label="Follow us on Twitter">
-                  <Twitter size={18} />
-                </a>
-              </Button>
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                className="rounded-full bg-white/10 hover:bg-white/20 text-white"
-                asChild
-              >
-                <a href="mailto:hello@konipai.com" aria-label="Email us">
-                  <Mail size={18} />
-                </a>
+              <Button variant="ghost" size="icon" className="text-white hover:text-white/80">
+                <Twitter className="h-5 w-5" />
               </Button>
             </div>
           </div>

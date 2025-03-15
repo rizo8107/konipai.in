@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import ProductCard from './ProductCard';
-import { Product } from '@/types/product';
+import { Product } from '@/lib/pocketbase';
 import { Button } from '@/components/ui/button';
 import { Loader2 } from 'lucide-react';
 
@@ -41,7 +41,7 @@ const ProductGrid = ({ products, title, loading = false }: ProductGridProps) => 
       
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-8">
         {products.slice(0, displayCount).map(product => (
-          <ProductCard key={product.$id} product={product} />
+          <ProductCard key={product.id} product={product} />
         ))}
       </div>
       

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { account } from '@/lib/appwrite';
+import { pocketbase } from '@/lib/pocketbase';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -43,10 +43,7 @@ export default function ForgotPasswordPage() {
   async function onSubmit(values: z.infer<typeof formSchema>) {
     try {
       setIsLoading(true);
-      await account.createRecovery(
-        values.email,
-        'http://localhost:8080/auth/reset-password'
-      );
+      await pocketbase.collection('users').requestPasswordReset(values.email);
       setEmailSent(true);
       toast.success('Password reset email sent');
     } catch (error: any) {

@@ -1,6 +1,6 @@
 # Konipai Tote Bag Hub
 
-A modern e-commerce platform for tote bags built with React, TypeScript, and Appwrite.
+A modern e-commerce platform for tote bags built with React, TypeScript, and PocketBase.
 
 ## Features
 
@@ -14,7 +14,7 @@ A modern e-commerce platform for tote bags built with React, TypeScript, and App
 ## Tech Stack
 
 - **Frontend**: React, TypeScript, Vite, TailwindCSS, Shadcn UI
-- **Backend**: Appwrite (Authentication, Database, Storage)
+- **Backend**: PocketBase (Authentication, Database, File Storage)
 - **Deployment**: Netlify
 
 ## Getting Started
@@ -23,7 +23,7 @@ A modern e-commerce platform for tote bags built with React, TypeScript, and App
 
 - Node.js (v16 or higher)
 - npm or yarn
-- Appwrite account
+- PocketBase (Download from https://pocketbase.io/docs/)
 
 ### Installation
 
@@ -38,48 +38,85 @@ A modern e-commerce platform for tote bags built with React, TypeScript, and App
    npm install
    ```
 
-3. Create a `.env` file based on `.env.example` and fill in your Appwrite credentials:
+3. Create a `.env` file based on `.env.example` and fill in your PocketBase credentials:
    ```
-   VITE_APPWRITE_ENDPOINT=https://cloud.appwrite.io/v1
-   VITE_APPWRITE_PROJECT_ID=your-project-id
+   VITE_POCKETBASE_URL=http://127.0.0.1:8090
+   POCKETBASE_ADMIN_EMAIL=your-admin-email
+   POCKETBASE_ADMIN_PASSWORD=your-admin-password
    ```
 
-4. Start the development server:
+4. Start PocketBase:
+   ```bash
+   # Navigate to your PocketBase directory
+   ./pocketbase serve
+   ```
+
+5. Initialize PocketBase collections:
+   ```bash
+   npm run init:pocketbase
+   ```
+
+6. Start the development server:
    ```bash
    npm run dev
    ```
 
-## Appwrite Setup
+## PocketBase Setup
 
-1. Create a new project in Appwrite
-2. Set up the following collections in your database:
-   - `orders`: For storing order information
-   - `addresses`: For storing user addresses
-
-3. Run the setup scripts to create the necessary attributes and indexes:
+1. Download PocketBase from https://pocketbase.io/docs/
+2. Extract the executable and run it:
    ```bash
-   # Set up the APPWRITE_API_KEY in your .env file first
-   node scripts/update-addresses-collection.js
-   node scripts/create-address-indexes.js
+   ./pocketbase serve
+   ```
+3. Access the admin UI at http://127.0.0.1:8090/_/
+4. Create an admin account with the credentials specified in your `.env` file
+5. Run the initialization script to create collections:
+   ```bash
+   npm run init:pocketbase
    ```
 
-4. Configure Appwrite platforms for CORS:
-   - Go to your Appwrite console > Project Settings > Platforms
-   - Add a platform for local development:
-     - Type: Web
-     - Name: Local Development
-     - Hostname: http://localhost:8081 (or your local dev port)
-   - Add a platform for Netlify:
-     - Type: Web
-     - Name: Netlify Deployment
-     - Hostname: https://your-site-name.netlify.app
+The script will create the following collections:
+- `users` (built-in PocketBase users collection)
+- `products`: For storing product information
+- `orders`: For storing order information
+- `addresses`: For storing user addresses
 
-   You can also use our helper script:
-   ```bash
-   npm run update:platforms
-   ```
+## Collection Structure
 
-## Deployment to Netlify
+### Products Collection
+- name (text, required)
+- description (text, required)
+- price (number, required)
+- images (file[], required)
+- colors (json, required)
+- features (text[], required)
+- dimensions (text, required)
+- material (text, required)
+- care (text[], required)
+- category (text, required)
+- tags (text[], required)
+- bestseller (bool, required)
+- new (bool, required)
+- inStock (bool, required)
+- reviews (number, optional)
+
+### Orders Collection
+- user (relation to users, required)
+- products (json, required)
+- totalAmount (number, required)
+- status (select: pending/processing/shipped/delivered/cancelled, required)
+- shippingAddress (relation to addresses, required)
+
+### Addresses Collection
+- user (relation to users, required)
+- street (text, required)
+- city (text, required)
+- state (text, required)
+- postalCode (text, required)
+- country (text, required)
+- isDefault (bool, required)
+
+## Deployment
 
 ### Manual Deployment
 
@@ -90,35 +127,15 @@ A modern e-commerce platform for tote bags built with React, TypeScript, and App
 
 2. Deploy the `dist` folder to Netlify using the Netlify CLI or drag-and-drop interface.
 
-### Continuous Deployment
+3. Deploy PocketBase to your preferred hosting provider (e.g., DigitalOcean, AWS, etc.)
 
-1. Push your code to GitHub
-2. Connect your repository to Netlify
-3. Configure the build settings:
-   - Build command: `npm run build`
-   - Publish directory: `dist`
-4. Add the required environment variables in the Netlify dashboard:
-   - `VITE_APPWRITE_ENDPOINT`
-   - `VITE_APPWRITE_PROJECT_ID`
+### Environment Variables for Production
 
-### Troubleshooting CORS Issues
+Make sure to set the following environment variables in your production environment:
 
-If you encounter CORS errors after deploying to Netlify, follow these steps:
-
-1. Make sure your Netlify domain is added to Appwrite platforms:
-   ```bash
-   npm run update:platforms
-   ```
-   
-2. Follow the instructions provided by the script to update your Appwrite platform settings.
-
-3. After updating the platform settings, redeploy your Netlify site or wait a few minutes for the changes to take effect.
-
-## Environment Variables
-
-- `VITE_APPWRITE_ENDPOINT`: Your Appwrite API endpoint
-- `VITE_APPWRITE_PROJECT_ID`: Your Appwrite project ID
-- `APPWRITE_API_KEY`: Your Appwrite API key (for deployment scripts only, not used in browser)
+- `VITE_POCKETBASE_URL`: Your PocketBase server URL
+- `POCKETBASE_ADMIN_EMAIL`: Admin email for PocketBase
+- `POCKETBASE_ADMIN_PASSWORD`: Admin password for PocketBase
 
 ## License
 

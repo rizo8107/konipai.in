@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { databases, DATABASE_ID, ORDERS_COLLECTION_ID } from '@/lib/appwrite';
+import { pocketbase, Collections } from '@/lib/pocketbase';
 import { Loader2, ArrowLeft, Package, MapPin } from 'lucide-react';
 import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
@@ -61,13 +61,17 @@ export default function OrderDetail() {
   useEffect(() => {
     if (order) {
       try {
-        // Parse items JSON string
-        const itemsData = JSON.parse(order.items) as OrderItem[];
-        setParsedItems(itemsData);
+        // Items is stored as a JSON string in PocketBase
+        const parsedItems = typeof order.items === 'string' 
+          ? JSON.parse(order.items) 
+          : order.items;
+        setParsedItems(parsedItems);
         
-        // Parse shipping address JSON string
-        const addressData = JSON.parse(order.shippingAddress) as ShippingAddress;
-        setParsedAddress(addressData);
+        // ShippingAddress is stored as a JSON string in PocketBase
+        const parsedShippingAddress = typeof order.shippingAddress === 'string' 
+          ? JSON.parse(order.shippingAddress) 
+          : order.shippingAddress;
+        setParsedAddress(parsedShippingAddress);
       } catch (error) {
         console.error('Error parsing order data:', error);
         setError('Error parsing order data. Please try again.');
@@ -82,11 +86,7 @@ export default function OrderDetail() {
       
       console.log('Fetching order details for order:', orderId);
       
-      const response = await databases.getDocument(
-        DATABASE_ID,
-        ORDERS_COLLECTION_ID,
-        orderId as string
-      );
+      const response = await pocketbase.collection(Collections.ORDERS).getOne(orderId);
       
       console.log('Order details fetched successfully:', response);
       

@@ -1,279 +1,200 @@
 import { useState, useEffect } from 'react';
-import { useAuth } from '@/hooks/useAuth';
-import { databases, DATABASE_ID, ORDERS_COLLECTION_ID } from '@/lib/appwrite';
-import { Query, Models } from 'appwrite';
+import { useAuth } from '@/contexts/AuthContext';
+import { pocketbase, Collections } from '@/lib/pocketbase';
 import { Link } from 'react-router-dom';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { Button } from '@/components/ui/button';
-import { 
-  Loader2, 
-  ChevronRight, 
-  ShoppingBag, 
-  Calendar, 
-  Filter, 
-  ArrowUpDown,
-  Package,
-  AlertCircle,
-  Truck
-} from 'lucide-react';
 import { format } from 'date-fns';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
+import { Loader2, Truck, Package, ShoppingBag } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { cn } from '@/lib/utils';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 
-interface Order {
-  $id: string;
-  userId: string;
-  status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
-  totalAmount: number;
-  orderDate: string;
-  // Items is stored as a JSON string in Appwrite
-  items: string;
-  // ShippingAddress is stored as a JSON string in Appwrite
-  shippingAddress: string;
-  $createdAt: string;
-}
-
-// Define the parsed item type
 interface OrderItem {
   productId: string;
   quantity: number;
-  price: number;
   name: string;
+  price: number;
 }
 
-// Define the parsed shipping address type
 interface ShippingAddress {
   street: string;
   city: string;
   state: string;
-  zipCode: string;
+  postalCode: string;
   country: string;
 }
+
+interface Order {
+  id: string;
+  created: string;
+  updated: string;
+  status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
+  totalAmount: number;
+  items: OrderItem[];
+  shippingAddress: ShippingAddress;
+}
+
+// Function to get badge color based on order status
+const getStatusBadgeVariant = (status: string) => {
+  switch (status) {
+    case 'pending': return 'secondary';
+    case 'processing': return 'default';
+    case 'shipped': return 'secondary';
+    case 'delivered': return 'success';
+    case 'cancelled': return 'destructive';
+    default: return 'outline';
+  }
+};
 
 export default function OrderHistory() {
   const { user } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [sortBy, setSortBy] = useState<'date-desc' | 'date-asc' | 'total-desc' | 'total-asc'>('date-desc');
 
   useEffect(() => {
-    if (user) {
-      fetchOrders();
-    }
-  }, [user, statusFilter, sortBy]);
-
-  async function fetchOrders() {
-    if (!user) return;
-
-    try {
-      setLoading(true);
-      setError(null);
-      
-      console.log('Fetching orders for user:', user.$id);
-      
-      const queries = [Query.equal('userId', user.$id)];
-      
-      if (statusFilter !== 'all') {
-        queries.push(Query.equal('status', statusFilter));
+    const fetchOrders = async () => {
+      if (!user) {
+        setLoading(false);
+        return;
       }
 
-      // Add sorting
-      switch (sortBy) {
-        case 'date-desc':
-          queries.push(Query.orderDesc('orderDate'));
-          break;
-        case 'date-asc':
-          queries.push(Query.orderAsc('orderDate'));
-          break;
-        case 'total-desc':
-          queries.push(Query.orderDesc('totalAmount'));
-          break;
-        case 'total-asc':
-          queries.push(Query.orderAsc('totalAmount'));
-          break;
+      try {
+        setLoading(true);
+        const response = await pocketbase.collection(Collections.ORDERS).getList(1, 50, {
+          filter: `user = "${user.id}"`,
+          sort: '-created',
+        });
+
+        // Process the orders
+        const processedOrders = response.items.map(order => {
+          // Items is stored as a JSON string in PocketBase
+          const parsedItems = typeof order.products === 'string' 
+            ? JSON.parse(order.products) 
+            : order.products;
+
+          // ShippingAddress is stored as a JSON string in PocketBase
+          const parsedAddress = typeof order.shippingAddress === 'string' && order.shippingAddress
+            ? JSON.parse(order.shippingAddress)
+            : order.shippingAddress;
+
+          return {
+            id: order.id,
+            created: order.created,
+            updated: order.updated,
+            status: order.status,
+            totalAmount: order.totalAmount,
+            items: parsedItems,
+            shippingAddress: parsedAddress
+          };
+        });
+
+        setOrders(processedOrders);
+      } catch (error) {
+        console.error('Error fetching orders:', error);
+        toast.error('Failed to load order history. Please try again later.');
+      } finally {
+        setLoading(false);
       }
+    };
 
-      console.log('Fetching orders with queries:', queries);
-      
-      const response = await databases.listDocuments(
-        DATABASE_ID,
-        ORDERS_COLLECTION_ID,
-        queries
-      );
-      
-      console.log('Orders fetched successfully:', response.documents.length);
-      
-      // Type assertion to convert Document[] to Order[]
-      setOrders(response.documents as unknown as Order[]);
-    } catch (error: unknown) {
-      console.error('Failed to fetch orders:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Failed to fetch orders';
-      setError(errorMessage);
-      toast.error('Failed to load your orders. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  function getStatusColor(status: Order['status']) {
-    switch (status) {
-      case 'delivered':
-        return 'bg-green-100 text-green-800 hover:bg-green-200';
-      case 'shipped':
-        return 'bg-blue-100 text-blue-800 hover:bg-blue-200';
-      case 'processing':
-        return 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200';
-      case 'cancelled':
-        return 'bg-red-100 text-red-800 hover:bg-red-200';
-      default:
-        return 'bg-gray-100 text-gray-800 hover:bg-gray-200';
-    }
-  }
+    fetchOrders();
+  }, [user]);
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center min-h-[200px]">
+      <div className="flex justify-center items-center p-8">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
 
-  if (error) {
+  if (orders.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-12 px-4 border border-dashed border-red-300 rounded-lg bg-red-50">
-        <AlertCircle className="h-12 w-12 text-red-500 mb-4" />
-        <p className="text-red-700 mb-4 text-center">{error}</p>
-        <Button 
-          onClick={() => fetchOrders()}
-          variant="outline"
-          className="gap-2"
-        >
-          Try Again
-        </Button>
-      </div>
+      <Card className="border-dashed">
+        <CardHeader className="text-center">
+          <CardTitle>No Orders Yet</CardTitle>
+          <CardDescription>
+            You haven't placed any orders yet. Start shopping to see your order history here.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex justify-center">
+          <ShoppingBag className="h-16 w-16 text-muted-foreground" />
+        </CardContent>
+        <CardFooter className="flex justify-center pb-6">
+          <Button asChild>
+            <Link to="/shop">Start Shopping</Link>
+          </Button>
+        </CardFooter>
+      </Card>
     );
   }
 
   return (
-    <div className="p-6">
-      <h2 className="text-2xl font-medium text-gray-900">Order History</h2>
+    <div className="space-y-6">
+      <h2 className="text-2xl font-semibold tracking-tight">Order History</h2>
       
-      {loading ? (
-        <div className="flex justify-center items-center min-h-[200px]">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
-      ) : orders.length === 0 ? (
-        <div className="mt-6 text-center">
-          <ShoppingBag className="mx-auto h-12 w-12 text-gray-400" />
-          <h3 className="mt-4 text-lg font-medium text-gray-900">No orders yet</h3>
-          <p className="mt-1 text-gray-500">Start shopping to see your orders here.</p>
-          <Button asChild className="mt-4 bg-primary hover:bg-primary/90">
-            <Link to="/shop">
-              <ShoppingBag className="mr-2 h-4 w-4" />
-              Browse Products
-            </Link>
-          </Button>
-        </div>
-      ) : (
-        <div className="mt-6 space-y-4">
-          {orders.map((order) => (
-            <Card key={order.$id} className="border border-gray-200">
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle className="text-lg text-gray-900">
-                      Order #{order.$id.slice(-6)}
-                    </CardTitle>
-                    <CardDescription className="text-gray-500">
-                      Placed on {new Date(order.$createdAt).toLocaleDateString()}
-                    </CardDescription>
-                  </div>
-                  <Badge 
-                    variant={
-                      order.status === 'delivered' ? 'default' :
-                      order.status === 'processing' ? 'secondary' :
-                      order.status === 'cancelled' ? 'destructive' : 'outline'
-                    }
-                    className={cn(
-                      'capitalize',
-                      order.status === 'delivered' && 'bg-green-100 text-green-800',
-                      order.status === 'processing' && 'bg-yellow-100 text-yellow-800',
-                      order.status === 'cancelled' && 'bg-red-100 text-red-800'
-                    )}
-                  >
-                    {order.status}
+      <div className="space-y-4">
+        {orders.map((order) => (
+          <Card key={order.id} className="overflow-hidden">
+            <CardHeader className="bg-muted/50">
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+                <div>
+                  <CardTitle className="text-lg">Order #{order.id.slice(-8)}</CardTitle>
+                  <CardDescription>
+                    Placed on {format(new Date(order.created), 'MMM d, yyyy')}
+                  </CardDescription>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant={getStatusBadgeVariant(order.status)}>
+                    {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
                   </Badge>
+                  <Button variant="outline" asChild size="sm">
+                    <Link to={`/orders/${order.id}`}>View Details</Link>
+                  </Button>
                 </div>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {JSON.parse(order.items).map((item: OrderItem) => (
-                    <div key={item.productId} className="flex items-center gap-4">
-                      <div className="h-20 w-20 flex-shrink-0 overflow-hidden rounded-md border border-gray-200">
-                        <img
-                          src={item.productId}
-                          alt={item.name}
-                          className="h-full w-full object-cover object-center"
-                        />
-                      </div>
-                      <div className="flex-grow">
-                        <h4 className="text-base font-medium text-gray-900">{item.name}</h4>
-                        <p className="mt-1 text-sm text-gray-500">
-                          Quantity: {item.quantity} × ${item.price.toFixed(2)}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-base font-medium text-gray-900">
-                          ${(item.quantity * item.price).toFixed(2)}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <div className="mt-6 border-t border-gray-200 pt-4">
-                  <div className="flex justify-between text-base">
-                    <p className="font-medium text-gray-900">Total</p>
-                    <p className="font-medium text-gray-900">
-                      ${order.totalAmount.toFixed(2)}
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="px-6 py-4 flex items-center justify-between border-b">
+                <div className="flex items-center gap-3">
+                  <Package className="h-5 w-5 text-muted-foreground" />
+                  <div>
+                    <p className="font-medium">{order.items.length} {order.items.length === 1 ? 'item' : 'items'}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {order.items.slice(0, 2).map(item => item.name).join(', ')}
+                      {order.items.length > 2 ? `, +${order.items.length - 2} more` : ''}
                     </p>
                   </div>
                 </div>
-              </CardContent>
-              <CardFooter className="border-t border-gray-200">
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  className="gap-2 border-gray-200 hover:bg-gray-50"
-                  asChild
-                >
-                  <Link to={`/orders/${order.$id}`}>
-                    <ChevronRight className="h-4 w-4" />
-                    View Details
-                  </Link>
-                </Button>
-              </CardFooter>
-            </Card>
-          ))}
-        </div>
-      )}
+                <div className="text-right">
+                  <p className="font-medium">${order.totalAmount.toFixed(2)}</p>
+                </div>
+              </div>
+              {(order.status === 'shipped' || order.status === 'delivered') && (
+                <div className="p-4 flex items-center gap-3 bg-primary/5">
+                  <Truck className="h-5 w-5 text-primary" />
+                  <div>
+                    <p className="font-medium">
+                      {order.status === 'delivered' 
+                        ? 'Delivered' 
+                        : 'Shipped'}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      {order.status === 'delivered'
+                        ? `Delivered on ${format(new Date(order.updated), 'MMM d, yyyy')}`
+                        : `Expected delivery by ${format(
+                            new Date(new Date(order.updated).getTime() + 5 * 24 * 60 * 60 * 1000), 
+                            'MMM d, yyyy'
+                          )}`
+                      }
+                    </p>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        ))}
+      </div>
     </div>
   );
 } 

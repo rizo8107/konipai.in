@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
 import { ArrowRight, Loader2 } from 'lucide-react';
-import { getProductsByCategory } from '@/lib/product-service';
+import { getProducts } from '@/lib/pocketbase';
 import { Product } from '@/types/product';
 
 const categories = [
@@ -34,10 +34,14 @@ const FeaturedCategories = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const controller = new AbortController();
+
     const fetchCategoryProducts = async () => {
       try {
         setLoading(true);
-        const productsPromises = categories.map(cat => getProductsByCategory(cat.category));
+        const productsPromises = categories.map(cat => 
+          getProducts({ category: cat.category }, controller.signal)
+        );
         const productsResults = await Promise.all(productsPromises);
         
         const categoryProductsMap: Record<string, Product[]> = {};
@@ -47,13 +51,20 @@ const FeaturedCategories = () => {
         
         setCategoryProducts(categoryProductsMap);
       } catch (error) {
-        console.error('Error fetching category products:', error);
+        // Only log error if it's not an abort error
+        if (!(error instanceof Error) || error.name !== 'AbortError') {
+          console.error('Error fetching category products:', error);
+        }
       } finally {
         setLoading(false);
       }
     };
 
     fetchCategoryProducts();
+
+    return () => {
+      controller.abort();
+    };
   }, []);
 
   return (
