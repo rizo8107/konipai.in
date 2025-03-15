@@ -17,26 +17,62 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
+        console.log('AuthProvider: initializing auth state');
+        const checkAuth = async () => {
+            try {
+                const currentUser = getCurrentUser();
+                console.log('AuthProvider: current user:', currentUser ? 'exists' : 'null');
+                setUser(currentUser);
+            } catch (error) {
+                console.error('AuthProvider: error getting current user:', error);
+            } finally {
+                console.log('AuthProvider: setting loading to false');
+                setLoading(false);
+            }
+        };
+
+        // Immediately check authentication state
+        checkAuth();
+
         // Subscribe to auth state changes
-        onAuthStateChange((authenticated) => {
+        const unsubscribe = onAuthStateChange((authenticated) => {
+            console.log('AuthProvider: auth state changed, authenticated:', authenticated);
             setUser(authenticated ? getCurrentUser() : null);
             setLoading(false);
         });
+
+        return () => {
+            // This is just a placeholder - onAuthStateChange doesn't actually return an unsubscribe function
+            // but it's good practice to handle cleanup if the API changes in the future
+        };
     }, []);
 
     const handleSignIn = async (email: string, password: string) => {
-        await signIn(email, password);
-        setUser(getCurrentUser());
+        try {
+            setLoading(true);
+            await signIn(email, password);
+            setUser(getCurrentUser());
+        } finally {
+            setLoading(false);
+        }
     };
 
     const handleSignUp = async (email: string, password: string, name: string) => {
-        await signUp(email, password, name);
-        await handleSignIn(email, password);
+        try {
+            setLoading(true);
+            await signUp(email, password, name);
+            await signIn(email, password);
+            setUser(getCurrentUser());
+        } finally {
+            setLoading(false);
+        }
     };
 
     const handleSignOut = () => {
+        setLoading(true);
         signOut();
         setUser(null);
+        setLoading(false);
     };
 
     const value = {

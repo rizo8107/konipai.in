@@ -35,7 +35,7 @@ const ProductCard = ({ product }: ProductCardProps) => {
         <ProductImage 
           url={product.images?.[0] || ''}
           alt={product.name}
-          className="w-full h-full object-cover object-center opacity-80"
+          className="w-full h-full object-cover object-center"
         />
         
         <div className="absolute top-3 left-3 flex flex-wrap gap-2">
@@ -51,14 +51,14 @@ const ProductCard = ({ product }: ProductCardProps) => {
           )}
         </div>
 
-        <div className="absolute inset-0 flex items-center justify-center">
+        <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/70 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300">
           <Button
             onClick={handleQuickAdd}
             variant="default"
-            size="lg"
-            className="bg-white text-black hover:bg-gray-100 shadow-lg"
+            size="sm"
+            className="w-full bg-white text-black hover:bg-gray-100 shadow-lg"
           >
-            <Plus className="mr-2 h-5 w-5" />
+            <Plus className="mr-2 h-4 w-4" />
             Add to Cart
           </Button>
         </div>

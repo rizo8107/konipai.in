@@ -13,7 +13,6 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { ShoppingBag, Menu } from "lucide-react"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
-import { ThemeToggle } from "./theme-toggle"
 import { Cart } from "./Cart"
 import { Logo } from '@/components/Logo'
 
@@ -56,7 +55,7 @@ export default function Navbar() {
           <Logo />
         </Link>
 
-        <nav className="hidden lg:flex items-center space-x-6 flex-1">
+        <nav className="hidden lg:flex items-center space-x-6 justify-center mx-auto">
           <Link
             to="/shop"
             className="text-sm font-medium transition-colors hover:text-primary"
@@ -85,7 +84,6 @@ export default function Navbar() {
 
         <div className="flex flex-1 items-center justify-end space-x-4">
           <nav className="flex items-center space-x-2">
-            <ThemeToggle />
             <Cart>
               <Button variant="ghost" size="icon" className="relative">
                 <ShoppingBag className="h-6 w-6" />

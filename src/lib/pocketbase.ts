@@ -17,7 +17,8 @@ export enum Collections {
     ORDERS = 'orders',
     ADDRESSES = 'addresses',
     CARTS = 'carts',
-    ASSETS = 'assets'
+    ASSETS = 'assets',
+    SLIDER_IMAGES = 'slider_images'
 }
 
 // Type definitions for PocketBase records
@@ -172,6 +173,7 @@ interface ListOptions {
     filter?: string;
     signal?: AbortSignal;
     $autoCancel?: boolean;
+    sort?: string;
 }
 
 // Auth functions
@@ -331,7 +333,59 @@ export function getCurrentUser(): User | null {
 
 // Subscribe to auth changes
 export function onAuthStateChange(callback: (isAuthenticated: boolean) => void) {
+    console.log('Setting up auth state change listener');
+    
+    // Immediately trigger callback with current state to ensure proper initialization
+    const initialState = pb.authStore.isValid;
+    console.log('Initial auth state:', initialState ? 'authenticated' : 'not authenticated');
+    
+    // Execute callback once on setup with the current state
+    setTimeout(() => {
+        callback(initialState);
+    }, 0);
+    
+    // Set up the listener for future changes
     pb.authStore.onChange((token, model) => {
-        callback(!!token && !!model);
+        const isAuth = !!token && !!model;
+        console.log('Auth state changed:', isAuth ? 'authenticated' : 'not authenticated');
+        callback(isAuth);
     });
+}
+
+export interface SliderImage extends RecordModel {
+    image: string;
+    alt: string;
+    order: number;
+    active: boolean;
+    link: string;
+    title: string;
+    description: string;
+}
+
+// Slider images functions
+export async function getSliderImages(signal?: AbortSignal): Promise<SliderImage[]> {
+    try {
+        const options: ListOptions = {
+            filter: 'active = true',
+            sort: '+order',
+            $autoCancel: false
+        };
+
+        if (signal) {
+            options.signal = signal;
+        }
+
+        const records = await pb.collection(Collections.SLIDER_IMAGES).getList(1, 10, options);
+
+        return records.items.map(record => ({
+            ...record,
+            image: pb.files.getUrl(record, record.image)
+        })) as SliderImage[];
+    } catch (error) {
+        if (error.name === 'AbortError') {
+            throw error;
+        }
+        console.error('Error fetching slider images:', error);
+        return [];
+    }
 } 

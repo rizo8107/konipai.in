@@ -13,17 +13,70 @@ export default function ProfilePage() {
   const navigate = useNavigate();
   const { user, loading } = useAuth();
   const [activeTab, setActiveTab] = useState('personal-info');
+  const [pageLoading, setPageLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!loading && !user) {
-      navigate('/auth/login');
-    }
+    console.log('ProfilePage: useEffect triggered, loading:', loading, 'user:', user ? 'exists' : 'null');
+    
+    const initializePage = async () => {
+      try {
+        setPageLoading(true);
+        setError(null);
+        
+        // Wait a short time to ensure auth state is fully initialized
+        if (loading) {
+          console.log('ProfilePage: Auth is still loading, waiting...');
+          return; // Exit and wait for next render when loading is complete
+        }
+
+        if (!user) {
+          console.log('ProfilePage: No user found, redirecting to login');
+          navigate('/auth/login');
+          return;
+        }
+        
+        console.log('ProfilePage: User is authenticated, loading profile data');
+        // Any additional initialization can happen here
+      } catch (err) {
+        console.error('ProfilePage: Error initializing page:', err);
+        setError('Failed to load profile data. Please try refreshing the page.');
+      } finally {
+        setPageLoading(false);
+      }
+    };
+
+    initializePage();
   }, [user, loading, navigate]);
 
-  if (loading) {
+  useEffect(() => {
+    console.log('ProfilePage: Page loading state:', pageLoading);
+  }, [pageLoading]);
+
+  if (loading || pageLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-white">
-        <Loader2 className="h-8 w-8 animate-spin" />
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-[#219898]" />
+          <p className="text-gray-500">Loading your profile...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-white">
+        <div className="text-center max-w-md p-6">
+          <div className="text-red-500 mb-4 text-lg">Error</div>
+          <p className="text-gray-700 mb-4">{error}</p>
+          <button 
+            onClick={() => window.location.reload()} 
+            className="px-4 py-2 bg-[#219898] text-white rounded hover:bg-[#219898]/90"
+          >
+            Retry
+          </button>
+        </div>
       </div>
     );
   }

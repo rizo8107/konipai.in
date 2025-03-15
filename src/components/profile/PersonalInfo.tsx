@@ -25,6 +25,7 @@ import { toast } from 'sonner';
 import { User, Mail, Phone, Loader2 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { User as UserType } from '@/lib/pocketbase';
 
 // Country codes for phone selection
 const countryCodes = [
@@ -46,8 +47,14 @@ const phoneFormSchema = z.object({
   phoneNumber: z.string().min(10, 'Phone number must be at least 10 digits'),
 });
 
-export default function PersonalInfo() {
-  const { user, loading } = useAuth();
+interface PersonalInfoProps {
+  user?: UserType;
+}
+
+export default function PersonalInfo({ user: userProp }: PersonalInfoProps) {
+  const { user: authUser, isAuthenticated } = useAuth();
+  const [loading, setLoading] = useState(false);
+  const [userData, setUserData] = useState<UserType | null>(userProp || authUser);
   const [isLoading, setIsLoading] = useState(false);
   const [phoneLoading, setPhoneLoading] = useState(false);
   const [showPhoneForm, setShowPhoneForm] = useState(false);
@@ -56,8 +63,8 @@ export default function PersonalInfo() {
   const profileForm = useForm<z.infer<typeof profileFormSchema>>({
     resolver: zodResolver(profileFormSchema),
     defaultValues: {
-      name: user?.name || '',
-      email: user?.email || '',
+      name: userData?.name || '',
+      email: userData?.email || '',
     },
   });
 
@@ -72,15 +79,15 @@ export default function PersonalInfo() {
 
   // Update form values when user data changes
   useEffect(() => {
-    if (user) {
+    if (userData) {
       profileForm.reset({
-        name: user.name || '',
-        email: user.email || '',
+        name: userData.name || '',
+        email: userData.email || '',
       });
 
       // Parse phone number if exists
-      if (user.phone && user.phone.startsWith('+')) {
-        const match = user.phone.match(/^\+(\d+)(\d+)$/);
+      if (userData.phone && userData.phone.startsWith('+')) {
+        const match = userData.phone.match(/^\+(\d+)(\d+)$/);
         if (match) {
           phoneForm.reset({
             countryCode: match[1],
@@ -89,13 +96,13 @@ export default function PersonalInfo() {
         }
       }
     }
-  }, [user, profileForm, phoneForm]);
+  }, [userData, profileForm, phoneForm]);
 
   // Function to refresh user data
   const refreshUserData = async () => {
     try {
-      if (pocketbase.authStore.isValid && user?.id) {
-        await pocketbase.collection('users').getOne(user.id);
+      if (pocketbase.authStore.isValid && userData?.id) {
+        await pocketbase.collection('users').getOne(userData.id);
       }
     } catch (error) {
       console.error("Error refreshing user data:", error);
@@ -103,11 +110,11 @@ export default function PersonalInfo() {
   };
 
   const onProfileSubmit = async (values: z.infer<typeof profileFormSchema>) => {
-    if (!user?.id) return;
+    if (!userData?.id) return;
 
     try {
       setIsLoading(true);
-      await pocketbase.collection('users').update(user.id, {
+      await pocketbase.collection('users').update(userData.id, {
         name: values.name,
         email: values.email
       });
@@ -123,7 +130,7 @@ export default function PersonalInfo() {
   };
 
   const onPhoneSubmit = async (values: z.infer<typeof phoneFormSchema>) => {
-    if (!user?.id) return;
+    if (!userData?.id) return;
 
     try {
       setPhoneLoading(true);
@@ -131,7 +138,7 @@ export default function PersonalInfo() {
       // Format the complete phone number for PocketBase
       const formattedPhone = `+${values.countryCode}${values.phoneNumber}`;
       
-      await pocketbase.collection('users').update(user.id, {
+      await pocketbase.collection('users').update(userData.id, {
         phone: formattedPhone
       });
       
@@ -147,12 +154,12 @@ export default function PersonalInfo() {
   };
 
   const handleRemovePhone = async () => {
-    if (!user?.id) return;
+    if (!userData?.id) return;
 
     try {
       setPhoneLoading(true);
       
-      await pocketbase.collection('users').update(user.id, {
+      await pocketbase.collection('users').update(userData.id, {
         phone: ""
       });
       
@@ -168,8 +175,8 @@ export default function PersonalInfo() {
 
   // Get user initials for avatar
   const getUserInitials = () => {
-    if (!user?.name) return 'U';
-    return user.name
+    if (!userData?.name) return 'U';
+    return userData.name
       .split(' ')
       .map(name => name[0])
       .join('')
@@ -257,13 +264,13 @@ export default function PersonalInfo() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Phone className="h-4 w-4 text-gray-500" />
-                <span>{user?.phone || 'No phone number added'}</span>
+                <span>{userData?.phone || 'No phone number added'}</span>
               </div>
               <div className="flex gap-2">
                 <Button variant="outline" onClick={() => setShowPhoneForm(true)}>
-                  {user?.phone ? 'Update' : 'Add Phone'}
+                  {userData?.phone ? 'Update' : 'Add Phone'}
                 </Button>
-                {user?.phone && (
+                {userData?.phone && (
                   <Button variant="destructive" onClick={handleRemovePhone} disabled={phoneLoading}>
                     {phoneLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Remove'}
                   </Button>
