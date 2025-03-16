@@ -70,7 +70,7 @@ export function ProductImage({ url, alt, className }: ProductImageProps) {
             src={imageUrl}
             alt={alt}
             className={cn("object-cover", className)}
-            loading="eager"
+            loading="lazy"
         />
     );
 } 
