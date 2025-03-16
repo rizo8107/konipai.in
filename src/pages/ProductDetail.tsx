@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, 
@@ -26,7 +26,12 @@ import { Card } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ProductImage } from '@/components/ProductImage';
-import { preloadImages, getPocketBaseImageUrl } from '@/utils/imageOptimizer';
+import { preloadImages, getPocketBaseImageUrl, ImageSize } from '@/utils/imageOptimizer';
+
+// Generate a very low-res placeholder
+const generatePlaceholder = (color = '#f3f4f6') => {
+  return `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1 1'%3E%3Crect width='1' height='1' fill='${color.replace('#', '%23')}'/%3E%3C/svg%3E`;
+};
 
 const ProductDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -37,11 +42,92 @@ const ProductDetail = () => {
   const [error, setError] = useState<string | null>(null);
   const [selectedImage, setSelectedImage] = useState<string>('');
   const [isWishlisted, setIsWishlisted] = useState(false);
+  const [imagesPreloaded, setImagesPreloaded] = useState(false);
   
   const { addItem } = useCart();
   const [quantity, setQuantity] = useState(1);
   const [selectedColor, setSelectedColor] = useState<ProductColor | null>(null);
   const { toast } = useToast();
+  const relatedLoaded = useRef(false);
+  
+  // Preload images for better performance
+  useEffect(() => {
+    if (product && product.images && product.images.length > 0 && !imagesPreloaded) {
+      // Create a function to preload all product images
+      const preloadProductImages = async () => {
+        try {
+          // Preload main image at higher quality
+          const mainImage = product.images[0];
+          
+          // Create a high-priority link for the main image
+          const link = document.createElement('link');
+          link.rel = 'preload';
+          link.as = 'image';
+          link.href = getPocketBaseImageUrl(mainImage, Collections.PRODUCTS, "large", "webp");
+          link.type = 'image/webp';
+          link.setAttribute('fetchpriority', 'high');
+          document.head.appendChild(link);
+          
+          // Preload all other product images
+          if (product.images.length > 1) {
+            // First create thumbnail versions for quick display
+            preloadImages(product.images.slice(1), Collections.PRODUCTS, "thumbnail");
+            
+            // Then load medium quality versions slightly delayed
+            setTimeout(() => {
+              preloadImages(product.images.slice(1), Collections.PRODUCTS, "medium");
+            }, 1000);
+          }
+          
+          // Mark as preloaded to avoid duplicate preloads
+          setImagesPreloaded(true);
+        } catch (error) {
+          console.error('Error preloading images:', error);
+        }
+      };
+      
+      preloadProductImages();
+    }
+  }, [product, imagesPreloaded]);
+  
+  // Preload related product images when user is likely to view them
+  useEffect(() => {
+    if (relatedProducts.length > 0 && !relatedLoaded.current) {
+      // Use intersection observer to detect when user scrolls near related products
+      const observer = new IntersectionObserver(
+        (entries) => {
+          entries.forEach(entry => {
+            if (entry.isIntersecting && !relatedLoaded.current) {
+              // Preload first image of each related product
+              const relatedImages = relatedProducts
+                .map(p => p.images?.[0])
+                .filter(Boolean) as string[];
+              
+              if (relatedImages.length > 0) {
+                // Preload with lower priority and small size
+                preloadImages(relatedImages, Collections.PRODUCTS, "small");
+                relatedLoaded.current = true;
+              }
+              
+              // Once loaded, disconnect observer
+              observer.disconnect();
+            }
+          });
+        },
+        { rootMargin: '500px' } // Start loading when 500px from viewport
+      );
+      
+      // Observe the related products section if it exists
+      const relatedSection = document.querySelector('#related-products');
+      if (relatedSection) {
+        observer.observe(relatedSection);
+      }
+      
+      return () => {
+        observer.disconnect();
+      };
+    }
+  }, [relatedProducts]);
   
   useEffect(() => {
     const fetchProduct = async () => {
@@ -63,22 +149,6 @@ const ProductDetail = () => {
         if (productData.images?.length > 0) {
           const mainImage = productData.images[0];
           setSelectedImage(mainImage);
-          
-          // Preload main image with high priority
-          if (mainImage) {
-            const link = document.createElement('link');
-            link.rel = 'preload';
-            link.as = 'image';
-            link.href = getPocketBaseImageUrl(mainImage, Collections.PRODUCTS, "large", "webp");
-            link.type = 'image/webp';
-            link.setAttribute('fetchpriority', 'high');
-            document.head.appendChild(link);
-            
-            // Preload thumbnails
-            if (productData.images.length > 1) {
-              preloadImages(productData.images.slice(1), Collections.PRODUCTS, "thumbnail");
-            }
-          }
         }
         if (productData.colors?.length > 0) {
           setSelectedColor(productData.colors[0]);
@@ -106,7 +176,29 @@ const ProductDetail = () => {
     };
     
     fetchProduct();
+    
+    // Reset preload state when product ID changes
+    setImagesPreloaded(false);
+    relatedLoaded.current = false;
+    
   }, [id, navigate, toast]);
+  
+  // Function to change selected image with preloading
+  const handleImageSelect = (image: string) => {
+    setSelectedImage(image);
+    
+    // Preload a higher quality version when selected
+    const preloadHighRes = () => {
+      const link = document.createElement('link');
+      link.rel = 'preload';
+      link.as = 'image';
+      link.href = getPocketBaseImageUrl(image, Collections.PRODUCTS, "large", "webp");
+      link.type = 'image/webp';
+      document.head.appendChild(link);
+    };
+    
+    preloadHighRes();
+  };
   
   if (loading) {
     return (
@@ -213,7 +305,7 @@ const ProductDetail = () => {
               {selectedImage ? (
                 <ProductImage
                   url={selectedImage}
-                  alt={product.name}
+                  alt={product?.name || 'Product image'}
                   className="w-full h-full object-cover"
                   priority={true}
                   width={600}
@@ -228,10 +320,10 @@ const ProductDetail = () => {
             </div>
             
             <div className="grid grid-cols-4 gap-4">
-              {product.images?.map((image, index) => (
+              {product?.images?.map((image, index) => (
                 <button
                   key={index}
-                  onClick={() => setSelectedImage(image)}
+                  onClick={() => handleImageSelect(image)}
                   className={cn(
                     "relative aspect-square bg-gray-100 rounded-lg overflow-hidden transition-all",
                     selectedImage === image && "ring-2 ring-primary ring-offset-2"
@@ -245,6 +337,7 @@ const ProductDetail = () => {
                     width={150}
                     height={150}
                     size="thumbnail"
+                    priority={index < 2} // Only prioritize first two thumbnails
                   />
                 </button>
               ))}
@@ -463,10 +556,10 @@ const ProductDetail = () => {
         
         {/* Related Products */}
         {relatedProducts.length > 0 && (
-          <div className="mb-16">
+          <div className="mb-16" id="related-products">
             <h2 className="text-3xl font-light text-center mb-12">You May Also Like</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-8">
-              {relatedProducts.map((relatedProduct) => (
+              {relatedProducts.map((relatedProduct, index) => (
                 <Link 
                   key={relatedProduct.id}
                   to={`/product/${relatedProduct.id}`}
@@ -480,6 +573,7 @@ const ProductDetail = () => {
                       width={300}
                       height={300}
                       size="medium"
+                      priority={false} // Don't prioritize related product images
                     />
                     <div className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/30 transition-colors duration-300">
                       <Button

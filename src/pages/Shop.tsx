@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { getProducts, type Product } from '@/lib/pocketbase';
 import { useCart } from '@/contexts/CartContext';
@@ -23,9 +23,35 @@ export default function Shop() {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState<"name" | "price" | "bestseller">('name');
   const [category, setCategory] = useState<string>('all');
+  const [visibleProducts, setVisibleProducts] = useState<Set<string>>(new Set());
   const { addItem } = useCart();
   const { toast } = useToast();
   const [wishlistedItems, setWishlistedItems] = useState<Set<string>>(new Set());
+  const productGridRef = useRef<HTMLDivElement>(null);
+  const observersRef = useRef<Map<string, IntersectionObserver>>(new Map());
+  
+  // Calculate the filtered products
+  const categories = ['all', ...new Set(products.map((product) => product.category).filter(Boolean))];
+  
+  const filteredProducts = products
+    .filter((product) => {
+      const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        product.description.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesCategory = category === 'all' || product.category === category;
+      return matchesSearch && matchesCategory;
+    })
+    .sort((a, b) => {
+      switch (sortBy) {
+        case 'name':
+          return a.name.localeCompare(b.name);
+        case 'price':
+          return a.price - b.price;
+        case 'bestseller':
+          return Number(b.bestseller) - Number(a.bestseller);
+        default:
+          return 0;
+      }
+    });
 
   useEffect(() => {
     const controller = new AbortController();
@@ -66,30 +92,56 @@ export default function Shop() {
 
     return () => {
       controller.abort();
+      // Clean up any observers
+      observersRef.current.forEach(observer => observer.disconnect());
+      observersRef.current.clear();
     };
   }, [toast]);
 
-  const categories = ['all', ...new Set(products.map((product) => product.category).filter(Boolean))];
-
-  const filteredProducts = products
-    .filter((product) => {
-      const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        product.description.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesCategory = category === 'all' || product.category === category;
-      return matchesSearch && matchesCategory;
-    })
-    .sort((a, b) => {
-      switch (sortBy) {
-        case 'name':
-          return a.name.localeCompare(b.name);
-        case 'price':
-          return a.price - b.price;
-        case 'bestseller':
-          return Number(b.bestseller) - Number(a.bestseller);
-        default:
-          return 0;
-      }
+  // Setup intersection observer to track which products are visible
+  useEffect(() => {
+    if (loading || products.length === 0 || !productGridRef.current) return;
+    
+    // Clean up previous observers
+    observersRef.current.forEach(observer => observer.disconnect());
+    observersRef.current.clear();
+    
+    // Create new observers for product elements
+    const productElements = productGridRef.current.querySelectorAll('[data-product-id]');
+    
+    productElements.forEach(element => {
+      const productId = element.getAttribute('data-product-id');
+      if (!productId) return;
+      
+      const observer = new IntersectionObserver(
+        (entries) => {
+          entries.forEach(entry => {
+            if (entry.isIntersecting) {
+              // Mark product as visible
+              setVisibleProducts(prev => new Set([...prev, productId]));
+              
+              // Once we've seen it, we can stop observing
+              observer.unobserve(entry.target);
+              observersRef.current.delete(productId);
+            }
+          });
+        },
+        { 
+          rootMargin: '200px', // Start loading when product is 200px from viewport
+          threshold: 0.1 // Consider visible when 10% is in viewport
+        }
+      );
+      
+      observer.observe(element);
+      observersRef.current.set(productId, observer);
     });
+    
+    return () => {
+      // Clean up observers
+      observersRef.current.forEach(observer => observer.disconnect());
+      observersRef.current.clear();
+    };
+  }, [loading, products, filteredProducts]);
 
   const handleAddToCart = (product: Product) => {
     if (!product.colors || !Array.isArray(product.colors) || product.colors.length === 0) {
@@ -245,12 +297,13 @@ export default function Shop() {
               <p className="text-lg text-muted-foreground">No products found</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
+            <div ref={productGridRef} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
               {filteredProducts.map((product, index) => (
                 <Link
                   key={product.id}
                   to={`/product/${product.id}`}
                   className="group block"
+                  data-product-id={product.id}
                 >
                   <div className="relative aspect-square overflow-hidden bg-gray-300 rounded-lg mb-4 group">
                     {product.images?.[0] ? (
@@ -258,10 +311,11 @@ export default function Shop() {
                         url={product.images[0]} 
                         alt={product.name}
                         className="w-full h-full object-cover"
-                        priority={index < 4}
+                        priority={index < 4} // Only set priority for first 4 products (visible above the fold)
                         width={300} 
                         height={300}
-                        size={index < 8 ? "medium" : "small"}
+                        size={index < 8 ? "medium" : "small"} // Use higher quality for first 8 products
+                        useResponsive={true}
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center">
