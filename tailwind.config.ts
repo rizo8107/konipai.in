@@ -64,7 +64,7 @@ export default {
 					ring: 'hsl(var(--sidebar-ring))'
 				},
 				konipai: {
-					beige: '#F6EFE0',
+					beige: '#f4f4f5',
 					mint: '#9CCBBD',
 					black: '#222222',
 					lightBeige: '#F9F5ED',

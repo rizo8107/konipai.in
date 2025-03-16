@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, memo } from 'react';
+import { useState, useEffect } from 'react';
 import { ArrowLeft, ArrowRight, Loader2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { getSliderImages, SliderImage } from '@/lib/pocketbase';
@@ -42,32 +42,35 @@ const Hero = () => {
     return () => clearInterval(interval);
   }, [sliderImages]);
 
-  const goToSlide = useCallback((index: number) => {
+  const goToSlide = (index: number) => {
+    console.log('Going to slide:', index);
     setCurrentImageIndex(index);
-  }, []);
+  };
 
-  const goToPrevSlide = useCallback((e: React.MouseEvent) => {
+  const goToPrevSlide = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    console.log('Going to previous slide');
     setCurrentImageIndex((prevIndex) => 
       prevIndex === 0 ? sliderImages.length - 1 : prevIndex - 1
     );
-  }, [sliderImages.length]);
+  };
 
-  const goToNextSlide = useCallback((e: React.MouseEvent) => {
+  const goToNextSlide = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    console.log('Going to next slide');
     setCurrentImageIndex((prevIndex) => 
       (prevIndex + 1) % sliderImages.length
     );
-  }, [sliderImages.length]);
+  };
 
   // Helper function to determine if a link is external
   const isExternalLink = (url: string) => {
     return url.startsWith('http://') || url.startsWith('https://');
   };
 
-  const handleSlideClick = useCallback((slide: SliderImage) => {
+  const handleSlideClick = (slide: SliderImage) => {
     if (slide.link) {
       if (isExternalLink(slide.link)) {
         window.open(slide.link, '_blank', 'noopener,noreferrer');
@@ -75,11 +78,11 @@ const Hero = () => {
         window.location.href = slide.link;
       }
     }
-  }, []);
+  };
 
   if (loading) {
     return (
-      <section className="relative w-full h-[50vh] md:h-[60vh] lg:h-[70vh] flex items-center justify-center bg-gray-50">
+      <section className="relative w-full h-[600px] md:h-[700px] lg:h-[800px] flex items-center justify-center bg-gray-50">
         <Loader2 className="h-12 w-12 animate-spin text-[#219898]" />
       </section>
     );
@@ -87,104 +90,73 @@ const Hero = () => {
 
   if (sliderImages.length === 0) {
     return (
-      <section className="relative w-full h-[50vh] md:h-[60vh] lg:h-[70vh] flex items-center justify-center bg-gray-50">
+      <section className="relative w-full h-[600px] md:h-[700px] lg:h-[800px] flex items-center justify-center bg-gray-50">
         <p className="text-gray-500">No slider images available</p>
       </section>
     );
   }
 
-  const currentSlide = sliderImages[currentImageIndex];
-  
   return (
-    <section className="relative w-full h-[50vh] md:h-[60vh] lg:h-[70vh] overflow-hidden bg-gray-100">
-      {/* Navigation Arrows */}
-      <button
-        onClick={goToPrevSlide}
-        className="absolute left-4 top-1/2 -translate-y-1/2 z-10 bg-white/80 backdrop-blur-sm rounded-full p-2 shadow-md hover:bg-white transition-colors"
-        aria-label="Previous slide"
-      >
-        <ArrowLeft className="h-5 w-5" />
-      </button>
-      
-      <button
-        onClick={goToNextSlide}
-        className="absolute right-4 top-1/2 -translate-y-1/2 z-10 bg-white/80 backdrop-blur-sm rounded-full p-2 shadow-md hover:bg-white transition-colors"
-        aria-label="Next slide"
-      >
-        <ArrowRight className="h-5 w-5" />
-      </button>
-      
-      {/* Slides */}
-      <div className="h-full relative">
+    <section className="relative w-full h-[600px] md:h-[700px] lg:h-[800px] overflow-hidden">
+      {/* Image Slider */}
+      <div className="absolute inset-0 w-full h-full">
         {sliderImages.map((slide, index) => (
-          <div
+          <div 
             key={slide.id}
             className={`absolute inset-0 h-full w-full transition-opacity duration-1000 ${
-              index === currentImageIndex ? 'opacity-100' : 'opacity-0 pointer-events-none'
-            }`}
+              currentImageIndex === index ? 'opacity-100 z-10' : 'opacity-0 z-0'
+            } cursor-pointer`}
             onClick={() => handleSlideClick(slide)}
-            style={{ cursor: slide.link ? 'pointer' : 'default' }}
           >
-            <img
-              src={slide.image}
+            <img 
+              src={slide.image} 
               alt={slide.alt || `Slide ${index + 1}`}
-              className="object-cover w-full h-full"
-              loading={index === 0 ? "eager" : "lazy"}
-              width="1920"
-              height="1080"
+              className="h-full w-full object-cover"
             />
-            
-            {slide.showOverlay && (
-              <div className="absolute inset-0 bg-black/40"></div>
-            )}
-            
-            <div className="absolute inset-0 flex flex-col items-center justify-center p-8 text-center">
-              {slide.title && (
-                <h2 className={`text-3xl md:text-4xl lg:text-5xl font-bold mb-4 ${slide.showOverlay ? 'text-white' : 'text-gray-900'}`}>
-                  {slide.title}
-                </h2>
-              )}
-              
-              {slide.subtitle && (
-                <p className={`text-base md:text-lg lg:text-xl max-w-2xl mx-auto mb-6 ${slide.showOverlay ? 'text-white/90' : 'text-gray-700'}`}>
-                  {slide.subtitle}
-                </p>
-              )}
-              
-              {slide.buttonText && slide.link && (
-                <Link 
-                  to={isExternalLink(slide.link) ? '#' : slide.link}
-                  onClick={(e) => {
-                    if (isExternalLink(slide.link)) {
-                      e.preventDefault();
-                      window.open(slide.link, '_blank', 'noopener,noreferrer');
-                    }
-                  }}
-                  className="inline-flex items-center justify-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-[#219898] hover:bg-[#197979]"
-                >
-                  {slide.buttonText}
-                </Link>
-              )}
-            </div>
+            <div className="absolute inset-0 bg-black/20"></div>
           </div>
         ))}
       </div>
       
-      {/* Slide Indicators */}
-      <div className="absolute bottom-6 left-0 right-0 flex justify-center gap-3 z-10">
+      {/* Navigation Arrows */}
+      <div className="absolute inset-0 flex items-center justify-between p-4 z-30 pointer-events-none">
+        <button 
+          onClick={goToPrevSlide}
+          className="bg-white/20 backdrop-blur-sm hover:bg-white/30 p-3 rounded-full text-white transition-all duration-300 pointer-events-auto"
+          aria-label="Previous slide"
+        >
+          <ArrowLeft className="h-5 w-5 md:h-6 md:w-6" />
+        </button>
+        <button 
+          onClick={goToNextSlide}
+          className="bg-white/20 backdrop-blur-sm hover:bg-white/30 p-3 rounded-full text-white transition-all duration-300 pointer-events-auto"
+          aria-label="Next slide"
+        >
+          <ArrowRight className="h-5 w-5 md:h-6 md:w-6" />
+        </button>
+      </div>
+      
+      {/* Slider Navigation Dots */}
+      <div className="absolute bottom-4 md:bottom-8 left-1/2 transform -translate-x-1/2 flex space-x-2 z-30">
         {sliderImages.map((_, index) => (
           <button
             key={index}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              goToSlide(index);
+            }}
             className={`w-2 h-2 md:w-3 md:h-3 rounded-full transition-all duration-300 ${
-              index === currentImageIndex ? 'bg-white scale-125 shadow-lg' : 'bg-white/50'
-            }`}
-            onClick={() => goToSlide(index)}
+              currentImageIndex === index ? 'bg-white w-6 md:w-10' : 'bg-white/50'
+            } hover:bg-white`}
             aria-label={`Go to slide ${index + 1}`}
           />
         ))}
       </div>
+      
+      <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-white to-transparent z-20" />
     </section>
   );
 };
 
-export default memo(Hero);
+export default Hero;

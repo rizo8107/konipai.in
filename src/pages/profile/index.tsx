@@ -91,28 +91,28 @@ export default function ProfilePage() {
         <h1 className="text-3xl font-bold mb-6 text-gray-900">My Account</h1>
         
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-          <TabsList className="grid w-full grid-cols-4 lg:w-[600px] bg-white border-b">
+          <TabsList className="grid w-full grid-cols-4 lg:w-[600px] konipai-tabs-list">
             <TabsTrigger 
               value="personal-info" 
-              className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none"
+              className="konipai-tab"
             >
               Personal Info
             </TabsTrigger>
             <TabsTrigger 
               value="orders"
-              className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none"
+              className="konipai-tab"
             >
               Orders
             </TabsTrigger>
             <TabsTrigger 
               value="addresses"
-              className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none"
+              className="konipai-tab"
             >
               Addresses
             </TabsTrigger>
             <TabsTrigger 
               value="security"
-              className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none"
+              className="konipai-tab"
             >
               Security
             </TabsTrigger>

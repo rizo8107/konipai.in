@@ -1,43 +1,40 @@
-import React, { Suspense } from "react";
 import { BrowserRouter, Routes as RouterRoutes, Route, Navigate } from "react-router-dom"
 import { useAuth } from "./contexts/AuthContext"
 import { Toaster as Sonner } from "@/components/ui/sonner"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import Navbar from "./components/Navbar"
 import Footer from "./components/Footer"
-import { Loader2 } from "lucide-react";
+import { lazy, Suspense } from "react"
+import { Loader2 } from "lucide-react"
 
-// Eagerly loaded components
+// Eager load critical pages
 import Index from "./pages/Index"
 
-// Lazy loaded components
-const Shop = React.lazy(() => import("./pages/Shop"))
-const ProductDetail = React.lazy(() => import("./pages/ProductDetail"))
-const Bestsellers = React.lazy(() => import("./pages/Bestsellers"))
-const NewArrivals = React.lazy(() => import("./pages/NewArrivals"))
-const About = React.lazy(() => import("./pages/About"))
-const Checkout = React.lazy(() => import("./pages/Checkout"))
-const NotFound = React.lazy(() => import("./pages/NotFound"))
-const LoginPage = React.lazy(() => import("./pages/auth/login"))
-const SignupPage = React.lazy(() => import("./pages/auth/signup"))
-const ForgotPasswordPage = React.lazy(() => import("./pages/auth/forgot-password"))
-const ResetPasswordPage = React.lazy(() => import("./pages/auth/reset-password"))
-const ProfilePage = React.lazy(() => import("./pages/profile"))
-const OrderDetail = React.lazy(() => import("./pages/OrderDetail"))
-const OrderConfirmation = React.lazy(() => import("./pages/order-confirmation"))
-
-// Loading fallback component
-const PageLoader = () => (
-  <div className="flex items-center justify-center min-h-[80vh]">
-    <Loader2 className="h-10 w-10 animate-spin text-primary" />
-  </div>
-);
+// Lazy load non-critical pages
+const Shop = lazy(() => import("./pages/Shop"))
+const ProductDetail = lazy(() => import("./pages/ProductDetail"))
+const Bestsellers = lazy(() => import("./pages/Bestsellers"))
+const NewArrivals = lazy(() => import("./pages/NewArrivals"))
+const About = lazy(() => import("./pages/About"))
+const Checkout = lazy(() => import("./pages/Checkout"))
+const NotFound = lazy(() => import("./pages/NotFound"))
+const LoginPage = lazy(() => import("./pages/auth/login"))
+const SignupPage = lazy(() => import("./pages/auth/signup"))
+const ForgotPasswordPage = lazy(() => import("./pages/auth/forgot-password"))
+const ResetPasswordPage = lazy(() => import("./pages/auth/reset-password"))
+const ProfilePage = lazy(() => import("./pages/profile"))
+const OrderDetail = lazy(() => import("./pages/OrderDetail"))
+const OrderConfirmation = lazy(() => import("./pages/order-confirmation"))
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, loading } = useAuth()
 
   if (loading) {
-    return <PageLoader />
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    )
   }
 
   if (!isAuthenticated) {
@@ -45,6 +42,15 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
   }
 
   return <>{children}</>
+}
+
+// Loading fallback for lazy-loaded components
+function PageLoader() {
+  return (
+    <div className="min-h-screen flex items-center justify-center">
+      <Loader2 className="h-8 w-8 animate-spin text-primary" />
+    </div>
+  )
 }
 
 export function Routes() {

@@ -174,7 +174,6 @@ interface ListOptions {
     signal?: AbortSignal;
     $autoCancel?: boolean;
     sort?: string;
-    expand?: string;
 }
 
 // Auth functions
@@ -197,184 +196,75 @@ export async function signOut() {
     pb.authStore.clear();
 }
 
-// Add a type definition for ProductFilterOptions
-interface ProductFilterOptions {
-  category?: string;
-  bestseller?: boolean;
-  new?: boolean;
-  inStock?: boolean;
+// Product functions
+export async function getProducts(filter?: ProductFilter, signal?: AbortSignal): Promise<Product[]> {
+    try {
+        const filterRules: string[] = [];
+        
+        if (filter) {
+            if (filter.category) {
+                filterRules.push(`category = "${filter.category}"`);
+            }
+            if (filter.bestseller !== undefined) {
+                filterRules.push(`bestseller = ${filter.bestseller}`);
+            }
+            if (filter.new !== undefined) {
+                filterRules.push(`new = ${filter.new}`);
+            }
+            if (filter.inStock !== undefined) {
+                filterRules.push(`inStock = ${filter.inStock}`);
+            }
+        }
+
+        const filterString = filterRules.length > 0 ? filterRules.join(' && ') : '';
+        
+        const options: ListOptions = {
+            $autoCancel: false
+        };
+
+        if (signal) {
+            options.signal = signal;
+        }
+
+        if (filterString) {
+            options.filter = filterString;
+        }
+
+        const records = await pb.collection(Collections.PRODUCTS).getList(1, 50, options);
+
+        return records.items.map(record => ({
+            ...record,
+            $id: record.id,
+            images: Array.isArray(record.images) 
+                ? record.images.map((image: string) => `${record.id}/${image}`)
+                : [],
+            colors: typeof record.colors === 'string' ? JSON.parse(record.colors) : record.colors,
+            features: typeof record.features === 'string' ? JSON.parse(record.features) : record.features,
+            care: typeof record.care === 'string' ? JSON.parse(record.care) : record.care,
+            tags: typeof record.tags === 'string' ? JSON.parse(record.tags) : record.tags,
+            createdAt: record.created,
+            updatedAt: record.updated
+        })) as unknown as Product[];
+    } catch (error) {
+        if (error.name === 'AbortError') {
+            throw error;
+        }
+        console.error('Error fetching products:', error);
+        return [];
+    }
 }
 
-// Add a simple in-memory cache for products
-const cache = {
-  products: new Map<string, { data: Product[], timestamp: number }>(),
-  sliderImages: new Map<string, { data: SliderImage[], timestamp: number }>(),
-  CACHE_DURATION: 5 * 60 * 1000, // 5 minutes in milliseconds
-  
-  // Helper to generate cache keys
-  getCacheKey(options?: ProductFilterOptions): string {
-    if (!options) return 'all';
-    return JSON.stringify(options);
-  },
-  
-  // Check if cache is valid
-  isValid(timestamp: number): boolean {
-    return Date.now() - timestamp < this.CACHE_DURATION;
-  }
-};
-
-// Modify getProducts to use cache
-export async function getProducts(
-  options?: ProductFilterOptions,
-  signal?: AbortSignal
-): Promise<Product[]> {
-  try {
-    const cacheKey = cache.getCacheKey(options);
-    const cachedData = cache.products.get(cacheKey);
-    
-    // Return cached data if it's valid
-    if (cachedData && cache.isValid(cachedData.timestamp)) {
-      console.log('Using cached products data for:', cacheKey);
-      return cachedData.data;
-    }
-    
-    // If no valid cache, fetch fresh data
-    const filterRules: string[] = [];
-    
-    if (options) {
-      if (options.category) {
-        filterRules.push(`category = "${options.category}"`);
-      }
-      
-      if (typeof options.bestseller === 'boolean') {
-        filterRules.push(`bestseller = ${options.bestseller}`);
-      }
-      
-      if (typeof options.new === 'boolean') {
-        filterRules.push(`new = ${options.new}`);
-      }
-      
-      if (typeof options.inStock === 'boolean') {
-        filterRules.push(`inStock = ${options.inStock}`);
-      }
-    }
-    
-    const filter = filterRules.length > 0 ? filterRules.join(' && ') : '';
-    
-    const fetchOptions: ListOptions = {
-      filter,
-      sort: '-created',
-      $autoCancel: false
-    };
-    
-    if (signal) {
-      fetchOptions.signal = signal;
-    }
-    
-    console.log('Fetching products with options:', fetchOptions);
-    
-    const response = await pb.collection(Collections.PRODUCTS).getList(1, 100, fetchOptions);
-    console.log('Products API response:', response);
-    
-    const products = response.items.map(record => {
-      // Ensure proper mapping of record fields to Product interface
-      return {
-        id: record.id,
+export async function getProduct(id: string) {
+    const record = await pb.collection('products').getOne<Product>(id);
+    return {
+        ...record,
         $id: record.id,
-        name: record.name,
-        description: record.description,
-        price: record.price,
-        images: record.images && record.images.length > 0
-          ? record.images.map((image: string) => `${record.id}/${image}`)
-          : [],
+        images: record.images.map(image => `${record.id}/${image}`),
         colors: typeof record.colors === 'string' ? JSON.parse(record.colors) : record.colors,
         features: typeof record.features === 'string' ? JSON.parse(record.features) : record.features,
         care: typeof record.care === 'string' ? JSON.parse(record.care) : record.care,
         tags: typeof record.tags === 'string' ? JSON.parse(record.tags) : record.tags,
-        category: record.category,
-        dimensions: record.dimensions,
-        material: record.material,
-        bestseller: record.bestseller,
-        new: record.new,
-        inStock: record.inStock,
-        reviews: record.reviews,
-        createdAt: record.created,
-        updatedAt: record.updated
-      } as unknown as Product;
-    });
-    
-    // Cache the results
-    cache.products.set(cacheKey, { 
-      data: products, 
-      timestamp: Date.now() 
-    });
-    
-    return products;
-  } catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') {
-      throw error;
-    }
-    console.error('Error fetching products:', error);
-    return [];
-  }
-}
-
-// Modify getProduct to use cache when possible
-export async function getProduct(id: string): Promise<Product | null> {
-  try {
-    // Check if we have this product in any cache entry
-    for (const [_, cachedData] of cache.products.entries()) {
-      if (cache.isValid(cachedData.timestamp)) {
-        const product = cachedData.data.find(p => p.id === id);
-        if (product) {
-          console.log('Found product in cache:', id);
-          return product;
-        }
-      }
-    }
-    
-    // No cache hit, fetch the product
-    console.log('Fetching product from API:', id);
-    const record = await pb.collection(Collections.PRODUCTS).getOne(id);
-    console.log('Product API response:', record);
-    
-    // Ensure proper mapping of record fields to Product interface
-    const product = {
-      id: record.id,
-      $id: record.id,
-      name: record.name,
-      description: record.description,
-      price: record.price,
-      images: record.images && record.images.length > 0
-        ? record.images.map(image => `${record.id}/${image}`)
-        : [],
-      colors: typeof record.colors === 'string' ? JSON.parse(record.colors) : record.colors,
-      features: typeof record.features === 'string' ? JSON.parse(record.features) : record.features,
-      care: typeof record.care === 'string' ? JSON.parse(record.care) : record.care,
-      tags: typeof record.tags === 'string' ? JSON.parse(record.tags) : record.tags,
-      category: record.category,
-      dimensions: record.dimensions,
-      material: record.material,
-      bestseller: record.bestseller,
-      new: record.new,
-      inStock: record.inStock,
-      reviews: record.reviews,
-      createdAt: record.created,
-      updatedAt: record.updated
-    } as unknown as Product;
-    
-    // Add to cache (using a specific key for this product)
-    const cacheKey = `product_${id}`;
-    cache.products.set(cacheKey, { 
-      data: [product], 
-      timestamp: Date.now() 
-    });
-    
-    return product;
-  } catch (error) {
-    console.error(`Error fetching product ${id}:`, error);
-    return null;
-  }
+    };
 }
 
 // Address functions
@@ -472,47 +362,30 @@ export interface SliderImage extends RecordModel {
     description: string;
 }
 
-// Modify getSliderImages to use cache
+// Slider images functions
 export async function getSliderImages(signal?: AbortSignal): Promise<SliderImage[]> {
-  try {
-    const cacheKey = 'sliderImages';
-    const cachedData = cache.sliderImages.get(cacheKey);
-    
-    // Return cached data if it's valid
-    if (cachedData && cache.isValid(cachedData.timestamp)) {
-      console.log('Using cached slider images');
-      return cachedData.data;
+    try {
+        const options: ListOptions = {
+            filter: 'active = true',
+            sort: '+order',
+            $autoCancel: false
+        };
+
+        if (signal) {
+            options.signal = signal;
+        }
+
+        const records = await pb.collection(Collections.SLIDER_IMAGES).getList(1, 10, options);
+
+        return records.items.map(record => ({
+            ...record,
+            image: pb.files.getUrl(record, record.image)
+        })) as SliderImage[];
+    } catch (error) {
+        if (error.name === 'AbortError') {
+            throw error;
+        }
+        console.error('Error fetching slider images:', error);
+        return [];
     }
-    
-    const options: ListOptions = {
-      filter: 'active = true',
-      sort: '+order',
-      $autoCancel: false
-    };
-
-    if (signal) {
-      options.signal = signal;
-    }
-
-    const records = await pb.collection(Collections.SLIDER_IMAGES).getList(1, 10, options);
-
-    const sliderImages = records.items.map(record => ({
-      ...record,
-      image: pb.files.getURL(record, record.image)
-    })) as SliderImage[];
-    
-    // Cache the results
-    cache.sliderImages.set(cacheKey, { 
-      data: sliderImages, 
-      timestamp: Date.now() 
-    });
-
-    return sliderImages;
-  } catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') {
-      throw error;
-    }
-    console.error('Error fetching slider images:', error);
-    return [];
-  }
 } 

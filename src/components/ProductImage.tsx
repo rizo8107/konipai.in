@@ -1,15 +1,26 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, memo } from 'react';
 import { ImageIcon, Loader2 } from 'lucide-react';
 import { Collections } from '@/lib/pocketbase';
 import { cn } from '@/lib/utils';
+import { getPocketBaseImageUrl } from '@/utils/imageOptimizer';
 
 interface ProductImageProps {
     url: string;
     alt: string;
     className?: string;
+    priority?: boolean; // For above-the-fold images
+    width?: number;
+    height?: number;
 }
 
-export function ProductImage({ url, alt, className }: ProductImageProps) {
+export const ProductImage = memo(function ProductImage({ 
+    url, 
+    alt, 
+    className,
+    priority = false,
+    width,
+    height
+}: ProductImageProps) {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [imageUrl, setImageUrl] = useState<string | null>(null);
@@ -21,35 +32,27 @@ export function ProductImage({ url, alt, className }: ProductImageProps) {
             return;
         }
 
-        const loadImage = async () => {
-            try {
-                setIsLoading(true);
-                setError(null);
-
-                // Split the URL into record ID and filename
-                const [recordId, filename] = url.split('/');
-                if (!recordId || !filename) {
-                    throw new Error('Invalid image URL format');
-                }
-
-                // Get the file URL from PocketBase
-                const baseUrl = 'https://backend-pocketbase.7za6uc.easypanel.host';
-                const fileUrl = `${baseUrl}/api/files/${Collections.PRODUCTS}/${recordId}/${filename}`;
-                setImageUrl(fileUrl);
-                setIsLoading(false);
-            } catch (err) {
-                console.error('Error loading image:', err);
-                setError('Failed to load image');
-                setIsLoading(false);
+        try {
+            const fullUrl = getPocketBaseImageUrl(url, Collections.PRODUCTS);
+            if (fullUrl) {
+                setImageUrl(fullUrl);
+            } else {
+                setError('Failed to process image URL');
             }
-        };
-
-        loadImage();
+            setIsLoading(false);
+        } catch (err) {
+            console.error('Error loading image:', err);
+            setError('Failed to load image');
+            setIsLoading(false);
+        }
     }, [url]);
 
     if (isLoading) {
         return (
-            <div className={cn("animate-pulse bg-muted", className)}>
+            <div 
+                className={cn("animate-pulse bg-muted", className)} 
+                style={{ width: width ? `${width}px` : undefined, height: height ? `${height}px` : undefined }}
+            >
                 <div className="w-full h-full flex items-center justify-center">
                     <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                 </div>
@@ -59,7 +62,10 @@ export function ProductImage({ url, alt, className }: ProductImageProps) {
 
     if (error || !imageUrl) {
         return (
-            <div className={cn("bg-muted flex items-center justify-center", className)}>
+            <div 
+                className={cn("bg-muted flex items-center justify-center", className)}
+                style={{ width: width ? `${width}px` : undefined, height: height ? `${height}px` : undefined }}
+            >
                 <ImageIcon className="h-6 w-6 text-muted-foreground" aria-label="Image failed to load" />
             </div>
         );
@@ -70,7 +76,10 @@ export function ProductImage({ url, alt, className }: ProductImageProps) {
             src={imageUrl}
             alt={alt}
             className={cn("object-cover", className)}
-            loading="lazy"
+            loading={priority ? "eager" : "lazy"}
+            width={width}
+            height={height}
+            decoding={priority ? "sync" : "async"}
         />
     );
-} 
+}); 

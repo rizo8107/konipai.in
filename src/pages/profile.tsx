@@ -77,10 +77,10 @@ export default function ProfilePage() {
   return (
     <div className="container py-10">
       <Tabs defaultValue="profile" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="profile">Profile</TabsTrigger>
-          <TabsTrigger value="orders">Orders</TabsTrigger>
-          <TabsTrigger value="addresses">Addresses</TabsTrigger>
+        <TabsList className="konipai-tabs-list">
+          <TabsTrigger value="profile" className="konipai-tab">Profile</TabsTrigger>
+          <TabsTrigger value="orders" className="konipai-tab">Orders</TabsTrigger>
+          <TabsTrigger value="addresses" className="konipai-tab">Addresses</TabsTrigger>
         </TabsList>
 
         <TabsContent value="profile">

@@ -359,73 +359,78 @@ const ProductDetail = () => {
               </div>
             </div>
             
-            <Tabs defaultValue="features" className="w-full">
-              <TabsList className="w-full grid grid-cols-5">
-                <TabsTrigger value="features">Features</TabsTrigger>
-                <TabsTrigger value="dimensions">Dimensions</TabsTrigger>
-                <TabsTrigger value="care">Care</TabsTrigger>
-                <TabsTrigger value="routine">How to Use</TabsTrigger>
-                <TabsTrigger value="tips">Tips & Advice</TabsTrigger>
-              </TabsList>
-              <TabsContent value="features" className="pt-4">
-                <ul className="list-disc pl-5 space-y-2 text-muted-foreground">
-                  {product.features.map((feature, index) => (
-                    <li key={index}>{feature}</li>
-                  ))}
-                </ul>
-              </TabsContent>
-              <TabsContent value="dimensions" className="pt-4">
-                <div className="space-y-4 text-muted-foreground">
-                  <p><strong>Dimensions:</strong> {product.dimensions}</p>
-                  <p><strong>Material:</strong> {product.material}</p>
-                </div>
-              </TabsContent>
-              <TabsContent value="care" className="pt-4">
-                <ul className="list-disc pl-5 space-y-2 text-muted-foreground">
-                  {product.care.map((care, index) => (
-                    <li key={index}>{care}</li>
-                  ))}
-                </ul>
-              </TabsContent>
-              <TabsContent value="routine" className="pt-4">
-                <div className="space-y-6">
-                  <div>
-                    <h3 className="font-medium mb-2">Daily Routine</h3>
-                    <p className="text-muted-foreground">
-                      Keep your tote bag clean and organized. Empty it regularly and store it in a cool, dry place when not in use.
-                    </p>
-                  </div>
-                  <div>
-                    <h3 className="font-medium mb-2">For Best Results</h3>
+            <div className="mt-12">
+              <h3 className="text-xl font-bold mb-4">Product Details</h3>
+              <div className="overflow-x-auto pb-2">
+                <Tabs defaultValue="features">
+                  <TabsList className="w-full grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 konipai-tabs-list">
+                    <TabsTrigger value="features" className="konipai-tab">Features</TabsTrigger>
+                    <TabsTrigger value="dimensions" className="konipai-tab">Dimensions</TabsTrigger>
+                    <TabsTrigger value="care" className="konipai-tab">Care</TabsTrigger>
+                    <TabsTrigger value="routine" className="konipai-tab">How to Use</TabsTrigger>
+                    <TabsTrigger value="tips" className="konipai-tab">Tips & Advice</TabsTrigger>
+                  </TabsList>
+                  <TabsContent value="features" className="pt-4">
                     <ul className="list-disc pl-5 space-y-2 text-muted-foreground">
-                      <li>Clean spills immediately</li>
-                      <li>Avoid overloading</li>
-                      <li>Rotate usage to maintain shape</li>
-                      <li>Store properly when not in use</li>
+                      {product.features.map((feature, index) => (
+                        <li key={index}>{feature}</li>
+                      ))}
                     </ul>
-                  </div>
-                </div>
-              </TabsContent>
-              <TabsContent value="tips" className="pt-4">
-                <div className="space-y-6">
-                  <div>
-                    <h3 className="font-medium mb-2">Expert's Tips</h3>
-                    <p className="text-muted-foreground">
-                      Our tote bags are designed for versatility and durability. The canvas material will soften and develop character over time, making each bag unique to its owner.
-                    </p>
-                  </div>
-                  <div>
-                    <h3 className="font-medium mb-2">Pro Tips</h3>
+                  </TabsContent>
+                  <TabsContent value="dimensions" className="pt-4">
+                    <div className="space-y-4 text-muted-foreground">
+                      <p><strong>Dimensions:</strong> {product.dimensions}</p>
+                      <p><strong>Material:</strong> {product.material}</p>
+                    </div>
+                  </TabsContent>
+                  <TabsContent value="care" className="pt-4">
                     <ul className="list-disc pl-5 space-y-2 text-muted-foreground">
-                      <li>Use internal organizers for better organization</li>
-                      <li>Apply water repellent spray for added protection</li>
-                      <li>Clean the bottom regularly</li>
-                      <li>Use bag hooks when placing on floors</li>
+                      {product.care.map((care, index) => (
+                        <li key={index}>{care}</li>
+                      ))}
                     </ul>
-                  </div>
-                </div>
-              </TabsContent>
-            </Tabs>
+                  </TabsContent>
+                  <TabsContent value="routine" className="pt-4">
+                    <div className="space-y-6">
+                      <div>
+                        <h3 className="font-medium mb-2">Daily Routine</h3>
+                        <p className="text-muted-foreground">
+                          Keep your tote bag clean and organized. Empty it regularly and store it in a cool, dry place when not in use.
+                        </p>
+                      </div>
+                      <div>
+                        <h3 className="font-medium mb-2">For Best Results</h3>
+                        <ul className="list-disc pl-5 space-y-2 text-muted-foreground">
+                          <li>Clean spills immediately</li>
+                          <li>Avoid overloading</li>
+                          <li>Rotate usage to maintain shape</li>
+                          <li>Store properly when not in use</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </TabsContent>
+                  <TabsContent value="tips" className="pt-4">
+                    <div className="space-y-6">
+                      <div>
+                        <h3 className="font-medium mb-2">Expert's Tips</h3>
+                        <p className="text-muted-foreground">
+                          Our tote bags are designed for versatility and durability. The canvas material will soften and develop character over time, making each bag unique to its owner.
+                        </p>
+                      </div>
+                      <div>
+                        <h3 className="font-medium mb-2">Pro Tips</h3>
+                        <ul className="list-disc pl-5 space-y-2 text-muted-foreground">
+                          <li>Use internal organizers for better organization</li>
+                          <li>Apply water repellent spray for added protection</li>
+                          <li>Clean the bottom regularly</li>
+                          <li>Use bag hooks when placing on floors</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </TabsContent>
+                </Tabs>
+              </div>
+            </div>
           </div>
         </div>
         
