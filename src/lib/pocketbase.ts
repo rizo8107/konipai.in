@@ -174,6 +174,7 @@ interface ListOptions {
     signal?: AbortSignal;
     $autoCancel?: boolean;
     sort?: string;
+    expand?: string;
 }
 
 // Auth functions
@@ -497,7 +498,7 @@ export async function getSliderImages(signal?: AbortSignal): Promise<SliderImage
 
     const sliderImages = records.items.map(record => ({
       ...record,
-      image: pb.files.getUrl(record, record.image)
+      image: pb.files.getURL(record, record.image)
     })) as SliderImage[];
     
     // Cache the results
