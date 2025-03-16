@@ -1,10 +1,10 @@
-import { BrowserRouter, Routes as RouterRoutes, Route, Navigate } from "react-router-dom"
+import { BrowserRouter, Routes as RouterRoutes, Route, Navigate, useLocation } from "react-router-dom"
 import { useAuth } from "./contexts/AuthContext"
 import { Toaster as Sonner } from "@/components/ui/sonner"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import Navbar from "./components/Navbar"
 import Footer from "./components/Footer"
-import { lazy, Suspense } from "react"
+import { lazy, Suspense, useEffect } from "react"
 import { Loader2 } from "lucide-react"
 
 // Eager load critical pages
@@ -53,6 +53,17 @@ function PageLoader() {
   )
 }
 
+// Scroll restoration component to ensure pages start at the top when navigating
+function ScrollToTop() {
+  const { pathname } = useLocation();
+  
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [pathname]);
+  
+  return null;
+}
+
 export function Routes() {
   return (
     <BrowserRouter>
@@ -62,6 +73,7 @@ export function Routes() {
           <Navbar />
           <main className="flex-grow">
             <Suspense fallback={<PageLoader />}>
+              <ScrollToTop />
               <RouterRoutes>
                 <Route path="/" element={<Index />} />
                 <Route path="/shop" element={<Shop />} />

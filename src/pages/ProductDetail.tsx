@@ -50,6 +50,11 @@ const ProductDetail = () => {
   const { toast } = useToast();
   const relatedLoaded = useRef(false);
   
+  // Force scroll to top when page loads or product ID changes
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [id]);
+  
   // Preload images for better performance
   useEffect(() => {
     if (product && product.images && product.images.length > 0 && !imagesPreloaded) {
