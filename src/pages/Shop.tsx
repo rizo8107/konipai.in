@@ -11,7 +11,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
 import { Heart, Star, ImageIcon, Loader2, ShoppingBag, Search, SlidersHorizontal, Plus } from 'lucide-react';
 import { ProductImage } from '@/components/ProductImage';
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { preloadImages } from '@/utils/imageOptimizer';
@@ -273,14 +273,15 @@ export default function Shop() {
                         <h4 className="mb-2 text-sm font-medium">Categories</h4>
                         <div className="space-y-2">
                           {categories.map((cat) => (
-                            <Button
-                              key={cat}
-                              variant={category === cat ? "default" : "ghost"}
-                              className="w-full justify-start"
-                              onClick={() => setCategory(cat)}
-                            >
-                              {cat === 'all' ? 'All Categories' : cat}
-                            </Button>
+                            <SheetClose key={cat} asChild>
+                              <Button
+                                variant={category === cat ? "default" : "ghost"}
+                                className="w-full justify-start"
+                                onClick={() => setCategory(cat)}
+                              >
+                                {cat === 'all' ? 'All Categories' : cat}
+                              </Button>
+                            </SheetClose>
                           ))}
                         </div>
                       </div>
@@ -297,7 +298,7 @@ export default function Shop() {
               <p className="text-lg text-muted-foreground">No products found</p>
             </div>
           ) : (
-            <div ref={productGridRef} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
+            <div ref={productGridRef} className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-8">
               {filteredProducts.map((product, index) => (
                 <Link
                   key={product.id}
@@ -305,7 +306,7 @@ export default function Shop() {
                   className="group block"
                   data-product-id={product.id}
                 >
-                  <div className="relative aspect-square overflow-hidden bg-gray-300 rounded-lg mb-4 group">
+                  <div className="relative overflow-hidden bg-gray-300 rounded-lg mb-2 md:mb-4 group">
                     {product.images?.[0] ? (
                       <ProductImage 
                         url={product.images[0]} 
@@ -316,21 +317,22 @@ export default function Shop() {
                         height={300}
                         size={index < 8 ? "medium" : "small"} // Use higher quality for first 8 products
                         useResponsive={true}
+                        aspectRatio="square"
                       />
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center">
+                      <div className="aspect-square w-full h-full flex items-center justify-center">
                         <ShoppingBag className="h-12 w-12 text-gray-400" />
                       </div>
                     )}
                     
-                    <div className="absolute top-3 left-3 flex flex-wrap gap-2">
+                    <div className="absolute top-2 left-2 flex flex-wrap gap-1">
                       {product.bestseller && (
-                        <Badge variant="secondary" className="bg-black text-white rounded-full">
+                        <Badge variant="secondary" className="bg-black text-white rounded-full text-xs">
                           Bestseller
                         </Badge>
                       )}
                       {product.new && (
-                        <Badge variant="secondary" className="bg-primary/90 text-white rounded-full">
+                        <Badge variant="secondary" className="bg-primary/90 text-white rounded-full text-xs">
                           New
                         </Badge>
                       )}
@@ -345,19 +347,19 @@ export default function Shop() {
                           handleAddToCart(product);
                         }}
                         variant="ghost"
-                        className="w-full bg-transparent hover:bg-transparent text-black flex items-center justify-center gap-2"
+                        className="w-full bg-transparent hover:bg-transparent text-black flex items-center justify-center gap-2 text-sm sm:text-base"
                       >
-                        <Plus className="h-5 w-5" />
+                        <Plus className="h-4 w-4" />
                         Add to Cart
                       </Button>
                     </div>
                   </div>
                   
                   <div>
-                    <h3 className="font-medium text-base mb-1">
+                    <h3 className="font-medium text-sm sm:text-base mb-1 truncate">
                       {product.name}
                     </h3>
-                    <p className="text-base font-medium">
+                    <p className="text-sm sm:text-base font-medium">
                       ₹{typeof product.price === 'number' ? product.price.toFixed(2) : '0.00'}
                     </p>
                   </div>

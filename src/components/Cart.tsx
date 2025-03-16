@@ -83,8 +83,8 @@ export function Cart({ children }: CartProps) {
           <>
             <ScrollArea className="flex-1 -mx-6 px-6">
               <div className="space-y-4">
-                {items.map((item) => (
-                  <div key={`${item.productId}-${item.color}`} className="flex gap-4">
+                {items.map((item, index) => (
+                  <div key={`${item.productId}-${item.color}-${index}`} className="flex gap-4">
                     <div className="relative aspect-square h-24">
                       {item.product && item.product.images && item.product.images[0] ? (
                         <ProductImage
@@ -117,7 +117,7 @@ export function Cart({ children }: CartProps) {
                         </Button>
                       </div>
                       <div className="text-sm text-muted-foreground">
-                        Color: {item.color || 'Default'}
+                        {item.color ? `Color: ${item.color}` : 'Default'}
                       </div>
                       <div className="mt-2 flex items-center gap-2">
                         <Button

@@ -12,7 +12,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { ShoppingBag, Menu } from "lucide-react"
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
+import { Sheet, SheetClose, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { Cart } from "./Cart"
 import { Logo } from '@/components/Logo'
 
@@ -32,21 +32,31 @@ export default function Navbar() {
           </SheetTrigger>
           <SheetContent side="left" className="w-[300px] sm:w-[400px]">
             <nav className="flex flex-col gap-4">
-              <Link to="/" className="flex items-center gap-2">
-                <Logo className="h-6" />
-              </Link>
-              <Link to="/shop" className="text-lg font-semibold">
-                Shop
-              </Link>
-              <Link to="/bestsellers" className="text-lg font-semibold">
-                Bestsellers
-              </Link>
-              <Link to="/new-arrivals" className="text-lg font-semibold">
-                New Arrivals
-              </Link>
-              <Link to="/about" className="text-lg font-semibold">
-                About
-              </Link>
+              <SheetClose asChild>
+                <Link to="/" className="flex items-center gap-2">
+                  <Logo className="h-6" />
+                </Link>
+              </SheetClose>
+              <SheetClose asChild>
+                <Link to="/shop" className="text-lg font-semibold">
+                  Shop
+                </Link>
+              </SheetClose>
+              <SheetClose asChild>
+                <Link to="/bestsellers" className="text-lg font-semibold">
+                  Bestsellers
+                </Link>
+              </SheetClose>
+              <SheetClose asChild>
+                <Link to="/new-arrivals" className="text-lg font-semibold">
+                  New Arrivals
+                </Link>
+              </SheetClose>
+              <SheetClose asChild>
+                <Link to="/about" className="text-lg font-semibold">
+                  About
+                </Link>
+              </SheetClose>
             </nav>
           </SheetContent>
         </Sheet>

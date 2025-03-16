@@ -301,7 +301,7 @@ const ProductDetail = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
           {/* Product Images */}
           <div className="space-y-4">
-            <div className="relative aspect-square bg-gray-100 rounded-lg overflow-hidden">
+            <div className="relative bg-gray-100 rounded-lg overflow-hidden">
               {selectedImage ? (
                 <ProductImage
                   url={selectedImage}
@@ -311,22 +311,24 @@ const ProductDetail = () => {
                   width={600}
                   height={600}
                   size="large"
+                  aspectRatio="square"
                 />
               ) : (
-                <div className="w-full h-full flex items-center justify-center">
+                <div className="aspect-square w-full h-full flex items-center justify-center">
                   <ImageIcon className="h-12 w-12 text-gray-400" />
                 </div>
               )}
             </div>
             
-            <div className="grid grid-cols-4 gap-4">
+            <div className="grid grid-cols-4 gap-2 sm:gap-4">
               {product?.images?.map((image, index) => (
                 <button
                   key={index}
                   onClick={() => handleImageSelect(image)}
                   className={cn(
-                    "relative aspect-square bg-gray-100 rounded-lg overflow-hidden transition-all",
-                    selectedImage === image && "ring-2 ring-primary ring-offset-2"
+                    "relative bg-gray-100 rounded-lg overflow-hidden transition-all",
+                    selectedImage === image ? "ring-2 ring-primary ring-offset-2" : "hover:ring-1 hover:ring-primary/50",
+                    "aspect-square" // Ensure consistent aspect ratio
                   )}
                   aria-label={`View ${product.name} image ${index + 1}`}
                 >
@@ -338,6 +340,7 @@ const ProductDetail = () => {
                     height={150}
                     size="thumbnail"
                     priority={index < 2} // Only prioritize first two thumbnails
+                    aspectRatio="square"
                   />
                 </button>
               ))}
@@ -557,15 +560,15 @@ const ProductDetail = () => {
         {/* Related Products */}
         {relatedProducts.length > 0 && (
           <div className="mb-16" id="related-products">
-            <h2 className="text-3xl font-light text-center mb-12">You May Also Like</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-8">
+            <h2 className="text-3xl font-light text-center mb-8 md:mb-12">You May Also Like</h2>
+            <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-4 md:gap-8">
               {relatedProducts.map((relatedProduct, index) => (
                 <Link 
                   key={relatedProduct.id}
                   to={`/product/${relatedProduct.id}`}
                   className="group block"
                 >
-                  <div className="relative aspect-square overflow-hidden bg-gray-100 rounded-lg mb-4">
+                  <div className="relative aspect-square overflow-hidden bg-gray-100 rounded-lg mb-2 md:mb-4">
                     <ProductImage
                       url={relatedProduct.images?.[0] || ''}
                       alt={relatedProduct.name}
@@ -573,7 +576,8 @@ const ProductDetail = () => {
                       width={300}
                       height={300}
                       size="medium"
-                      priority={false} // Don't prioritize related product images
+                      priority={false}
+                      aspectRatio="square"
                     />
                     <div className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/30 transition-colors duration-300">
                       <Button
@@ -591,25 +595,26 @@ const ProductDetail = () => {
                           });
                         }}
                         variant="default"
-                        size="lg"
+                        size="sm"
                         className={cn(
                           "opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100",
-                          "transition-all duration-200 bg-white text-black hover:bg-gray-100"
+                          "transition-all duration-200 bg-white text-black hover:bg-gray-100",
+                          "hidden sm:flex" // Hide on very small screens
                         )}
                       >
-                        <Plus className="mr-2 h-5 w-5" />
+                        <Plus className="mr-2 h-4 w-4" />
                         Add to Cart
                       </Button>
                     </div>
                     
-                    <div className="absolute top-3 left-3 flex flex-col gap-2">
+                    <div className="absolute top-2 left-2 flex flex-col gap-1">
                       {relatedProduct.bestseller && (
-                        <Badge variant="default" className="bg-black text-white">
+                        <Badge variant="default" className="bg-black text-white text-xs">
                           Bestseller
                         </Badge>
                       )}
                       {relatedProduct.new && (
-                        <Badge variant="default" className="bg-primary text-white">
+                        <Badge variant="default" className="bg-primary text-white text-xs">
                           New
                         </Badge>
                       )}
@@ -617,23 +622,28 @@ const ProductDetail = () => {
                   </div>
                   
                   <div>
-                    <h3 className="font-medium text-base mb-1 group-hover:text-primary transition-colors">
+                    <h3 className="font-medium text-sm sm:text-base mb-1 truncate group-hover:text-primary transition-colors">
                       {relatedProduct.name}
                     </h3>
                     <div className="flex items-center justify-between">
-                      <p className="text-base font-medium">
+                      <p className="text-sm sm:text-base font-medium">
                         ₹{typeof relatedProduct.price === 'number' ? relatedProduct.price.toFixed(2) : '0.00'}
                       </p>
                       {relatedProduct.colors?.length > 0 && (
                         <div className="flex -space-x-1">
-                          {relatedProduct.colors.map((color) => (
+                          {relatedProduct.colors.slice(0, 3).map((color) => (
                             <div 
                               key={color.value}
-                              className="w-4 h-4 rounded-full border-2 border-white ring-1 ring-gray-200"
+                              className="w-3 h-3 sm:w-4 sm:h-4 rounded-full border-2 border-white ring-1 ring-gray-200"
                               style={{ backgroundColor: color.hex }}
                               title={color.name}
                             />
                           ))}
+                          {relatedProduct.colors.length > 3 && (
+                            <div className="w-3 h-3 sm:w-4 sm:h-4 rounded-full bg-gray-200 border-2 border-white flex items-center justify-center text-[8px] sm:text-[10px] font-medium">
+                              +{relatedProduct.colors.length - 3}
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>

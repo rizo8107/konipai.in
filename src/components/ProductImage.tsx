@@ -13,6 +13,7 @@ interface ProductImageProps {
     height?: number;
     size?: ImageSize;
     useResponsive?: boolean;
+    aspectRatio?: "square" | "portrait" | "landscape"; // Added aspect ratio option
 }
 
 export const ProductImage = memo(function ProductImage({ 
@@ -23,7 +24,8 @@ export const ProductImage = memo(function ProductImage({
     width,
     height,
     size = "medium",
-    useResponsive = true
+    useResponsive = true,
+    aspectRatio = "square" // Default to square aspect ratio
 }: ProductImageProps) {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -32,6 +34,13 @@ export const ProductImage = memo(function ProductImage({
     const [sources, setSources] = useState<Array<{srcSet: string, media: string, type: string}>>([]);
     const imgRef = useRef<HTMLImageElement>(null);
     const observer = useRef<IntersectionObserver | null>(null);
+
+    // Define aspect ratio classes
+    const aspectRatioClasses = {
+        square: "aspect-square",
+        portrait: "aspect-[3/4]",
+        landscape: "aspect-[4/3]",
+    };
 
     useEffect(() => {
         if (!url) {
@@ -114,7 +123,7 @@ export const ProductImage = memo(function ProductImage({
     if (error || !imageUrl) {
         return (
             <div 
-                className={cn("bg-muted flex items-center justify-center", className)}
+                className={cn("bg-muted flex items-center justify-center", aspectRatioClasses[aspectRatio], className)}
                 style={{ width: width ? `${width}px` : undefined, height: height ? `${height}px` : undefined }}
                 aria-label="Image not available"
             >
@@ -126,7 +135,8 @@ export const ProductImage = memo(function ProductImage({
     // Use picture element for responsive images
     if (useResponsive && sources.length > 0) {
         return (
-            <div className="relative overflow-hidden" style={{ width: width ? `${width}px` : '100%', height: height ? `${height}px` : '100%' }}>
+            <div className={cn("relative overflow-hidden w-full", aspectRatioClasses[aspectRatio])} 
+                style={{ maxWidth: width ? `${width}px` : undefined }}>
                 {/* Blur-up thumbnail */}
                 {isLoading && thumbnailUrl && (
                     <div className="absolute inset-0 z-0">
@@ -145,7 +155,7 @@ export const ProductImage = memo(function ProductImage({
                     </div>
                 )}
                 
-                <picture>
+                <picture className="w-full h-full block">
                     {sources.map((source, index) => (
                         <source 
                             key={index} 
@@ -177,7 +187,8 @@ export const ProductImage = memo(function ProductImage({
 
     // Fallback to regular img tag
     return (
-        <div className="relative overflow-hidden" style={{ width: width ? `${width}px` : '100%', height: height ? `${height}px` : '100%' }}>
+        <div className={cn("relative overflow-hidden w-full", aspectRatioClasses[aspectRatio])}
+            style={{ maxWidth: width ? `${width}px` : undefined }}>
             {/* Blur-up thumbnail */}
             {isLoading && thumbnailUrl && (
                 <div className="absolute inset-0 z-0">
