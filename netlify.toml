@@ -90,4 +90,28 @@
     # Cache optimized images for 1 year
     Cache-Control = "public, max-age=31536000, immutable"
     # Add WebP content type negotiation
-    Vary = "Accept" 
+    Vary = "Accept"
+
+# Cache the serverless function responses (image proxy)
+[[headers]]
+  for = "/.netlify/functions/image-proxy"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+    Vary = "Accept, Accept-Encoding, Origin, Content-Type"
+    
+# Set resource hints for better loading performance
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    # DNS Prefetching
+    Link = '''
+    </assets/index-*.js>; rel=preload; as=script,
+    </assets/index-*.css>; rel=preload; as=style,
+    <https://backend-pocketbase.7za6uc.easypanel.host>; rel=dns-prefetch
+    '''
+
+# Function bundling configuration
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+  included_files = ["node_modules/sharp/**/*"] 

@@ -1,4 +1,4 @@
-import { useState, useEffect, memo } from 'react';
+import { useState, useEffect, memo, useRef } from 'react';
 import { ImageIcon, Loader2 } from 'lucide-react';
 import { Collections } from '@/lib/pocketbase';
 import { cn } from '@/lib/utils';
@@ -28,7 +28,10 @@ export const ProductImage = memo(function ProductImage({
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [imageUrl, setImageUrl] = useState<string | null>(null);
+    const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
     const [sources, setSources] = useState<Array<{srcSet: string, media: string, type: string}>>([]);
+    const imgRef = useRef<HTMLImageElement>(null);
+    const observer = useRef<IntersectionObserver | null>(null);
 
     useEffect(() => {
         if (!url) {
@@ -38,6 +41,10 @@ export const ProductImage = memo(function ProductImage({
         }
 
         try {
+            // Always load tiny thumbnail for blur-up effect
+            const tinyThumb = getPocketBaseImageUrl(url, Collections.PRODUCTS, "thumbnail", "webp");
+            setThumbnailUrl(tinyThumb);
+            
             if (useResponsive) {
                 // Set sources for responsive image loading
                 setSources(getResponsiveImageSources(url, Collections.PRODUCTS));
@@ -51,27 +58,58 @@ export const ProductImage = memo(function ProductImage({
                 setImageUrl(optimizedUrl);
             }
             
-            setIsLoading(false);
+            // If image is a priority image, we'll keep isLoading true until the image loads
+            // Otherwise mark loading as false since we'll load it when it comes into view
+            if (!priority) {
+                setIsLoading(false);
+            }
         } catch (err) {
             console.error('Error loading image:', err);
             setError('Failed to load image');
             setIsLoading(false);
         }
-    }, [url, size, useResponsive]);
+    }, [url, size, useResponsive, priority]);
 
-    if (isLoading) {
-        return (
-            <div 
-                className={cn("animate-pulse bg-muted", className)} 
-                style={{ width: width ? `${width}px` : undefined, height: height ? `${height}px` : undefined }}
-                aria-label="Loading image"
-            >
-                <div className="w-full h-full flex items-center justify-center">
-                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                </div>
-            </div>
-        );
-    }
+    useEffect(() => {
+        // Set up intersection observer for non-priority images
+        if (!priority && imgRef.current) {
+            observer.current = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        // Start actual loading when image is in viewport
+                        const img = entry.target as HTMLImageElement;
+                        if (img.dataset.src) {
+                            img.src = img.dataset.src;
+                        }
+                        if (img.dataset.srcset) {
+                            img.srcset = img.dataset.srcset;
+                        }
+                        
+                        // Once we've started loading, disconnect observer
+                        if (observer.current) {
+                            observer.current.disconnect();
+                        }
+                    }
+                });
+            }, {
+                rootMargin: '200px', // Start loading when image is 200px from viewport
+                threshold: 0
+            });
+            
+            observer.current.observe(imgRef.current);
+        }
+        
+        return () => {
+            if (observer.current) {
+                observer.current.disconnect();
+            }
+        };
+    }, [priority, imageUrl]);
+
+    // Handle image load completion
+    const handleImageLoad = () => {
+        setIsLoading(false);
+    };
 
     if (error || !imageUrl) {
         return (
@@ -88,33 +126,91 @@ export const ProductImage = memo(function ProductImage({
     // Use picture element for responsive images
     if (useResponsive && sources.length > 0) {
         return (
-            <picture>
-                {sources.map((source, index) => (
-                    <source key={index} srcSet={source.srcSet} media={source.media} type={source.type} />
-                ))}
-                <img
-                    src={imageUrl}
-                    alt={alt}
-                    className={cn("object-cover w-full h-full", className)}
-                    loading={priority ? "eager" : "lazy"}
-                    width={width}
-                    height={height}
-                    decoding={priority ? "sync" : "async"}
-                />
-            </picture>
+            <div className="relative overflow-hidden" style={{ width: width ? `${width}px` : '100%', height: height ? `${height}px` : '100%' }}>
+                {/* Blur-up thumbnail */}
+                {isLoading && thumbnailUrl && (
+                    <div className="absolute inset-0 z-0">
+                        <img
+                            src={thumbnailUrl}
+                            alt=""
+                            className={cn("w-full h-full object-cover blur-xl scale-110", className)}
+                            aria-hidden="true"
+                        />
+                    </div>
+                )}
+                
+                {isLoading && (
+                    <div className="absolute inset-0 flex items-center justify-center z-10 bg-background/30">
+                        <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                    </div>
+                )}
+                
+                <picture>
+                    {sources.map((source, index) => (
+                        <source 
+                            key={index} 
+                            srcSet={priority ? source.srcSet : undefined} 
+                            data-srcset={!priority ? source.srcSet : undefined}
+                            media={source.media} 
+                            type={source.type} 
+                        />
+                    ))}
+                    <img
+                        ref={imgRef}
+                        src={priority ? imageUrl : undefined}
+                        data-src={!priority ? imageUrl : undefined}
+                        alt={alt}
+                        className={cn("object-cover w-full h-full transition-opacity duration-500", 
+                            isLoading ? "opacity-0" : "opacity-100",
+                            className
+                        )}
+                        loading={priority ? "eager" : "lazy"}
+                        width={width}
+                        height={height}
+                        decoding={priority ? "sync" : "async"}
+                        onLoad={handleImageLoad}
+                    />
+                </picture>
+            </div>
         );
     }
 
     // Fallback to regular img tag
     return (
-        <img
-            src={imageUrl}
-            alt={alt}
-            className={cn("object-cover", className)}
-            loading={priority ? "eager" : "lazy"}
-            width={width}
-            height={height}
-            decoding={priority ? "sync" : "async"}
-        />
+        <div className="relative overflow-hidden" style={{ width: width ? `${width}px` : '100%', height: height ? `${height}px` : '100%' }}>
+            {/* Blur-up thumbnail */}
+            {isLoading && thumbnailUrl && (
+                <div className="absolute inset-0 z-0">
+                    <img
+                        src={thumbnailUrl}
+                        alt=""
+                        className={cn("w-full h-full object-cover blur-xl scale-110", className)}
+                        aria-hidden="true"
+                    />
+                </div>
+            )}
+            
+            {isLoading && (
+                <div className="absolute inset-0 flex items-center justify-center z-10 bg-background/30">
+                    <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                </div>
+            )}
+            
+            <img
+                ref={imgRef}
+                src={priority ? imageUrl : undefined}
+                data-src={!priority ? imageUrl : undefined}
+                alt={alt}
+                className={cn("object-cover w-full h-full transition-opacity duration-500",
+                    isLoading ? "opacity-0" : "opacity-100",
+                    className
+                )}
+                loading={priority ? "eager" : "lazy"}
+                width={width}
+                height={height}
+                decoding={priority ? "sync" : "async"}
+                onLoad={handleImageLoad}
+            />
+        </div>
     );
 }); 

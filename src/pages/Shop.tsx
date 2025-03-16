@@ -14,6 +14,8 @@ import { ProductImage } from '@/components/ProductImage';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { preloadImages } from '@/utils/imageOptimizer';
+import { Collections } from '@/lib/pocketbase';
 
 export default function Shop() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -33,6 +35,19 @@ export default function Shop() {
         setLoading(true);
         const data = await getProducts(undefined, controller.signal);
         setProducts(data);
+        
+        // Preload first 8 images for better initial load performance
+        if (data.length > 0) {
+          const criticalImages = data.slice(0, 8)
+            .map(product => product.images?.[0])
+            .filter(Boolean) as string[];
+            
+          // Preload with high priority for first 4 (visible above the fold)
+          preloadImages(criticalImages.slice(0, 4), Collections.PRODUCTS, "medium", true);
+          
+          // Preload remaining with normal priority
+          preloadImages(criticalImages.slice(4), Collections.PRODUCTS, "small", false);
+        }
       } catch (error) {
         if (!(error instanceof Error) || error.name !== 'AbortError') {
           console.error('Error fetching products:', error);

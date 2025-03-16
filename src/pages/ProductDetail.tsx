@@ -26,6 +26,7 @@ import { Card } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ProductImage } from '@/components/ProductImage';
+import { preloadImages, getPocketBaseImageUrl } from '@/utils/imageOptimizer';
 
 const ProductDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -60,7 +61,24 @@ const ProductDetail = () => {
 
         setProduct(productData);
         if (productData.images?.length > 0) {
-          setSelectedImage(productData.images[0]);
+          const mainImage = productData.images[0];
+          setSelectedImage(mainImage);
+          
+          // Preload main image with high priority
+          if (mainImage) {
+            const link = document.createElement('link');
+            link.rel = 'preload';
+            link.as = 'image';
+            link.href = getPocketBaseImageUrl(mainImage, Collections.PRODUCTS, "large", "webp");
+            link.type = 'image/webp';
+            link.setAttribute('fetchpriority', 'high');
+            document.head.appendChild(link);
+            
+            // Preload thumbnails
+            if (productData.images.length > 1) {
+              preloadImages(productData.images.slice(1), Collections.PRODUCTS, "thumbnail");
+            }
+          }
         }
         if (productData.colors?.length > 0) {
           setSelectedColor(productData.colors[0]);

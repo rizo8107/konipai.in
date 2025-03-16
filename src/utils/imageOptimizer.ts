@@ -1,6 +1,9 @@
 // Image URL cache to avoid redundant URL processing
 const imageUrlCache = new Map<string, string>();
 
+// Track which images have been preloaded to avoid duplicates
+const preloadedImages = new Set<string>();
+
 // Default size optimizations for different screen sizes
 export type ImageSize = "thumbnail" | "small" | "medium" | "large" | "original";
 export type ImageFormat = "webp" | "jpeg" | "png" | "original";
@@ -11,8 +14,8 @@ interface ImageSizeConfig {
 }
 
 const IMAGE_SIZES: Record<ImageSize, ImageSizeConfig> = {
-  thumbnail: { width: 100, quality: 80 },
-  small: { width: 300, quality: 85 },
+  thumbnail: { width: 100, quality: 75 },
+  small: { width: 300, quality: 80 },
   medium: { width: 600, quality: 85 },
   large: { width: 1200, quality: 90 },
   original: { width: 0, quality: 100 }, // Original size
@@ -63,6 +66,9 @@ export function getPocketBaseImageUrl(
       
       params.append('format', format);
       params.append('quality', sizeConfig.quality.toString());
+      
+      // Add cache-busting parameter based on size and format to ensure proper caching
+      params.append('v', `${size}-${format}`);
       
       if (params.toString()) {
         fullUrl += `?${params.toString()}`;
@@ -122,17 +128,26 @@ export function getResponsiveImageSources(url: string, collection: string) {
 }
 
 /**
- * Preloads important images to improve perceived performance
+ * Preloads critical images for improved perceived performance
  * @param urls - Array of image URLs to preload
- * @param collection - The PocketBase collection name
+ * @param collection - The PocketBase collection name 
  * @param size - The size to preload (default small to save bandwidth)
+ * @param highPriority - Whether to use high priority preloading
  */
 export function preloadImages(
   urls: string[], 
   collection: string, 
-  size: ImageSize = "small"
+  size: ImageSize = "small",
+  highPriority = false
 ): void {
   urls.forEach(url => {
+    const cacheKey = `${url}-${size}-preload`;
+    
+    // Skip if already preloaded
+    if (preloadedImages.has(cacheKey)) {
+      return;
+    }
+    
     const imageUrl = getPocketBaseImageUrl(url, collection, size, "webp");
     if (imageUrl) {
       const link = document.createElement('link');
@@ -140,8 +155,33 @@ export function preloadImages(
       link.as = 'image';
       link.href = imageUrl;
       link.type = 'image/webp';
+      
+      // Set high priority for critical images
+      if (highPriority) {
+        link.setAttribute('fetchpriority', 'high');
+      }
+      
       document.head.appendChild(link);
+      preloadedImages.add(cacheKey);
     }
+  });
+}
+
+/**
+ * Preloads the critical first visible images on a page
+ * @param productIds - Array of product IDs visible in the initial viewport
+ * @param collection - The PocketBase collection name
+ */
+export function preloadCriticalImages(productIds: string[], collection: string): void {
+  // Create a preload link for each critical image
+  productIds.forEach(id => {
+    const link = document.createElement('link');
+    link.rel = 'preload';
+    link.as = 'image';
+    link.href = `${window.location.origin}/api/image-proxy?id=${id}&size=medium&format=webp`;
+    link.type = 'image/webp';
+    link.setAttribute('fetchpriority', 'high');
+    document.head.appendChild(link);
   });
 }
 
@@ -150,6 +190,7 @@ export function preloadImages(
  */
 export function clearImageCache(): void {
   imageUrlCache.clear();
+  preloadedImages.clear();
 }
 
 // Set maximum cache size to prevent memory issues
@@ -159,5 +200,12 @@ export function limitCacheSize(maxSize: number = 100): void {
     const entriesToRemove = imageUrlCache.size - maxSize;
     const keysToRemove = Array.from(imageUrlCache.keys()).slice(0, entriesToRemove);
     keysToRemove.forEach(key => imageUrlCache.delete(key));
+  }
+  
+  // Also limit preloaded images cache
+  if (preloadedImages.size > maxSize) {
+    const entriesToRemove = preloadedImages.size - maxSize;
+    const keysToRemove = Array.from(preloadedImages).slice(0, entriesToRemove);
+    keysToRemove.forEach(key => preloadedImages.delete(key));
   }
 } 
