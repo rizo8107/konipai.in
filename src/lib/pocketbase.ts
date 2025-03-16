@@ -263,7 +263,6 @@ export async function getProducts(
     const fetchOptions: ListOptions = {
       filter,
       sort: '-created',
-      expand: 'category',
       $autoCancel: false
     };
     
@@ -271,15 +270,37 @@ export async function getProducts(
       fetchOptions.signal = signal;
     }
     
-    const response = await pb.collection(Collections.PRODUCTS).getList(1, 100, fetchOptions);
+    console.log('Fetching products with options:', fetchOptions);
     
-    const products = response.items.map(record => ({
-      $id: record.id,
-      ...record,
-      images: record.images && record.images.length > 0
-        ? record.images.map((image: string) => `${record.id}/${image}`)
-        : [],
-    })) as unknown as Product[];
+    const response = await pb.collection(Collections.PRODUCTS).getList(1, 100, fetchOptions);
+    console.log('Products API response:', response);
+    
+    const products = response.items.map(record => {
+      // Ensure proper mapping of record fields to Product interface
+      return {
+        id: record.id,
+        $id: record.id,
+        name: record.name,
+        description: record.description,
+        price: record.price,
+        images: record.images && record.images.length > 0
+          ? record.images.map((image: string) => `${record.id}/${image}`)
+          : [],
+        colors: typeof record.colors === 'string' ? JSON.parse(record.colors) : record.colors,
+        features: typeof record.features === 'string' ? JSON.parse(record.features) : record.features,
+        care: typeof record.care === 'string' ? JSON.parse(record.care) : record.care,
+        tags: typeof record.tags === 'string' ? JSON.parse(record.tags) : record.tags,
+        category: record.category,
+        dimensions: record.dimensions,
+        material: record.material,
+        bestseller: record.bestseller,
+        new: record.new,
+        inStock: record.inStock,
+        reviews: record.reviews,
+        createdAt: record.created,
+        updatedAt: record.updated
+      } as unknown as Product;
+    });
     
     // Cache the results
     cache.products.set(cacheKey, { 
@@ -312,16 +333,33 @@ export async function getProduct(id: string): Promise<Product | null> {
     }
     
     // No cache hit, fetch the product
-    const record = await pb.collection(Collections.PRODUCTS).getOne(id, {
-      expand: 'category',
-    });
+    console.log('Fetching product from API:', id);
+    const record = await pb.collection(Collections.PRODUCTS).getOne(id);
+    console.log('Product API response:', record);
     
+    // Ensure proper mapping of record fields to Product interface
     const product = {
+      id: record.id,
       $id: record.id,
-      ...record,
+      name: record.name,
+      description: record.description,
+      price: record.price,
       images: record.images && record.images.length > 0
         ? record.images.map(image => `${record.id}/${image}`)
         : [],
+      colors: typeof record.colors === 'string' ? JSON.parse(record.colors) : record.colors,
+      features: typeof record.features === 'string' ? JSON.parse(record.features) : record.features,
+      care: typeof record.care === 'string' ? JSON.parse(record.care) : record.care,
+      tags: typeof record.tags === 'string' ? JSON.parse(record.tags) : record.tags,
+      category: record.category,
+      dimensions: record.dimensions,
+      material: record.material,
+      bestseller: record.bestseller,
+      new: record.new,
+      inStock: record.inStock,
+      reviews: record.reviews,
+      createdAt: record.created,
+      updatedAt: record.updated
     } as unknown as Product;
     
     // Add to cache (using a specific key for this product)
