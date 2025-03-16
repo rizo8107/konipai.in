@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "prebuild": "npm run optimize:images",
     "build": "tsc && vite build",
     "build:dev": "vite build --mode development",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
@@ -14,7 +15,8 @@
     "prepare:netlify": "node scripts/prepare-netlify.cjs",
     "deploy": "npm run prepare:netlify && npm run build",
     "update:platforms": "node scripts/update-platforms.js",
-    "init:pocketbase": "tsx scripts/init-pocketbase.ts"
+    "init:pocketbase": "tsx scripts/init-pocketbase.ts",
+    "optimize:images": "node scripts/optimize-images.js"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
@@ -85,6 +87,7 @@
     "lovable-tagger": "^1.1.7",
     "node-appwrite": "^15.0.1",
     "postcss": "^8.4.47",
+    "sharp": "^0.33.5",
     "tailwindcss": "^3.4.11",
     "terser": "^5.39.0",
     "ts-node": "^10.9.2",

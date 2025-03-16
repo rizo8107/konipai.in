@@ -141,7 +141,21 @@ export default function Shop() {
     <div className="min-h-screen bg-background">
       {/* Hero Section */}
       <div className="relative h-[300px] bg-gray-900 flex items-center justify-center text-white">
-        <div className="absolute inset-0 bg-[url('/images/shop-hero.jpg')] bg-cover bg-center opacity-50" />
+        <div className="absolute inset-0 overflow-hidden">
+          <picture>
+            <source srcSet="/images/shop-hero.webp" type="image/webp" />
+            <source srcSet="/images/shop-hero.jpg" type="image/jpeg" />
+            <img 
+              src="/images/shop-hero.jpg" 
+              alt="Shop collection hero" 
+              className="w-full h-full object-cover object-center opacity-50"
+              width={1200} 
+              height={300}
+              loading="eager"
+              decoding="sync"
+            />
+          </picture>
+        </div>
         <div className="relative z-10 text-center">
           <h1 className="text-4xl font-bold mb-4">Our Collection</h1>
           <p className="text-lg max-w-2xl mx-auto">
@@ -217,7 +231,7 @@ export default function Shop() {
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
-              {filteredProducts.map((product) => (
+              {filteredProducts.map((product, index) => (
                 <Link
                   key={product.id}
                   to={`/product/${product.id}`}
@@ -229,6 +243,10 @@ export default function Shop() {
                         url={product.images[0]} 
                         alt={product.name}
                         className="w-full h-full object-cover"
+                        priority={index < 4}
+                        width={300} 
+                        height={300}
+                        size={index < 8 ? "medium" : "small"}
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center">

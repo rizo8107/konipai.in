@@ -75,4 +75,19 @@
 # Environment variable configuration - define placeholders
 # Actual values should be set in the Netlify UI or dashboard
 [template.environment]
-  VITE_POCKETBASE_URL = "Your PocketBase backend URL, e.g., https://backend-pocketbase.example.com" 
+  VITE_POCKETBASE_URL = "Your PocketBase backend URL, e.g., https://backend-pocketbase.example.com"
+
+# Image optimization settings
+[[headers]]
+  for = "/*.webp"
+  [headers.values]
+    # Cache WebP images for 1 year
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/images/*"
+  [headers.values]
+    # Cache optimized images for 1 year
+    Cache-Control = "public, max-age=31536000, immutable"
+    # Add WebP content type negotiation
+    Vary = "Accept" 

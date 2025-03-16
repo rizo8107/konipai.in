@@ -197,6 +197,10 @@ const ProductDetail = () => {
                   url={selectedImage}
                   alt={product.name}
                   className="w-full h-full object-cover"
+                  priority={true}
+                  width={600}
+                  height={600}
+                  size="large"
                 />
               ) : (
                 <div className="w-full h-full flex items-center justify-center">
@@ -220,6 +224,9 @@ const ProductDetail = () => {
                     url={image}
                     alt={`${product.name} ${index + 1}`}
                     className="w-full h-full object-cover"
+                    width={150}
+                    height={150}
+                    size="thumbnail"
                   />
                 </button>
               ))}
@@ -452,6 +459,9 @@ const ProductDetail = () => {
                       url={relatedProduct.images?.[0] || ''}
                       alt={relatedProduct.name}
                       className="w-full h-full object-cover object-center transition duration-300 group-hover:scale-105"
+                      width={300}
+                      height={300}
+                      size="medium"
                     />
                     <div className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/30 transition-colors duration-300">
                       <Button
