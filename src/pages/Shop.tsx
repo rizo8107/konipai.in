@@ -271,7 +271,7 @@ export default function Shop() {
                       {product.name}
                     </h3>
                     <p className="text-base font-medium">
-                      ${typeof product.price === 'number' ? product.price.toFixed(2) : '0.00'}
+                      ₹{typeof product.price === 'number' ? product.price.toFixed(2) : '0.00'}
                     </p>
                   </div>
                 </Link>

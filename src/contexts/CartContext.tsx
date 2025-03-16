@@ -25,7 +25,7 @@ interface CartContextType {
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
 const CART_STORAGE_KEY = 'konipai_cart';
-const SHIPPING_THRESHOLD = 100; // Free shipping over $100
+const SHIPPING_THRESHOLD = 100; // Free shipping over ₹100
 const SHIPPING_COST = 10;
 
 export function CartProvider({ children }: { children: React.ReactNode }) {

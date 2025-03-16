@@ -193,25 +193,21 @@ export default function OrderDetail() {
                     key={index} 
                     className="flex justify-between items-center py-4 border-b last:border-0"
                   >
-                    <div>
+                    <div className="flex flex-col">
                       <p className="font-medium">{item.name}</p>
                       <p className="text-sm text-muted-foreground">
-                        Quantity: {item.quantity} × ${item.price.toFixed(2)}
+                        Quantity: {item.quantity} × ₹{item.price.toFixed(2)}
                       </p>
                     </div>
                     <p className="font-medium">
-                      ${(item.quantity * item.price).toFixed(2)}
+                      ₹{(item.quantity * item.price).toFixed(2)}
                     </p>
                   </div>
                 ))}
                 
-                <div className="pt-4 border-t">
-                  <div className="flex justify-between items-center">
-                    <p className="font-medium">Total</p>
-                    <p className="font-bold text-lg">
-                      ${order.totalAmount.toFixed(2)}
-                    </p>
-                  </div>
+                <div className="flex justify-end pt-4 pb-2 space-x-4">
+                  <div className="font-bold">Total:</div>
+                  <div className="font-bold">₹{(order.totalAmount).toFixed(2)}</div>
                 </div>
               </div>
             </CardContent>

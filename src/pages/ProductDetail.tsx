@@ -251,7 +251,7 @@ const ProductDetail = () => {
             
             <h1 className="text-3xl font-bold mb-2">{product.name}</h1>
             <p className="text-2xl font-medium mb-6 text-primary">
-              ${typeof product.price === 'number' ? product.price.toFixed(2) : '0.00'}
+              ₹{typeof product.price === 'number' ? product.price.toFixed(2) : '0.00'}
             </p>
             
             <div className="mb-6">
@@ -495,7 +495,7 @@ const ProductDetail = () => {
                     </h3>
                     <div className="flex items-center justify-between">
                       <p className="text-base font-medium">
-                        ${typeof relatedProduct.price === 'number' ? relatedProduct.price.toFixed(2) : '0.00'}
+                        ₹{typeof relatedProduct.price === 'number' ? relatedProduct.price.toFixed(2) : '0.00'}
                       </p>
                       {relatedProduct.colors?.length > 0 && (
                         <div className="flex -space-x-1">

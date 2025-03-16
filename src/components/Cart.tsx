@@ -138,7 +138,7 @@ export function Cart({ children }: CartProps) {
                           <Plus className="h-4 w-4" />
                         </Button>
                         <div className="ml-auto font-medium">
-                          ${((Number(item.product?.price) || 0) * (Number(item.quantity) || 0)).toFixed(2)}
+                          ₹{((Number(item.product?.price) || 0) * (Number(item.quantity) || 0)).toFixed(2)}
                         </div>
                       </div>
                     </div>
@@ -152,17 +152,17 @@ export function Cart({ children }: CartProps) {
               <div className="space-y-1.5">
                 <div className="flex justify-between">
                   <span className="text-sm">Subtotal</span>
-                  <span className="font-medium">${(subtotal || 0).toFixed(2)}</span>
+                  <span className="font-medium">₹{(subtotal || 0).toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-sm">Shipping</span>
                   <span className="font-medium">
-                    {(subtotal || 0) >= 100 ? 'Free' : `$${10.00.toFixed(2)}`}
+                    {(subtotal || 0) >= 100 ? 'Free' : '₹10.00'}
                   </span>
                 </div>
                 <div className="flex justify-between font-medium">
                   <span>Total</span>
-                  <span>${(total || 0).toFixed(2)}</span>
+                  <span>₹{(total || 0).toFixed(2)}</span>
                 </div>
               </div>
               <Button 
@@ -172,7 +172,7 @@ export function Cart({ children }: CartProps) {
                 disabled={items.length === 0}
               >
                 <Link to="/checkout">
-                  Proceed to Checkout (${(total || 0).toFixed(2)})
+                  Proceed to Checkout (₹{(total || 0).toFixed(2)})
                 </Link>
               </Button>
               <Button

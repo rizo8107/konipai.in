@@ -70,7 +70,7 @@ const ProductCard = ({ product }: ProductCardProps) => {
         </h3>
         <div className="flex items-center justify-between">
           <p className="text-base font-medium">
-            ${typeof product.price === 'number' ? product.price.toFixed(2) : '0.00'}
+            ₹{typeof product.price === 'number' ? product.price.toFixed(2) : '0.00'}
           </p>
           {product.colors?.length > 0 && (
             <div className="flex -space-x-1">

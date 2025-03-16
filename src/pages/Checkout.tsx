@@ -355,47 +355,37 @@ export default function CheckoutPage() {
           <h2 className="text-lg font-semibold">Order Summary</h2>
           <div className="space-y-2">
             {items.map((item) => (
-              <div key={`${item.productId}-${item.color}`} className="flex justify-between">
-                <span>
-                  {item.product.name} ({item.quantity}x)
-                </span>
-                <span className="font-medium">
-                  ${(item.product.price * item.quantity).toFixed(2)}
-                </span>
+              <div key={`${item.productId}-${item.color}`} className="flex justify-between py-1">
+                <span className="text-gray-600">{item.product.name} × {item.quantity}</span>
+                <span className="font-medium">₹{(item.product.price * item.quantity).toFixed(2)}</span>
               </div>
             ))}
             <Separator />
-            <div className="flex justify-between">
-              <span>Subtotal</span>
-              <span className="font-medium">${subtotal.toFixed(2)}</span>
+            <div className="flex justify-between py-1">
+              <span className="text-gray-600">Subtotal</span>
+              <span className="font-medium">₹{subtotal.toFixed(2)}</span>
             </div>
-            <div className="flex justify-between">
-              <span>Shipping</span>
-              <span className="font-medium">
-                {subtotal >= 100 ? 'Free' : `$${10.00.toFixed(2)}`}
-              </span>
+            <div className="flex justify-between py-1">
+              <span className="text-gray-600">Shipping</span>
+              <span className="font-medium">{subtotal >= 100 ? 'Free' : `₹${10.00.toFixed(2)}`}</span>
             </div>
-            <div className="flex justify-between text-lg font-bold">
+            <div className="flex justify-between py-1 font-semibold">
               <span>Total</span>
-              <span>${total.toFixed(2)}</span>
+              <span>₹{total.toFixed(2)}</span>
             </div>
           </div>
         </div>
 
-        <Button
-          type="submit"
-          className="w-full"
-          disabled={isSubmitting}
-        >
-          {isSubmitting ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Processing...
-            </>
-          ) : (
-            `Place Order - $${total.toFixed(2)}`
-          )}
-        </Button>
+        {isSubmitting ? (
+          <Button disabled className="w-full mt-3">
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            Processing...
+          </Button>
+        ) : (
+          <Button type="submit" className="w-full mt-3">
+            {`Place Order - ₹${total.toFixed(2)}`}
+          </Button>
+        )}
       </form>
     </div>
   );
