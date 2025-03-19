@@ -1,7 +1,6 @@
 import { Link } from 'react-router-dom';
-import { Mail, Instagram, Facebook, Twitter, ShoppingBag } from 'lucide-react';
+import { Facebook, Instagram, Twitter } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Logo } from '@/components/Logo';
 
 const Footer = () => {
@@ -9,7 +8,7 @@ const Footer = () => {
     <footer className="bg-[#219898] text-white">
       <div className="konipai-container py-16">
         <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
-          <div className="md:col-span-4">
+          <div className="md:col-span-5">
             <Link to="/" className="inline-block mb-6">
               <Logo variant="light" className="h-8" />
             </Link>
@@ -30,7 +29,7 @@ const Footer = () => {
             </div>
           </div>
           
-          <div className="md:col-span-2">
+          <div className="md:col-span-3">
             <h3 className="font-semibold mb-4 text-lg">Shop</h3>
             <ul className="space-y-3">
               <li>
@@ -51,28 +50,7 @@ const Footer = () => {
             </ul>
           </div>
           
-          <div className="md:col-span-2">
-            <h3 className="font-semibold mb-4 text-lg">Company</h3>
-            <ul className="space-y-3">
-              <li>
-                <Link to="/about" className="text-white/80 hover:text-white transition-colors">
-                  About Us
-                </Link>
-              </li>
-              <li>
-                <Link to="/contact-us" className="text-white/80 hover:text-white transition-colors">
-                  Contact Us
-                </Link>
-              </li>
-              <li>
-                <Link to="#" className="text-white/80 hover:text-white transition-colors">
-                  Sustainability
-                </Link>
-              </li>
-            </ul>
-          </div>
-          
-          <div className="md:col-span-2">
+          <div className="md:col-span-4">
             <h3 className="font-semibold mb-4 text-lg">Policies</h3>
             <ul className="space-y-3">
               <li>
@@ -95,27 +73,12 @@ const Footer = () => {
                   Cancellations & Refunds
                 </Link>
               </li>
+              <li>
+                <Link to="/contact-us" className="text-white/80 hover:text-white transition-colors">
+                  Contact Us
+                </Link>
+              </li>
             </ul>
-          </div>
-          
-          <div className="md:col-span-2">
-            <h3 className="font-semibold mb-4 text-lg">Newsletter</h3>
-            <p className="text-white/80 mb-4 text-sm">
-              Subscribe to receive updates, exclusive offers, and more.
-            </p>
-            <div className="flex flex-col space-y-2">
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 h-4 w-4" />
-                <Input 
-                  type="email" 
-                  placeholder="Your email" 
-                  className="pl-10 bg-white/10 border-white/20 placeholder:text-white/50 text-white" 
-                />
-              </div>
-              <Button variant="secondary" className="w-full">
-                Subscribe
-              </Button>
-            </div>
           </div>
         </div>
       </div>
