@@ -117,9 +117,11 @@ export default function OrderConfirmation() {
           <div className="flex justify-between py-1">
             <span className="text-gray-600">Shipping</span>
             <span className="font-medium">
-              {parseFloat(order.shipping_cost) === 0 
-                ? 'Free' 
-                : `₹${parseFloat(order.shipping_cost).toFixed(2)}`}
+              {order.shipping_cost === null || order.shipping_cost === undefined || isNaN(parseFloat(order.shipping_cost))
+                ? 'Free'
+                : parseFloat(order.shipping_cost) === 0
+                  ? 'Free'
+                  : `₹${parseFloat(order.shipping_cost).toFixed(2)}`}
             </span>
           </div>
           <div className="flex justify-between py-1 font-semibold">
