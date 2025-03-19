@@ -26,6 +26,13 @@ const ProfilePage = lazy(() => import("./pages/profile"))
 const OrderDetail = lazy(() => import("./pages/OrderDetail"))
 const OrderConfirmation = lazy(() => import("./pages/order-confirmation"))
 
+// Policy pages
+const ContactUs = lazy(() => import("./pages/ContactUs"))
+const ShippingPolicy = lazy(() => import("./pages/ShippingPolicy"))
+const TermsAndConditions = lazy(() => import("./pages/TermsAndConditions"))
+const CancellationsRefunds = lazy(() => import("./pages/CancellationsRefunds"))
+const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"))
+
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, loading } = useAuth()
 
@@ -81,6 +88,14 @@ export function Routes() {
                 <Route path="/bestsellers" element={<Bestsellers />} />
                 <Route path="/new-arrivals" element={<NewArrivals />} />
                 <Route path="/about" element={<About />} />
+                
+                {/* Policy Pages */}
+                <Route path="/contact-us" element={<ContactUs />} />
+                <Route path="/shipping-policy" element={<ShippingPolicy />} />
+                <Route path="/terms-and-conditions" element={<TermsAndConditions />} />
+                <Route path="/cancellations-refunds" element={<CancellationsRefunds />} />
+                <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+                
                 <Route
                   path="/checkout"
                   element={

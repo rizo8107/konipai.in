@@ -60,50 +60,79 @@ const Footer = () => {
                 </Link>
               </li>
               <li>
-                <Link to="/sustainability" className="text-white/80 hover:text-white transition-colors">
-                  Sustainability
+                <Link to="/contact-us" className="text-white/80 hover:text-white transition-colors">
+                  Contact Us
                 </Link>
               </li>
               <li>
-                <Link to="/contact" className="text-white/80 hover:text-white transition-colors">
-                  Contact Us
+                <Link to="#" className="text-white/80 hover:text-white transition-colors">
+                  Sustainability
                 </Link>
               </li>
             </ul>
           </div>
           
-          <div className="md:col-span-4">
-            <h3 className="font-semibold mb-4 text-lg">Stay Updated</h3>
-            <p className="text-white/80 mb-4">
-              Subscribe to our newsletter for exclusive offers and updates.
+          <div className="md:col-span-2">
+            <h3 className="font-semibold mb-4 text-lg">Policies</h3>
+            <ul className="space-y-3">
+              <li>
+                <Link to="/privacy-policy" className="text-white/80 hover:text-white transition-colors">
+                  Privacy Policy
+                </Link>
+              </li>
+              <li>
+                <Link to="/terms-and-conditions" className="text-white/80 hover:text-white transition-colors">
+                  Terms & Conditions
+                </Link>
+              </li>
+              <li>
+                <Link to="/shipping-policy" className="text-white/80 hover:text-white transition-colors">
+                  Shipping Policy
+                </Link>
+              </li>
+              <li>
+                <Link to="/cancellations-refunds" className="text-white/80 hover:text-white transition-colors">
+                  Cancellations & Refunds
+                </Link>
+              </li>
+            </ul>
+          </div>
+          
+          <div className="md:col-span-2">
+            <h3 className="font-semibold mb-4 text-lg">Newsletter</h3>
+            <p className="text-white/80 mb-4 text-sm">
+              Subscribe to receive updates, exclusive offers, and more.
             </p>
-            <form className="flex gap-2">
-              <input
-                type="email"
-                placeholder="Enter your email"
-                className="flex-1 px-4 py-2 rounded-lg bg-white/10 text-white placeholder:text-white/60 border border-white/20 focus:outline-none focus:border-white/40"
-              />
-              <Button className="bg-white text-[#219898] hover:bg-white/90">
+            <div className="flex flex-col space-y-2">
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 h-4 w-4" />
+                <Input 
+                  type="email" 
+                  placeholder="Your email" 
+                  className="pl-10 bg-white/10 border-white/20 placeholder:text-white/50 text-white" 
+                />
+              </div>
+              <Button variant="secondary" className="w-full">
                 Subscribe
               </Button>
-            </form>
+            </div>
           </div>
         </div>
-        
-        <div className="mt-16 pt-8 border-t border-white/20">
-          <div className="flex flex-col md:flex-row justify-between items-center gap-4 text-white/80 text-sm">
-            <p>© {new Date().getFullYear()} Konipai. All rights reserved.</p>
-            <div className="flex gap-6">
-              <Link to="/privacy-policy" className="hover:text-white transition-colors">
-                Privacy Policy
-              </Link>
-              <Link to="/terms" className="hover:text-white transition-colors">
-                Terms & Conditions
-              </Link>
-              <Link to="/faq" className="hover:text-white transition-colors">
-                FAQ
-              </Link>
-            </div>
+      </div>
+      
+      <div className="border-t border-white/10">
+        <div className="konipai-container py-6 flex flex-col md:flex-row justify-between items-center text-white/60 text-sm">
+          <p>© {new Date().getFullYear()} Konipai. All rights reserved.</p>
+          <div className="flex gap-4 mt-4 md:mt-0">
+            <Link to="/privacy-policy" className="hover:text-white transition-colors">
+              Privacy
+            </Link>
+            <Link to="/terms-and-conditions" className="hover:text-white transition-colors">
+              Terms
+            </Link>
+            <Link to="/cancellations-refunds" className="hover:text-white transition-colors">
+              Refunds
+            </Link>
           </div>
         </div>
       </div>
