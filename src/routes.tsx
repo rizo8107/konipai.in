@@ -24,7 +24,8 @@ const ForgotPasswordPage = lazy(() => import("./pages/auth/forgot-password"))
 const ResetPasswordPage = lazy(() => import("./pages/auth/reset-password"))
 const ProfilePage = lazy(() => import("./pages/profile"))
 const OrderDetail = lazy(() => import("./pages/OrderDetail"))
-const OrderConfirmation = lazy(() => import("./pages/order-confirmation"))
+const OrderConfirmation = lazy(() => import("./pages/OrderConfirmation"))
+const Orders = lazy(() => import("./pages/Orders"))
 
 // Policy pages
 const ContactUs = lazy(() => import("./pages/ContactUs"))
@@ -109,6 +110,14 @@ export function Routes() {
                   element={
                     <PrivateRoute>
                       <OrderConfirmation />
+                    </PrivateRoute>
+                  }
+                />
+                <Route
+                  path="/orders"
+                  element={
+                    <PrivateRoute>
+                      <Orders />
                     </PrivateRoute>
                   }
                 />

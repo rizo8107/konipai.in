@@ -296,6 +296,16 @@ async function initializePocketBase() {
                 }
             },
             {
+                name: 'payment_id',
+                type: 'text',
+                required: false,
+            },
+            {
+                name: 'payment_order_id',
+                type: 'text',
+                required: false,
+            },
+            {
                 name: 'shipping_address',
                 type: 'relation',
                 required: true,

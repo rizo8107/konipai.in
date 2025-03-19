@@ -10,6 +10,14 @@ import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/components/ui/use-toast';
 import { Loader2, ShoppingBag } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { 
+  loadRazorpayScript, 
+  getRazorpayKeyId, 
+  createRazorpayOrder, 
+  openRazorpayCheckout,
+  verifyRazorpayPayment,
+  RazorpayResponse
+} from '@/lib/razorpay';
 
 interface CheckoutFormData {
   name: string;
@@ -27,6 +35,8 @@ export default function CheckoutPage() {
   const { toast } = useToast();
   const { items, subtotal, total, clearCart, isLoading: cartLoading } = useCart();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isPaymentProcessing, setIsPaymentProcessing] = useState(false);
+  const [razorpayLoaded, setRazorpayLoaded] = useState(false);
   const [formData, setFormData] = useState<CheckoutFormData>({
     name: user?.name || '',
     email: user?.email || '',
@@ -36,6 +46,19 @@ export default function CheckoutPage() {
     zipCode: '',
     phone: '',
   });
+
+  // Load Razorpay script
+  useEffect(() => {
+    const loadScript = async () => {
+      const isLoaded = await loadRazorpayScript();
+      setRazorpayLoaded(isLoaded);
+      if (!isLoaded) {
+        console.error('Failed to load Razorpay script');
+      }
+    };
+    
+    loadScript();
+  }, []);
 
   useEffect(() => {
     // Redirect if not logged in
@@ -90,10 +113,77 @@ export default function CheckoutPage() {
     }));
   };
 
+  const handlePaymentSuccess = async (response: RazorpayResponse, orderId: string) => {
+    try {
+      setIsPaymentProcessing(true);
+      
+      console.log('Payment success:', response);
+      
+      // For direct payment flow (test mode), razorpay_order_id may not be present
+      // In this case, we use the orderId from our database
+      const paymentId = response.razorpay_payment_id;
+      const orderIdToUse = response.razorpay_order_id || orderId;
+      const signature = response.razorpay_signature || 'test_signature';
+      
+      // Verify payment
+      const verified = await verifyRazorpayPayment(
+        paymentId,
+        orderIdToUse,
+        signature
+      );
+
+      if (!verified) {
+        throw new Error('Payment verification failed. Please contact support.');
+      }
+
+      // Clear cart data - do this after payment is successfully processed
+      try {
+        // First try to delete the server cart
+        if (user?.id) {
+          try {
+            const serverCart = await pocketbase.collection('carts').getFirstListItem(`user="${user.id}"`);
+            if (serverCart?.id) {
+              await pocketbase.collection('carts').delete(serverCart.id);
+            }
+          } catch (error) {
+            if (error.status !== 404) {
+              console.warn('Failed to delete server cart:', error);
+            }
+          }
+        }
+
+        // Then clear local cart state and storage
+        clearCart();
+        localStorage.removeItem('checkout_cart');
+      } catch (error) {
+        console.warn('Failed to clear cart:', error);
+      }
+
+      // Show success message
+      toast({
+        title: "Payment successful!",
+        description: "Thank you for your purchase.",
+      });
+
+      // Redirect to order confirmation page
+      navigate(`/order-confirmation/${orderId}`);
+    } catch (error) {
+      console.error('Payment processing error:', error);
+      toast({
+        variant: "destructive",
+        title: "Payment Processing Failed",
+        description: error instanceof Error ? error.message : "Failed to process your payment. Please try again or contact support.",
+      });
+    } finally {
+      setIsPaymentProcessing(false);
+      setIsSubmitting(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (isSubmitting) {
+    if (isSubmitting || isPaymentProcessing) {
       return; // Prevent double submission
     }
 
@@ -106,6 +196,11 @@ export default function CheckoutPage() {
 
       if (!items || items.length === 0) {
         throw new Error('Your cart is empty');
+      }
+
+      // Check if Razorpay is loaded
+      if (!razorpayLoaded) {
+        throw new Error('Payment gateway is not available. Please refresh the page and try again.');
       }
 
       // Validate cart items
@@ -131,8 +226,9 @@ export default function CheckoutPage() {
           city: formData.city,
           state: formData.state,
           postalCode: formData.zipCode,
-          country: 'United States',
+          country: 'India',
           isDefault: true,
+          phone: formData.phone,
         };
 
         const existingAddress = await pocketbase.collection('addresses')
@@ -153,8 +249,9 @@ export default function CheckoutPage() {
             city: formData.city,
             state: formData.state,
             postalCode: formData.zipCode,
-            country: 'United States',
+            country: 'India',
             isDefault: true,
+            phone: formData.phone,
           });
           addressId = created.id;
         } else {
@@ -190,38 +287,44 @@ export default function CheckoutPage() {
 
       const order = await pocketbase.collection('orders').create(orderData);
 
-      // Clear cart data - do this after order is successfully created
-      try {
-        // First try to delete the server cart
-        if (user.id) {
-          try {
-            const serverCart = await pocketbase.collection('carts').getFirstListItem(`user="${user.id}"`);
-            if (serverCart?.id) {
-              await pocketbase.collection('carts').delete(serverCart.id);
-            }
-          } catch (error) {
-            if (error.status !== 404) {
-              console.warn('Failed to delete server cart:', error);
-            }
-          }
-        }
+      // Create Razorpay order
+      const razorpayOrderResponse = await createRazorpayOrder(
+        total, // amount in INR
+        'INR',  // currency
+        order.id // receipt (using our order ID)
+      );
 
-        // Then clear local cart state and storage
-        clearCart();
-        localStorage.removeItem('checkout_cart');
-      } catch (error) {
-        console.warn('Failed to clear cart:', error);
-        // Don't throw error here, as the order was successfully created
+      if (!razorpayOrderResponse || !razorpayOrderResponse.id) {
+        throw new Error('Failed to create payment order. Please try again.');
       }
 
-      // Show success message
-      toast({
-        title: "Order placed successfully!",
-        description: "Thank you for your purchase.",
+      // Open Razorpay payment form
+      openRazorpayCheckout({
+        key: getRazorpayKeyId(),
+        amount: total * 100, // Razorpay expects amount in paise
+        currency: 'INR',
+        name: 'Konipai',
+        description: `Order #${order.id}`,
+        image: import.meta.env.VITE_SITE_LOGO || 'https://konipai.in/assets/logo.png',
+        order_id: razorpayOrderResponse.id,
+        handler: (response) => handlePaymentSuccess(response, order.id),
+        prefill: {
+          name: formData.name,
+          email: formData.email,
+          contact: formData.phone,
+        },
+        notes: {
+          order_id: order.id,
+          address: `${formData.address}, ${formData.city}, ${formData.state} - ${formData.zipCode}`
+        },
+        theme: {
+          color: '#4F46E5', // Indigo color that matches Konipai theme
+        }
       });
+
+      // NOTE: After this point, the payment flow is handled by Razorpay's modal
+      // The handlePaymentSuccess function will be called when payment is completed
       
-      // Redirect to order confirmation page
-      navigate(`/order-confirmation/${order.id}`);
     } catch (error) {
       console.error('Checkout error:', error);
       toast({
@@ -229,7 +332,6 @@ export default function CheckoutPage() {
         title: "Checkout Failed",
         description: error instanceof Error ? error.message : "Failed to process your order. Please try again.",
       });
-    } finally {
       setIsSubmitting(false);
     }
   };
@@ -376,14 +478,25 @@ export default function CheckoutPage() {
           </div>
         </div>
 
-        {isSubmitting ? (
+        <div className="space-y-4">
+          <h2 className="text-lg font-semibold">Payment Method</h2>
+          <div className="flex items-center space-x-3 p-4 border rounded-md bg-gray-50">
+            <img src="/razorpay-logo.svg" alt="Razorpay" className="h-8" onError={(e) => (e.currentTarget.src = 'https://razorpay.com/assets/razorpay-logo.svg')} />
+            <div>
+              <p className="font-medium">Pay with Razorpay</p>
+              <p className="text-sm text-gray-500">Secure payment via Razorpay</p>
+            </div>
+          </div>
+        </div>
+
+        {isSubmitting || isPaymentProcessing ? (
           <Button disabled className="w-full mt-3">
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            Processing...
+            {isPaymentProcessing ? 'Processing Payment...' : 'Processing...'}
           </Button>
         ) : (
           <Button type="submit" className="w-full mt-3">
-            {`Place Order - ₹${total.toFixed(2)}`}
+            {`Pay Now - ₹${total.toFixed(2)}`}
           </Button>
         )}
       </form>
