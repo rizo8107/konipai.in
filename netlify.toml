@@ -26,7 +26,7 @@
     </assets/index-*.css>; rel=preload; as=style
     '''
     # Content Security Policy
-    Content-Security-Policy = "default-src 'self'; script-src 'self' https://cdn.gpteng.co https://checkout.razorpay.com; style-src 'self' 'unsafe-inline' https://konipai.in; img-src 'self' https://backend-pocketbase.7za6uc.easypanel.host https://razorpay.com https://konipai.in data:; connect-src 'self' https://backend-pocketbase.7za6uc.easypanel.host https://api.razorpay.com https://lumberjack.razorpay.com; font-src 'self' https://konipai.in; frame-src 'self' https://checkout.razorpay.com; object-src 'none'; media-src 'self'; worker-src 'self'; manifest-src 'self';"
+    Content-Security-Policy = "default-src 'self'; script-src 'self' https://cdn.gpteng.co https://checkout.razorpay.com; style-src 'self' 'unsafe-inline' https://*.konipai.in; img-src 'self' https://backend-pocketbase.7za6uc.easypanel.host https://*.razorpay.com https://*.konipai.in data:; connect-src 'self' https://backend-pocketbase.7za6uc.easypanel.host https://*.razorpay.com; font-src 'self' https://*.konipai.in data: *; frame-src 'self' https://*.razorpay.com; object-src 'none'; media-src 'self'; worker-src 'self'; manifest-src 'self';"
 
 [[headers]]
   for = "/assets/*"
