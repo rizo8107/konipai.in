@@ -26,7 +26,7 @@
     </assets/index-*.css>; rel=preload; as=style
     '''
     # Content Security Policy
-    Content-Security-Policy = "default-src 'self'; script-src 'self' https://cdn.gpteng.co; style-src 'self' 'unsafe-inline'; img-src 'self' https://backend-pocketbase.7za6uc.easypanel.host data:; connect-src 'self' https://backend-pocketbase.7za6uc.easypanel.host; font-src 'self'; object-src 'none'; media-src 'self'; worker-src 'self'; manifest-src 'self';"
+    Content-Security-Policy = "default-src 'self'; script-src 'self' https://cdn.gpteng.co https://checkout.razorpay.com; style-src 'self' 'unsafe-inline'; img-src 'self' https://backend-pocketbase.7za6uc.easypanel.host https://razorpay.com data:; connect-src 'self' https://backend-pocketbase.7za6uc.easypanel.host https://api.razorpay.com; font-src 'self'; object-src 'none'; media-src 'self'; worker-src 'self'; manifest-src 'self';"
 
 [[headers]]
   for = "/assets/*"
