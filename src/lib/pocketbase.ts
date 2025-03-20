@@ -89,6 +89,7 @@ export interface User extends RecordModel {
     email: string;
     name: string;
     avatar?: string;
+    phone?: string;
 }
 
 export interface Product extends RecordModel {
@@ -126,6 +127,7 @@ export interface Address extends RecordModel {
     postalCode: string;
     country: string;
     isDefault: boolean;
+    phone?: string;
 }
 
 export interface Order extends RecordModel {

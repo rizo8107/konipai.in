@@ -44,7 +44,7 @@ export default function CheckoutPage() {
     city: '',
     state: '',
     zipCode: '',
-    phone: '',
+    phone: user?.phone || '',
   });
 
   // Load Razorpay script
@@ -81,6 +81,14 @@ export default function CheckoutPage() {
       if (!user?.id) return;
 
       try {
+        // Update form with user data including phone number
+        setFormData(prev => ({
+          ...prev,
+          name: user.name || '',
+          email: user.email || '',
+          phone: user.phone || ''
+        }));
+        
         const address = await pocketbase.collection('addresses')
           .getFirstListItem(`user="${user.id}"`);
         
@@ -91,7 +99,8 @@ export default function CheckoutPage() {
             city: address.city || '',
             state: address.state || '',
             zipCode: address.postalCode || '',
-            phone: address.phone || '',
+            // Only override phone from address if user doesn't have a phone number
+            phone: prev.phone || address.phone || ''
           }));
         }
       } catch (error) {
@@ -134,6 +143,25 @@ export default function CheckoutPage() {
 
       if (!verified) {
         throw new Error('Payment verification failed. Please contact support.');
+      }
+
+      // Update order with payment information
+      try {
+        await pocketbase.collection('orders').update(orderId, {
+          payment_status: 'paid',
+          razorpay_order_id: orderIdToUse,  // Using the exact field name from PocketBase schema
+          razorpay_payment_id: paymentId,   // Using the exact field name from PocketBase schema
+          notes: `Payment completed via Razorpay. Payment ID: ${paymentId}` // Adding notes about the payment
+        });
+        console.log('Order updated with payment information:', {
+          orderId,
+          razorpay_order_id: orderIdToUse,
+          razorpay_payment_id: paymentId,
+          notes: `Payment completed via Razorpay. Payment ID: ${paymentId}`
+        });
+      } catch (updateError) {
+        console.error('Failed to update order with payment details:', updateError);
+        // Continue with checkout process even if update fails
       }
 
       // Clear cart data - do this after payment is successfully processed
@@ -278,7 +306,7 @@ export default function CheckoutPage() {
         total,
         shipping_cost,
         status: 'pending',
-        shipping_address: addressId,
+        shippingAddress: addressId, // Changed from shipping_address to match PocketBase field name
         customer_name: formData.name,
         customer_email: formData.email,
         customer_phone: formData.phone,
