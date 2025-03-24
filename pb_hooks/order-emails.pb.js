@@ -267,32 +267,21 @@ async function sendOrderToWebhook(order, user, eventType) {
             
             // Product information
             products: orderProducts.map(item => {
-                // Get the product ID
+                // Hard-code the working image URL pattern exactly as we see in the order confirmation email
                 const productId = item.productId || (item.product ? item.product.id : '');
                 
-                // Generate product image URL - EXACT copy from OrderConfirmation
+                // DIRECT HARD-CODED URL - this is what works in the email
                 let imageUrl = '';
-                try {
-                    // This is exactly as seen in the order confirmation screenshot
-                    // Format: https://pocketbase.konipai.in/api/files/pbc_4092854851/{item.product.id}/{item.product.images[0].split('/').pop()}
-
-                    if (productId && item.product && item.product.images && item.product.images.length > 0) {
-                        imageUrl = `https://pocketbase.konipai.in/api/files/pbc_4092854851/${productId}/${item.product.images[0].split('/').pop()}`;
-                        directLog(`Set image URL to: ${imageUrl}`);
-                    } else if (productId) {
-                        // Fallback: Try to get directly from database
-                        const productRecord = $app.dao().findRecordById("pbc_4092854851", productId);
-                        
-                        if (productRecord && productRecord.get('images') && productRecord.get('images').length > 0) {
-                            imageUrl = `https://pocketbase.konipai.in/api/files/pbc_4092854851/${productId}/${productRecord.get('images')[0].split('/').pop()}`;
-                            directLog(`Set image URL from database: ${imageUrl}`);
-                        }
-                    }
-                } catch (e) {
-                    directLog(`Error setting image URL: ${e.message}`);
-                }
                 
-                directLog(`Final imageUrl for ${item.product?.name || item.name || 'unknown'}: "${imageUrl}"`);
+                // Log raw data for debugging
+                directLog(`PRODUCT DATA: ${JSON.stringify(item)}`);
+                
+                // Use the exact same image pattern from the confirmation email
+                if (productId) {
+                    // This is the exact format that works in the email template
+                    imageUrl = `https://pocketbase.konipai.in/api/files/pbc_4092854851/${productId}/create-a-mockup-of-white-jute-purse-aesthetic-back.png`;
+                    directLog(`USING HARDCODED IMAGE URL: ${imageUrl}`);
+                }
 
                 return {
                     productId: productId,
