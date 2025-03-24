@@ -264,59 +264,109 @@
     
     <!-- Main Content -->
     <div class="email-content">
-      <div class="greeting">Hello {{$json.body.customerInfo.name || $json.customerInfo.name}},</div>
+      <div class="greeting">Hello {{#if $json.body.customerInfo.name}}{{$json.body.customerInfo.name}}{{else}}{{$json.customerInfo.name}}{{/if}},</div>
       
       <!-- Dynamic status message based on status type -->
-      {{#if ($json.body.notificationType || $json.notificationType) === 'order_status_update' && ($json.body.orderStatus || $json.orderStatus) === 'processing'}}
-      <div class="status-banner status-processing">
-        Your Order is Being Processed
-      </div>
-      <div class="message">
-        Great news! We're currently processing your order and preparing it for shipment. We'll notify you once it's on its way.
-      </div>
-      {{/if}}
-      
-      {{#if ($json.body.notificationType || $json.notificationType) === 'order_status_update' && ($json.body.orderStatus || $json.orderStatus) === 'shipped'}}
-      <div class="status-banner status-shipped">
-        Your Order Has Been Shipped
-      </div>
-      <div class="message">
-        Your order is on its way! Your package has been handed over to our delivery partner and is on its way to you.
-      </div>
-      {{/if}}
-      
-      {{#if ($json.body.notificationType || $json.notificationType) === 'order_status_update' && ($json.body.orderStatus || $json.orderStatus) === 'delivered'}}
-      <div class="status-banner status-delivered">
-        Your Order Has Been Delivered
-      </div>
-      <div class="message">
-        Your order has been delivered! We hope you enjoy your purchase. If you have any issues, please let us know.
-      </div>
-      {{/if}}
-      
-      {{#if ($json.body.notificationType || $json.notificationType) === 'order_status_update' && ($json.body.orderStatus || $json.orderStatus) === 'cancelled'}}
-      <div class="status-banner status-cancelled">
-        Your Order Has Been Cancelled
-      </div>
-      <div class="message">
-        Your order has been cancelled as requested. If you didn't request this cancellation or have any questions, please contact our support team.
-      </div>
-      {{/if}}
-      
-      {{#if ($json.body.notificationType || $json.notificationType) === 'order_payment_success'}}
-      <div class="status-banner status-paid">
-        Payment Confirmed
-      </div>
-      <div class="message">
-        We've confirmed your payment and your order is now being processed. Thank you for your purchase!
-      </div>
-      {{/if}}
-      
-      <!-- If no specific status template matches -->
-      {{#if !($json.body.notificationType || $json.notificationType)}}
-      <div class="message">
-        We're writing to let you know that there has been an update to your order. Please see the latest status below.
-      </div>
+      {{#if $json.body.notificationType}}
+        {{#if (eq $json.body.notificationType "order_status_update")}}
+          {{#if (eq $json.body.orderStatus "processing")}}
+          <div class="status-banner status-processing">
+            Your Order is Being Processed
+          </div>
+          <div class="message">
+            Great news! We're currently processing your order and preparing it for shipment. We'll notify you once it's on its way.
+          </div>
+          {{/if}}
+          
+          {{#if (eq $json.body.orderStatus "shipped")}}
+          <div class="status-banner status-shipped">
+            Your Order Has Been Shipped
+          </div>
+          <div class="message">
+            Your order is on its way! Your package has been handed over to our delivery partner and is on its way to you.
+          </div>
+          {{/if}}
+          
+          {{#if (eq $json.body.orderStatus "delivered")}}
+          <div class="status-banner status-delivered">
+            Your Order Has Been Delivered
+          </div>
+          <div class="message">
+            Your order has been delivered! We hope you enjoy your purchase. If you have any issues, please let us know.
+          </div>
+          {{/if}}
+          
+          {{#if (eq $json.body.orderStatus "cancelled")}}
+          <div class="status-banner status-cancelled">
+            Your Order Has Been Cancelled
+          </div>
+          <div class="message">
+            Your order has been cancelled as requested. If you didn't request this cancellation or have any questions, please contact our support team.
+          </div>
+          {{/if}}
+        {{/if}}
+        
+        {{#if (eq $json.body.notificationType "order_payment_success")}}
+        <div class="status-banner status-paid">
+          Payment Confirmed
+        </div>
+        <div class="message">
+          We've confirmed your payment and your order is now being processed. Thank you for your purchase!
+        </div>
+        {{/if}}
+      {{else}}
+        {{#if $json.notificationType}}
+          {{#if (eq $json.notificationType "order_status_update")}}
+            {{#if (eq $json.orderStatus "processing")}}
+            <div class="status-banner status-processing">
+              Your Order is Being Processed
+            </div>
+            <div class="message">
+              Great news! We're currently processing your order and preparing it for shipment. We'll notify you once it's on its way.
+            </div>
+            {{/if}}
+            
+            {{#if (eq $json.orderStatus "shipped")}}
+            <div class="status-banner status-shipped">
+              Your Order Has Been Shipped
+            </div>
+            <div class="message">
+              Your order is on its way! Your package has been handed over to our delivery partner and is on its way to you.
+            </div>
+            {{/if}}
+            
+            {{#if (eq $json.orderStatus "delivered")}}
+            <div class="status-banner status-delivered">
+              Your Order Has Been Delivered
+            </div>
+            <div class="message">
+              Your order has been delivered! We hope you enjoy your purchase. If you have any issues, please let us know.
+            </div>
+            {{/if}}
+            
+            {{#if (eq $json.orderStatus "cancelled")}}
+            <div class="status-banner status-cancelled">
+              Your Order Has Been Cancelled
+            </div>
+            <div class="message">
+              Your order has been cancelled as requested. If you didn't request this cancellation or have any questions, please contact our support team.
+            </div>
+            {{/if}}
+          {{/if}}
+          
+          {{#if (eq $json.notificationType "order_payment_success")}}
+          <div class="status-banner status-paid">
+            Payment Confirmed
+          </div>
+          <div class="message">
+            We've confirmed your payment and your order is now being processed. Thank you for your purchase!
+          </div>
+          {{/if}}
+        {{else}}
+          <div class="message">
+            We're writing to let you know that there has been an update to your order. Please see the latest status below.
+          </div>
+        {{/if}}
       {{/if}}
       
       <!-- Order Information -->
@@ -325,25 +375,25 @@
         <div class="order-details">
           <div class="order-detail">
             <div class="detail-label">Order Number</div>
-            <div class="detail-value">#{{$json.body.orderId || $json.orderId}}</div>
+            <div class="detail-value">#{{#if $json.body.orderId}}{{$json.body.orderId}}{{else}}{{$json.orderId}}{{/if}}</div>
           </div>
           <div class="order-detail">
             <div class="detail-label">Order Date</div>
-            <div class="detail-value">{{#if $json.body.orderDate}}{{$formatDate($json.body.orderDate)}}{{else if $json.orderDate}}{{$formatDate($json.orderDate)}}{{else}}{{$formatDate($json.body.timestamp || $json.timestamp || $now)}}{{/if}}</div>
+            <div class="detail-value">{{#if $json.body.orderDate}}{{$formatDate($json.body.orderDate)}}{{else}}{{#if $json.orderDate}}{{$formatDate($json.orderDate)}}{{else}}{{$formatDate($now)}}{{/if}}{{/if}}</div>
           </div>
           <div class="order-detail">
             <div class="detail-label">Order Status</div>
-            <div class="detail-value" style="text-transform: capitalize;">{{$json.body.orderStatus || $json.orderStatus}}</div>
+            <div class="detail-value" style="text-transform: capitalize;">{{#if $json.body.orderStatus}}{{$json.body.orderStatus}}{{else}}{{$json.orderStatus}}{{/if}}</div>
           </div>
           <div class="order-detail">
             <div class="detail-label">Payment Status</div>
-            <div class="detail-value" style="text-transform: capitalize;">{{$json.body.paymentInfo.paymentStatus || $json.paymentInfo.paymentStatus}}</div>
+            <div class="detail-value" style="text-transform: capitalize;">{{#if $json.body.paymentInfo.paymentStatus}}{{$json.body.paymentInfo.paymentStatus}}{{else}}{{$json.paymentInfo.paymentStatus}}{{/if}}</div>
           </div>
         </div>
       </div>
       
       <!-- Product Table (Abbreviated for status updates) -->
-      <h2 class="order-header">Order Summary ({{$json.body.totalItems || $json.totalItems}} items)</h2>
+      <h2 class="order-header">Order Summary ({{#if $json.body.totalItems}}{{$json.body.totalItems}}{{else}}{{$json.totalItems}}{{/if}} items)</h2>
       <table class="products-table">
         <thead>
           <tr>
@@ -354,52 +404,99 @@
           </tr>
         </thead>
         <tbody>
-          {{#each $json.body.products || $json.products}}
-          <tr>
-            <td>
-              {{#if this.imageUrl}}
-              <img src="{{this.imageUrl}}" alt="{{this.name}}" class="product-image">
-              {{else}}
-              <div class="product-image" style="display: flex; align-items: center; justify-content: center; background-color: #f5f5f5; color: #999; font-size: 10px;">No Image</div>
-              {{/if}}
-            </td>
-            <td>
-              <div class="product-name">{{this.name}}</div>
-              {{#if this.color}}
-              <div class="product-color">Color: {{this.color}}</div>
-              {{/if}}
-            </td>
-            <td style="text-align: center;">
-              {{this.quantity}}
-            </td>
-            <td style="text-align: right;">
-              {{$formatNumber(this.price, {format: 'INR'})}}
-            </td>
-          </tr>
-          {{/each}}
+          {{#if $json.body.products}}
+            {{#each $json.body.products}}
+            <tr>
+              <td>
+                {{#if this.imageUrl}}
+                <img src="{{this.imageUrl}}" alt="{{this.name}}" class="product-image">
+                {{else}}
+                <div class="product-image" style="display: flex; align-items: center; justify-content: center; background-color: #f5f5f5; color: #999; font-size: 10px;">No Image</div>
+                {{/if}}
+              </td>
+              <td>
+                <div class="product-name">{{this.name}}</div>
+                {{#if this.color}}
+                <div class="product-color">Color: {{this.color}}</div>
+                {{/if}}
+              </td>
+              <td style="text-align: center;">
+                {{this.quantity}}
+              </td>
+              <td style="text-align: right;">
+                {{$formatNumber(this.price, {format: 'INR'})}}
+              </td>
+            </tr>
+            {{/each}}
+          {{else}}
+            {{#each $json.products}}
+            <tr>
+              <td>
+                {{#if this.imageUrl}}
+                <img src="{{this.imageUrl}}" alt="{{this.name}}" class="product-image">
+                {{else}}
+                <div class="product-image" style="display: flex; align-items: center; justify-content: center; background-color: #f5f5f5; color: #999; font-size: 10px;">No Image</div>
+                {{/if}}
+              </td>
+              <td>
+                <div class="product-name">{{this.name}}</div>
+                {{#if this.color}}
+                <div class="product-color">Color: {{this.color}}</div>
+                {{/if}}
+              </td>
+              <td style="text-align: center;">
+                {{this.quantity}}
+              </td>
+              <td style="text-align: right;">
+                {{$formatNumber(this.price, {format: 'INR'})}}
+              </td>
+            </tr>
+            {{/each}}
+          {{/if}}
         </tbody>
       </table>
       
       <!-- Order Totals (for some status updates it makes sense to show totals) -->
-      {{#if ($json.body.notificationType || $json.notificationType) === 'order_payment_success' || ($json.body.paymentInfo.paymentStatus || $json.paymentInfo.paymentStatus) === 'paid'}}
-      <div class="order-totals">
-        <div class="total-row">
-          <div class="total-label">Subtotal</div>
-          <div class="total-value">{{$json.body.financialDetails.subtotalFormatted || $json.financialDetails.subtotalFormatted}}</div>
+      {{#if $json.body.notificationType}}
+        {{#if (eq $json.body.notificationType "order_payment_success")}}
+        <div class="order-totals">
+          <div class="total-row">
+            <div class="total-label">Subtotal</div>
+            <div class="total-value">{{#if $json.body.financialDetails.subtotalFormatted}}{{$json.body.financialDetails.subtotalFormatted}}{{else}}{{$json.financialDetails.subtotalFormatted}}{{/if}}</div>
+          </div>
+          <div class="total-row">
+            <div class="total-label">Shipping</div>
+            <div class="total-value">{{#if $json.body.financialDetails.shippingCostFormatted}}{{$json.body.financialDetails.shippingCostFormatted}}{{else}}{{$json.financialDetails.shippingCostFormatted}}{{/if}}</div>
+          </div>
+          <div class="total-row" style="border-top: 1px solid #eee; padding-top: 10px; margin-top: 5px;">
+            <div class="total-label order-total">Total</div>
+            <div class="total-value order-total">{{#if $json.body.financialDetails.totalFormatted}}{{$json.body.financialDetails.totalFormatted}}{{else}}{{$json.financialDetails.totalFormatted}}{{/if}}</div>
+          </div>
         </div>
-        <div class="total-row">
-          <div class="total-label">Shipping</div>
-          <div class="total-value">{{$json.body.financialDetails.shippingCostFormatted || $json.financialDetails.shippingCostFormatted}}</div>
-        </div>
-        <div class="total-row" style="border-top: 1px solid #eee; padding-top: 10px; margin-top: 5px;">
-          <div class="total-label order-total">Total</div>
-          <div class="total-value order-total">{{$json.body.financialDetails.totalFormatted || $json.financialDetails.totalFormatted}}</div>
-        </div>
-      </div>
+        {{/if}}
+      {{else}}
+        {{#if $json.notificationType}}
+          {{#if (eq $json.notificationType "order_payment_success")}}
+          <div class="order-totals">
+            <div class="total-row">
+              <div class="total-label">Subtotal</div>
+              <div class="total-value">{{#if $json.body.financialDetails.subtotalFormatted}}{{$json.body.financialDetails.subtotalFormatted}}{{else}}{{$json.financialDetails.subtotalFormatted}}{{/if}}</div>
+            </div>
+            <div class="total-row">
+              <div class="total-label">Shipping</div>
+              <div class="total-value">{{#if $json.body.financialDetails.shippingCostFormatted}}{{$json.body.financialDetails.shippingCostFormatted}}{{else}}{{$json.financialDetails.shippingCostFormatted}}{{/if}}</div>
+            </div>
+            <div class="total-row" style="border-top: 1px solid #eee; padding-top: 10px; margin-top: 5px;">
+              <div class="total-label order-total">Total</div>
+              <div class="total-value order-total">{{#if $json.body.financialDetails.totalFormatted}}{{$json.body.financialDetails.totalFormatted}}{{else}}{{$json.financialDetails.totalFormatted}}{{/if}}</div>
+            </div>
+          </div>
+          {{/if}}
+        {{/if}}
       {{/if}}
       
       <!-- CTA Button -->
-      <a href="{{$json.body.emailTemplateData.viewOrderUrl || $json.emailTemplateData.viewOrderUrl}}" class="cta-button">View Order Details</a>
+      <a href="{{#if $json.body.emailTemplateData.viewOrderUrl}}{{$json.body.emailTemplateData.viewOrderUrl}}{{else}}{{$json.emailTemplateData.viewOrderUrl}}{{/if}}" class="cta-button">View Order Details</a>
       
       <div class="message">
         If you have any questions about your order, please contact our customer service team.
@@ -409,8 +506,8 @@
     <!-- Footer -->
     <div class="email-footer">
       <div class="contact-info">
-        <div>Email: <a href="mailto:{{$json.body.emailTemplateData.supportEmail || $json.emailTemplateData.supportEmail}}" class="contact-link">{{$json.body.emailTemplateData.supportEmail || $json.emailTemplateData.supportEmail}}</a></div>
-        <div>Phone: {{$json.body.emailTemplateData.supportPhone || $json.emailTemplateData.supportPhone}}</div>
+        <div>Email: <a href="mailto:{{#if $json.body.emailTemplateData.supportEmail}}{{$json.body.emailTemplateData.supportEmail}}{{else}}{{$json.emailTemplateData.supportEmail}}{{/if}}" class="contact-link">{{#if $json.body.emailTemplateData.supportEmail}}{{$json.body.emailTemplateData.supportEmail}}{{else}}{{$json.emailTemplateData.supportEmail}}{{/if}}</a></div>
+        <div>Phone: {{#if $json.body.emailTemplateData.supportPhone}}{{$json.body.emailTemplateData.supportPhone}}{{else}}{{$json.emailTemplateData.supportPhone}}{{/if}}</div>
       </div>
       
       <div class="social-links">
@@ -420,7 +517,7 @@
       </div>
       
       <div class="copyright">
-        &copy; {{$json.body.emailTemplateData.year || $json.emailTemplateData.year}} {{$json.body.emailTemplateData.siteName || $json.emailTemplateData.siteName}}. All rights reserved.
+        &copy; {{#if $json.body.emailTemplateData.year}}{{$json.body.emailTemplateData.year}}{{else}}{{$json.emailTemplateData.year}}{{/if}} {{#if $json.body.emailTemplateData.siteName}}{{$json.body.emailTemplateData.siteName}}{{else}}{{$json.emailTemplateData.siteName}}{{/if}}. All rights reserved.
       </div>
     </div>
   </div>
