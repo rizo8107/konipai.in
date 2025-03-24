@@ -112,6 +112,45 @@ async function sendOrderToWebhook(order, user, eventType) {
                     directLog('WARNING: Products is not an array, converting to empty array');
                     orderProducts = [];
                 }
+                
+                // Pre-process the products to ensure consistent format
+                orderProducts = orderProducts.map(item => {
+                    // Handle different possible product structures
+                    let productId, productName, productPrice, productImages;
+                    let quantity = 1;
+                    let color = '';
+                    
+                    // Extract product details
+                    if (item.product) {
+                        // New format: { product: {...}, quantity: 1, color: '...' }
+                        productId = item.product.id || item.productId || '';
+                        productName = item.product.name || 'Product';
+                        productPrice = item.product.price || 0;
+                        productImages = item.product.images || [];
+                        quantity = item.quantity || 1;
+                        color = item.color || '';
+                    } else {
+                        // Legacy format: { productId: '...', name: '...', price: 100, ... }
+                        productId = item.productId || '';
+                        productName = item.name || 'Product';
+                        productPrice = item.price || 0;
+                        productImages = item.images || [];
+                        quantity = item.quantity || 1;
+                        color = item.color || '';
+                    }
+                    
+                    return {
+                        productId,
+                        product: {
+                            id: productId,
+                            name: productName,
+                            price: productPrice,
+                            images: productImages
+                        },
+                        quantity,
+                        color
+                    };
+                });
             }
             debugLog('Parsed products:', JSON.stringify(orderProducts));
         } catch (e) {
@@ -161,8 +200,10 @@ async function sendOrderToWebhook(order, user, eventType) {
                 orderProducts.forEach(item => {
                     const quantity = typeof item.quantity === 'number' ? item.quantity : 1;
                     totalItems += quantity;
-                    const price = typeof item.price === 'number' ? item.price : 0;
-                    const name = item.name || 'Product';
+                    
+                    // Use the product information from the normalized structure
+                    const price = item.product?.price || 0;
+                    const name = item.product?.name || 'Product';
                     
                     orderSummary += `- ${quantity}x ${name} (${formatCurrency(price)})`;
                     if (item.color) {
@@ -211,14 +252,35 @@ async function sendOrderToWebhook(order, user, eventType) {
             orderStatus: order.status || 'pending',
             
             // Product information
-            products: orderProducts.map(item => ({
-                productId: item.productId || '',
-                name: item.name || 'Product',
-                quantity: typeof item.quantity === 'number' ? item.quantity : 1,
-                price: typeof item.price === 'number' ? item.price : 0,
-                color: item.color || '',
-                imageUrl: item.image || ''
-            })),
+            products: orderProducts.map(item => {
+                // Generate product image URL if product has images
+                let imageUrl = '';
+                try {
+                    if (item.product && item.product.images && item.product.images.length > 0) {
+                        // Format: /api/files/COLLECTION_ID/RECORD_ID/FILENAME
+                        const pocketbaseUrl = 'https://pocketbase.konipai.in';
+                        const collectionId = 'pbc_4092854851'; // products collection
+                        const productId = item.product.id || item.productId;
+                        const imageName = item.product.images[0].split('/').pop();
+                        imageUrl = `${pocketbaseUrl}/api/files/${collectionId}/${productId}/${imageName}`;
+                        debugLog('Generated image URL:', imageUrl);
+                    } else if (item.image) {
+                        // Use legacy image field if present
+                        imageUrl = item.image;
+                    }
+                } catch (e) {
+                    console.error('Error generating product image URL:', e);
+                }
+
+                return {
+                    productId: item.productId || (item.product ? item.product.id : '') || '',
+                    name: item.product ? item.product.name : (item.name || 'Product'),
+                    quantity: typeof item.quantity === 'number' ? item.quantity : 1,
+                    price: item.product ? item.product.price : (typeof item.price === 'number' ? item.price : 0),
+                    color: item.color || '',
+                    imageUrl: imageUrl
+                };
+            }),
             totalItems: totalItems,
             orderSummary: orderSummary,
             
