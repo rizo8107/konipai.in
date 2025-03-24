@@ -182,7 +182,7 @@ const sendOrderToWebhook = async (order, user) => {
           const quantity = typeof item.quantity === 'number' ? item.quantity : 1;
           totalItems += quantity;
           const price = typeof item.price === 'number' ? item.price : 0;
-          const name = item.name || 'Product';
+          const name = item.product?.name || item.name || 'Product';
           
           orderSummary += `- ${quantity}x ${name} (${formatCurrency(price)})`;
           if (item.color) {
@@ -195,6 +195,44 @@ const sendOrderToWebhook = async (order, user) => {
       console.error("Error generating product list:", e);
       orderSummary = "Error generating product list. Please check your order online.";
     }
+
+    // Process product data to ensure we have proper information
+    const processedProducts = orderProducts.map(item => {
+      // Extract product information with fallbacks for each field
+      const productId = item.productId || item.product?.id || '';
+      const name = item.product?.name || item.name || 'Product';
+      const quantity = typeof item.quantity === 'number' ? item.quantity : 1;
+      const price = typeof item.price === 'number' ? item.price : (item.product?.price || 0);
+      const color = item.color || item.variant || 'Default';
+      
+      // Handle image URL with multiple fallbacks
+      let imageUrl = '';
+      if (item.image) {
+        imageUrl = item.image;
+      } else if (item.product?.image) {
+        imageUrl = item.product.image;
+      } else if (item.product?.expand?.image?.url) {
+        imageUrl = item.product.expand.image.url;
+      } else if (item.product?.imageUrl) {
+        imageUrl = item.product.imageUrl;
+      } else if (item.imageUrl) {
+        imageUrl = item.imageUrl;
+      }
+      
+      // Add the origin to image URL if it's a relative path
+      if (imageUrl && !imageUrl.startsWith('http')) {
+        imageUrl = `https://konipai.in${imageUrl.startsWith('/') ? '' : '/'}${imageUrl}`;
+      }
+      
+      return {
+        productId,
+        name,
+        quantity,
+        price,
+        color,
+        imageUrl
+      };
+    });
 
     // Get the subtotal, shipping cost and total values with fallbacks
     const subtotal = order.subtotal || order.totalAmount || 0;
@@ -234,15 +272,8 @@ const sendOrderToWebhook = async (order, user) => {
       // Order status
       orderStatus: 'processing',
       
-      // Product information
-      products: orderProducts.map(item => ({
-        productId: item.productId || '',
-        name: item.name || item.product?.name || 'Product',
-        quantity: typeof item.quantity === 'number' ? item.quantity : 1,
-        price: typeof item.price === 'number' ? item.price : (item.product?.price || 0),
-        color: item.color || 'Default',
-        imageUrl: item.image || item.product?.image || ''
-      })),
+      // Product information with enhanced data
+      products: processedProducts,
       totalItems: totalItems,
       orderSummary: orderSummary,
       
