@@ -3,13 +3,6 @@
   "description": "Konipai Frontend Application",
   "image": "ghcr.io/rizo8107/konipai.in:latest",
   "imagePullPolicy": "Always",
-  "imagePullSecrets": [
-    {
-      "name": "ghcr-secret",
-      "username": "rizo8107",
-      "password": "${GITHUB_TOKEN}"
-    }
-  ],
   "ports": [
     {
       "port": 80,
