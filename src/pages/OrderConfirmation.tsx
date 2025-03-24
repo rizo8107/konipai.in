@@ -5,12 +5,51 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/components/ui/use-toast';
-import { CheckCircle, ShoppingBag, Loader2 } from 'lucide-react';
+import { CheckCircle, ShoppingBag, Loader2, Package } from 'lucide-react';
+
+// Define interface for product in order
+interface OrderProduct {
+  product: {
+    id: string;
+    name: string;
+    price: number;
+    image?: string;
+  };
+  quantity: number;
+  color?: string;
+}
+
+// Define interface for order
+interface Order {
+  id: string;
+  products: string | OrderProduct[];
+  subtotal: number;
+  total: number;
+  shipping_cost: number | null;
+  payment_status: string;
+  payment_id?: string;
+  customer_name?: string;
+  customer_phone?: string;
+  customer_email?: string;
+  expand?: {
+    shipping_address?: {
+      street: string;
+      city: string;
+      state: string;
+      postalCode: string;
+      country: string;
+    };
+    user?: {
+      id: string;
+      email: string;
+    };
+  };
+}
 
 export default function OrderConfirmation() {
   const { orderId } = useParams<{ orderId: string }>();
   const { toast } = useToast();
-  const [order, setOrder] = useState<any>(null);
+  const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -27,7 +66,7 @@ export default function OrderConfirmation() {
           expand: 'shipping_address,user',
         });
 
-        setOrder(orderData);
+        setOrder(orderData as unknown as Order);
       } catch (err) {
         console.error('Failed to fetch order:', err);
         setError('Failed to load order details. Please try again later.');
@@ -67,14 +106,14 @@ export default function OrderConfirmation() {
   }
 
   // Parse the products from the JSON string if it's a string, otherwise use as is
-  let products = [];
+  let products: OrderProduct[] = [];
   try {
     // Check if products is a string that needs parsing
     if (typeof order.products === 'string') {
       products = JSON.parse(order.products || '[]');
     } else {
       // Products is already an object
-      products = order.products || [];
+      products = order.products as OrderProduct[];
     }
   } catch (err) {
     console.error('Error parsing products:', err);
@@ -99,34 +138,54 @@ export default function OrderConfirmation() {
 
       <Card className="p-6 mb-6">
         <h2 className="text-lg font-semibold mb-4">Order Summary</h2>
-        <div className="space-y-2">
-          {products.map((item: any, index: number) => (
-            <div key={index} className="flex justify-between py-1">
-              <span className="text-gray-600">
-                {item.product.name} × {item.quantity}
-                {item.color && ` (${item.color})`}
-              </span>
-              <span className="font-medium">₹{(item.product.price * item.quantity).toFixed(2)}</span>
+        <div className="space-y-4">
+          {products.map((item, index) => (
+            <div key={index} className="flex items-center gap-4 py-2 border-b border-gray-100 last:border-0">
+              <div className="h-16 w-16 rounded-md bg-gray-50 overflow-hidden flex-shrink-0">
+                {item.product.image ? (
+                  <img 
+                    src={item.product.image.startsWith('http') ? item.product.image : `https://konipai.in/${item.product.image}`} 
+                    alt={item.product.name} 
+                    className="h-full w-full object-cover"
+                    onError={(e) => {
+                      e.currentTarget.onerror = null;
+                      e.currentTarget.src = '/placeholder-product.png';
+                    }}
+                  />
+                ) : (
+                  <div className="h-full w-full flex items-center justify-center text-gray-400">
+                    <Package className="h-6 w-6" />
+                  </div>
+                )}
+              </div>
+              <div className="flex-grow flex flex-col">
+                <h3 className="font-medium">{item.product.name}</h3>
+                <div className="text-sm text-gray-600">
+                  <span>Qty: {item.quantity}</span>
+                  {item.color && <span className="ml-2">Color: {item.color}</span>}
+                </div>
+              </div>
+              <div className="font-medium">₹{(item.product.price * item.quantity).toFixed(2)}</div>
             </div>
           ))}
           <Separator className="my-2" />
           <div className="flex justify-between py-1">
             <span className="text-gray-600">Subtotal</span>
-            <span className="font-medium">₹{parseFloat(order.subtotal).toFixed(2)}</span>
+            <span className="font-medium">₹{parseFloat(order.subtotal.toString()).toFixed(2)}</span>
           </div>
           <div className="flex justify-between py-1">
             <span className="text-gray-600">Shipping</span>
             <span className="font-medium">
-              {order.shipping_cost === null || order.shipping_cost === undefined || isNaN(parseFloat(order.shipping_cost))
+              {order.shipping_cost === null || order.shipping_cost === undefined || isNaN(parseFloat(order.shipping_cost.toString()))
                 ? 'Free'
-                : parseFloat(order.shipping_cost) === 0
+                : parseFloat(order.shipping_cost.toString()) === 0
                   ? 'Free'
-                  : `₹${parseFloat(order.shipping_cost).toFixed(2)}`}
+                  : `₹${parseFloat(order.shipping_cost.toString()).toFixed(2)}`}
             </span>
           </div>
           <div className="flex justify-between py-1 font-semibold">
             <span>Total</span>
-            <span>₹{parseFloat(order.total).toFixed(2)}</span>
+            <span>₹{parseFloat(order.total.toString()).toFixed(2)}</span>
           </div>
         </div>
       </Card>
@@ -161,8 +220,8 @@ export default function OrderConfirmation() {
       </Card>
 
       <div className="flex justify-center space-x-4 mt-8">
-        <Button asChild variant="outline">
-          <Link to="/account/orders">View All Orders</Link>
+        <Button asChild variant="outline" className="w-full">
+          <Link to="/orders">View All Orders</Link>
         </Button>
         <Button asChild>
           <Link to="/shop">Continue Shopping</Link>
