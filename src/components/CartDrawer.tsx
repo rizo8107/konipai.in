@@ -1,5 +1,5 @@
 import { X, Minus, Plus, ShoppingBag } from 'lucide-react';
-import { useCart } from '@/context/CartContext';
+import { useCart } from '@/contexts/CartContext';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -7,12 +7,13 @@ import { Badge } from '@/components/ui/badge';
 
 const CartDrawer = () => {
   const { 
-    cartItems, 
-    removeFromCart, 
+    items, 
+    removeItem, 
     updateQuantity, 
-    cartTotal, 
-    isCartOpen, 
-    setIsCartOpen 
+    subtotal,
+    total,
+    isCartOpen,
+    setIsCartOpen
   } = useCart();
 
   if (!isCartOpen) return null;
@@ -31,9 +32,9 @@ const CartDrawer = () => {
                 <div className="flex items-center gap-3">
                   <ShoppingBag className="h-5 w-5" />
                   <h2 className="text-lg font-medium">Shopping Cart</h2>
-                  {cartItems.length > 0 && (
+                  {items.length > 0 && (
                     <Badge variant="secondary" className="ml-2">
-                      {cartItems.length} {cartItems.length === 1 ? 'item' : 'items'}
+                      {items.length} {items.length === 1 ? 'item' : 'items'}
                     </Badge>
                   )}
                 </div>
@@ -49,14 +50,14 @@ const CartDrawer = () => {
 
               <ScrollArea className="flex-1">
                 <div className="px-6">
-                  {cartItems.length > 0 ? (
+                  {items.length > 0 ? (
                     <ul className="divide-y divide-gray-100">
-                      {cartItems.map((item) => (
-                        <li key={`${item.id}-${item.color}`} className="py-6 flex gap-4">
+                      {items.map((item) => (
+                        <li key={`${item.productId}-${item.color}`} className="py-6 flex gap-4">
                           <div className="h-24 w-24 flex-shrink-0 overflow-hidden rounded-xl border border-gray-100">
                             <img
-                              src={item.image}
-                              alt={item.name}
+                              src={item.product.images?.[0] || ''}
+                              alt={item.product.name}
                               className="h-full w-full object-cover object-center"
                             />
                           </div>
@@ -66,20 +67,20 @@ const CartDrawer = () => {
                               <div className="flex justify-between">
                                 <h3 className="text-sm font-medium">
                                   <Link 
-                                    to={`/product/${item.id}`}
+                                    to={`/product/${item.productId}`}
                                     className="hover:text-konipai-mint transition-colors"
                                   >
-                                    {item.name}
+                                    {item.product.name}
                                   </Link>
                                 </h3>
-                                <p className="text-sm font-medium">${item.price.toFixed(2)}</p>
+                                <p className="text-sm font-medium">${item.product.price.toFixed(2)}</p>
                               </div>
                               <p className="mt-1 text-sm text-gray-500 capitalize">{item.color}</p>
                             </div>
                             <div className="flex items-center justify-between mt-4">
                               <div className="flex items-center border rounded-lg bg-gray-50">
                                 <button
-                                  onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                                  onClick={() => updateQuantity(item.productId, item.quantity - 1)}
                                   className="p-2 hover:text-konipai-mint transition-colors"
                                   aria-label="Decrease quantity"
                                 >
@@ -87,7 +88,7 @@ const CartDrawer = () => {
                                 </button>
                                 <span className="px-4 py-1 text-sm font-medium">{item.quantity}</span>
                                 <button
-                                  onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                                  onClick={() => updateQuantity(item.productId, item.quantity + 1)}
                                   className="p-2 hover:text-konipai-mint transition-colors"
                                   aria-label="Increase quantity"
                                 >
@@ -97,7 +98,7 @@ const CartDrawer = () => {
 
                               <button
                                 type="button"
-                                onClick={() => removeFromCart(item.id)}
+                                onClick={() => removeItem(item.productId)}
                                 className="text-sm font-medium text-gray-500 hover:text-red-500 transition-colors"
                               >
                                 Remove
@@ -128,11 +129,11 @@ const CartDrawer = () => {
                 </div>
               </ScrollArea>
 
-              {cartItems.length > 0 && (
+              {items.length > 0 && (
                 <div className="border-t border-gray-100 px-6 py-6">
                   <div className="flex items-center justify-between mb-4">
                     <p className="text-sm text-gray-500">Subtotal</p>
-                    <p className="text-lg font-medium">${cartTotal.toFixed(2)}</p>
+                    <p className="text-lg font-medium">${subtotal.toFixed(2)}</p>
                   </div>
                   <p className="text-xs text-gray-500 mb-6">
                     Shipping and taxes calculated at checkout.

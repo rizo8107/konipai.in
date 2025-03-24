@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState } from 'react';
 import { Product, pocketbase } from '@/lib/pocketbase';
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
+import { deduplicateCartItems, isValidCartItem } from '@/utils/cartUtils';
 
 export interface CartItem {
   productId: string;
@@ -20,6 +21,8 @@ interface CartContextType {
   subtotal: number;
   total: number;
   itemCount: number;
+  isCartOpen: boolean;
+  setIsCartOpen: (isOpen: boolean) => void;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -33,6 +36,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
   const { user, loading: authLoading } = useAuth();
+  const [isCartOpen, setIsCartOpen] = useState(false);
 
   // Load cart from local storage and sync with server on mount or auth state change
   useEffect(() => {
@@ -52,15 +56,10 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
             const parsedCart = JSON.parse(savedCart);
             if (Array.isArray(parsedCart)) {
               // Validate cart items
-              localItems = parsedCart.filter((item: CartItem) => 
-                item &&
-                item.productId &&
-                item.product && 
-                typeof item.quantity === 'number' && 
-                item.quantity > 0 &&
-                typeof item.product.price === 'number' &&
-                !isNaN(item.product.price)
-              );
+              localItems = parsedCart.filter(isValidCartItem);
+              
+              // Deduplicate local items based on productId+color
+              localItems = deduplicateCartItems(localItems);
             } else {
               console.warn('Local cart is not an array:', parsedCart);
             }
@@ -87,20 +86,15 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
                 const serverItems = JSON.parse(serverCart.items);
                 
                 if (Array.isArray(serverItems)) {
-                  const validItems = serverItems.filter((item: CartItem) => 
-                    item &&
-                    item.productId &&
-                    item.product && 
-                    typeof item.quantity === 'number' && 
-                    item.quantity > 0 &&
-                    typeof item.product.price === 'number' &&
-                    !isNaN(item.product.price)
-                  );
+                  const validItems = serverItems.filter(isValidCartItem);
+                  
+                  // Deduplicate server items
+                  const deduplicatedServerItems = deduplicateCartItems(validItems);
 
                   // If server has items, use those instead of local items
-                  if (validItems.length > 0) {
-                    setItems(validItems);
-                    localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(validItems));
+                  if (deduplicatedServerItems.length > 0) {
+                    setItems(deduplicatedServerItems);
+                    localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(deduplicatedServerItems));
                     setIsLoading(false);
                     return;
                   }
@@ -155,7 +149,6 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     loadCart();
   }, [user, authLoading, toast]);
 
-  // Calculate totals
   const calculateTotals = (cartItems: CartItem[]) => {
     const subtotal = cartItems.reduce((sum, item) => {
       const price = Number(item.product.price) || 0;
@@ -176,16 +169,14 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
     const syncCart = async () => {
       // Validate and clean cart items
-      const validItems = items.filter(item => 
-        item.product && 
-        typeof item.quantity === 'number' && 
-        item.quantity > 0 &&
-        typeof item.product.price === 'number'
-      );
+      const validItems = items.filter(isValidCartItem);
 
+      // Deduplicate items before saving
+      const deduplicatedItems = deduplicateCartItems(validItems);
+      
       // Always update local storage
       try {
-        localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(validItems));
+        localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(deduplicatedItems));
       } catch (error) {
         console.warn('Failed to save cart to local storage:', error);
       }
@@ -196,7 +187,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       try {
         // Prepare cart items for server storage
         const cartData = {
-          items: JSON.stringify(validItems.map(item => ({
+          items: JSON.stringify(deduplicatedItems.map(item => ({
             productId: item.productId,
             product: {
               id: item.product.id,
@@ -263,16 +254,16 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     }
 
     setItems(currentItems => {
-      // Create a unique identifier for the item
-      const itemKey = `${product.id}-${color}`;
+      // Create a unique identifier for the item based on product ID and color
+      const itemKey = `${product.id}-${color || 'Default'}`;
       
-      // Find existing item with the same product ID and color
+      // Check if this exact product+color combination already exists in the cart
       const existingItemIndex = currentItems.findIndex(item => 
-        `${item.productId}-${item.color}` === itemKey
+        `${item.productId}-${item.color || 'Default'}` === itemKey
       );
 
       if (existingItemIndex !== -1) {
-        // Update existing item
+        // Update existing item's quantity instead of adding a duplicate
         const updatedItems = [...currentItems];
         updatedItems[existingItemIndex] = {
           ...updatedItems[existingItemIndex],
@@ -281,7 +272,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         return updatedItems;
       }
 
-      // Add new item
+      // Add new item if it doesn't exist
       return [...currentItems, {
         productId: product.id,
         product,
@@ -345,6 +336,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     subtotal,
     total,
     itemCount,
+    isCartOpen,
+    setIsCartOpen,
   };
 
   return (
@@ -360,4 +353,4 @@ export function useCart() {
     throw new Error('useCart must be used within a CartProvider');
   }
   return context;
-} 
+}
