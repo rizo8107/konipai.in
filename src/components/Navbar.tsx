@@ -57,6 +57,32 @@ export default function Navbar() {
                   About
                 </Link>
               </SheetClose>
+              
+              {/* Add authenticated user links for mobile */}
+              {user && (
+                <>
+                  <div className="h-px bg-border my-2" />
+                  <SheetClose asChild>
+                    <Link to="/profile" className="text-lg font-semibold">
+                      Profile
+                    </Link>
+                  </SheetClose>
+                  <SheetClose asChild>
+                    <Link to="/orders" className="text-lg font-semibold">
+                      Orders
+                    </Link>
+                  </SheetClose>
+                  <SheetClose asChild>
+                    <Button 
+                      variant="ghost" 
+                      className="text-lg font-semibold justify-start px-0 hover:bg-transparent"
+                      onClick={() => signOut()}
+                    >
+                      Log out
+                    </Button>
+                  </SheetClose>
+                </>
+              )}
             </nav>
           </SheetContent>
         </Sheet>
@@ -128,6 +154,9 @@ export default function Navbar() {
                   <DropdownMenuSeparator />
                   <DropdownMenuItem asChild>
                     <Link to="/profile">Profile</Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to="/orders">Orders</Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => signOut()}>
                     Log out
