@@ -1,0 +1,39 @@
+{
+  "name": "konipai-frontend",
+  "description": "Konipai Frontend Application",
+  "image": "ghcr.io/rizo8107/konipai.in:latest",
+  "ports": [
+    {
+      "port": 80,
+      "targetPort": 80,
+      "protocol": "http"
+    }
+  ],
+  "env": [
+    {
+      "name": "VITE_POCKETBASE_URL",
+      "value": "https://backend-pocketbase.7za6uc.easypanel.host"
+    },
+    {
+      "name": "VITE_RAZORPAY_KEY_ID",
+      "value": "rzp_test_2K8qXKqXKqXKqX"
+    },
+    {
+      "name": "VITE_RAZORPAY_TEST_MODE",
+      "value": "true"
+    }
+  ],
+  "resources": {
+    "cpu": "100m",
+    "memory": "256Mi"
+  },
+  "healthcheck": {
+    "path": "/",
+    "port": 80,
+    "interval": "30s",
+    "timeout": "10s",
+    "retries": 3
+  },
+  "restartPolicy": "always",
+  "networks": ["default"]
+} 
