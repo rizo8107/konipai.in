@@ -1,12 +1,15 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { ArrowLeft, ArrowRight, Loader2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { getSliderImages, SliderImage } from '@/lib/pocketbase';
+import { getSliderImages, SliderImage, Collections } from '@/lib/pocketbase';
+import { getPocketBaseImageUrl, preloadImages } from '@/utils/imageOptimizer';
 
 const Hero = () => {
   const [sliderImages, setSliderImages] = useState<SliderImage[]>([]);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [imagesPreloaded, setImagesPreloaded] = useState(false);
+  const nextImageIndexRef = useRef((currentImageIndex + 1) % Math.max(1, sliderImages.length));
   
   useEffect(() => {
     const controller = new AbortController();
@@ -32,6 +35,66 @@ const Hero = () => {
     };
   }, []);
   
+  // Preload next image when current image changes
+  useEffect(() => {
+    if (sliderImages.length <= 1) return;
+    
+    // Calculate next image index
+    const nextIndex = (currentImageIndex + 1) % sliderImages.length;
+    nextImageIndexRef.current = nextIndex;
+    
+    // Preload next image
+    if (sliderImages[nextIndex]?.image) {
+      const img = new Image();
+      // Extract image ID and filename for the optimization
+      const imageUrl = sliderImages[nextIndex].image;
+      const urlParts = imageUrl.split('/');
+      if (urlParts.length >= 2) {
+        const imageId = urlParts[urlParts.length - 2];
+        const fileName = urlParts[urlParts.length - 1];
+        const optimizedUrl = getPocketBaseImageUrl(`${imageId}/${fileName}`, Collections.SLIDER_IMAGES, "large", "webp");
+        img.src = optimizedUrl;
+      }
+    }
+  }, [currentImageIndex, sliderImages]);
+  
+  // Initial preloading of all slider images as small thumbnails
+  useEffect(() => {
+    if (sliderImages.length > 0 && !imagesPreloaded) {
+      try {
+        // Extract image URLs in the right format for the preloader
+        const imageUrls = sliderImages.map(slide => {
+          const urlParts = slide.image.split('/');
+          if (urlParts.length >= 2) {
+            const imageId = urlParts[urlParts.length - 2];
+            const fileName = urlParts[urlParts.length - 1];
+            return `${imageId}/${fileName}`;
+          }
+          return '';
+        }).filter(Boolean);
+        
+        // Preload current image as high priority
+        if (imageUrls[currentImageIndex]) {
+          const link = document.createElement('link');
+          link.rel = 'preload';
+          link.as = 'image';
+          const optimizedUrl = getPocketBaseImageUrl(imageUrls[currentImageIndex], Collections.SLIDER_IMAGES, "large", "webp");
+          link.href = optimizedUrl;
+          link.type = 'image/webp';
+          link.setAttribute('fetchpriority', 'high');
+          document.head.appendChild(link);
+        }
+        
+        // Preload other images as low priority
+        preloadImages(imageUrls, Collections.SLIDER_IMAGES, "small", false);
+        
+        setImagesPreloaded(true);
+      } catch (error) {
+        console.error('Error preloading slider images:', error);
+      }
+    }
+  }, [sliderImages, imagesPreloaded, currentImageIndex]);
+  
   useEffect(() => {
     if (sliderImages.length === 0) return;
     
@@ -43,14 +106,12 @@ const Hero = () => {
   }, [sliderImages]);
 
   const goToSlide = (index: number) => {
-    console.log('Going to slide:', index);
     setCurrentImageIndex(index);
   };
 
   const goToPrevSlide = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    console.log('Going to previous slide');
     setCurrentImageIndex((prevIndex) => 
       prevIndex === 0 ? sliderImages.length - 1 : prevIndex - 1
     );
@@ -59,7 +120,6 @@ const Hero = () => {
   const goToNextSlide = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    console.log('Going to next slide');
     setCurrentImageIndex((prevIndex) => 
       (prevIndex + 1) % sliderImages.length
     );
@@ -77,6 +137,21 @@ const Hero = () => {
       } else {
         window.location.href = slide.link;
       }
+    }
+  };
+  
+  // Helper to get optimized image URL
+  const getOptimizedImageUrl = (imageUrl: string, size: "small" | "medium" | "large" = "large") => {
+    try {
+      const urlParts = imageUrl.split('/');
+      if (urlParts.length >= 2) {
+        const imageId = urlParts[urlParts.length - 2];
+        const fileName = urlParts[urlParts.length - 1];
+        return getPocketBaseImageUrl(`${imageId}/${fileName}`, Collections.SLIDER_IMAGES, size, "webp");
+      }
+      return imageUrl;
+    } catch {
+      return imageUrl;
     }
   };
 
@@ -100,22 +175,64 @@ const Hero = () => {
     <section className="relative w-full h-[400px] md:h-[600px] lg:h-[800px] overflow-hidden">
       {/* Image Slider */}
       <div className="absolute inset-0 w-full h-full">
-        {sliderImages.map((slide, index) => (
-          <div 
-            key={slide.id}
-            className={`absolute inset-0 h-full w-full transition-opacity duration-1000 ${
-              currentImageIndex === index ? 'opacity-100 z-10' : 'opacity-0 z-0'
-            } cursor-pointer`}
-            onClick={() => handleSlideClick(slide)}
-          >
-            <img 
-              src={slide.image} 
-              alt={slide.alt || `Slide ${index + 1}`}
-              className="h-full w-full object-cover"
-            />
-            <div className="absolute inset-0 bg-black/20"></div>
-          </div>
-        ))}
+        {sliderImages.map((slide, index) => {
+          const isCurrentImage = currentImageIndex === index;
+          const isNextImage = nextImageIndexRef.current === index;
+          // Only render current and next images to save memory
+          if (!isCurrentImage && !isNextImage) return null;
+          
+          // Get both large and small versions of the image
+          const smallImageUrl = getOptimizedImageUrl(slide.image, "small");
+          const largeImageUrl = getOptimizedImageUrl(slide.image, "large");
+          
+          return (
+            <div 
+              key={slide.id}
+              className={`absolute inset-0 h-full w-full transition-opacity duration-1000 ${
+                isCurrentImage ? 'opacity-100 z-10' : 'opacity-0 z-0'
+              } cursor-pointer`}
+              onClick={() => handleSlideClick(slide)}
+            >
+              {/* Small blurry image that loads immediately for blur-up effect */}
+              {isCurrentImage && (
+                <div className="absolute inset-0">
+                  <img 
+                    src={smallImageUrl}
+                    alt=""
+                    className="h-full w-full object-cover filter blur-lg scale-110"
+                    aria-hidden="true"
+                    loading="eager"
+                    style={{ opacity: 0.8 }}
+                  />
+                </div>
+              )}
+              
+              {/* Main high-quality image */}
+              <picture>
+                <source
+                  srcSet={largeImageUrl}
+                  media="(min-width: 640px)"
+                  type="image/webp"
+                />
+                <source
+                  srcSet={smallImageUrl}
+                  media="(max-width: 639px)"
+                  type="image/webp"
+                />
+                <img 
+                  src={largeImageUrl}
+                  alt={slide.alt || `Slide ${index + 1}`}
+                  className="h-full w-full object-cover"
+                  loading={isCurrentImage ? "eager" : "lazy"}
+                  fetchPriority={isCurrentImage ? "high" : "auto"}
+                  decoding={isCurrentImage ? "sync" : "async"}
+                />
+              </picture>
+              
+              <div className="absolute inset-0 bg-black/20"></div>
+            </div>
+          );
+        })}
       </div>
       
       {/* Navigation Arrows */}
@@ -137,7 +254,7 @@ const Hero = () => {
       </div>
       
       {/* Slider Navigation Dots */}
-      <div className="absolute bottom-4 md:bottom-8 left-1/2 transform -translate-x-1/2 flex space-x-2 z-30">
+      <div className="absolute bottom-12 left-0 right-0 z-30 flex items-center justify-center gap-2">
         {sliderImages.map((_, index) => (
           <button
             key={index}

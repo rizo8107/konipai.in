@@ -10,16 +10,25 @@ export type ImageFormat = "webp" | "jpeg" | "png" | "original";
 
 interface ImageSizeConfig {
   width: number;
+  height?: number;
   quality: number;
 }
 
 const IMAGE_SIZES: Record<ImageSize, ImageSizeConfig> = {
-  thumbnail: { width: 100, quality: 75 },
-  small: { width: 300, quality: 80 },
-  medium: { width: 600, quality: 85 },
-  large: { width: 1200, quality: 90 },
+  thumbnail: { width: 100, quality: 70 },
+  small: { width: 300, quality: 75 },
+  medium: { width: 600, quality: 80 },
+  large: { width: 1200, quality: 85 },
   original: { width: 0, quality: 100 }, // Original size
 };
+
+// Cache image dimensions to minimize layout shifts
+interface ImageDimensions {
+  width: number;
+  height: number;
+  aspectRatio: number;
+}
+const imageDimensionCache = new Map<string, ImageDimensions>();
 
 /**
  * Builds and caches PocketBase image URLs with optimization parameters
@@ -53,7 +62,7 @@ export function getPocketBaseImageUrl(
     }
 
     // Build base URL
-    let fullUrl = `${baseUrl}/api/files/${collection}/${recordId}/${filename}`;
+    let fullUrl = `${baseUrl.replace(/\/$/, '')}/api/files/${collection}/${recordId}/${filename}`;
     
     // Add optimization parameters if not original format
     if (format !== "original") {
@@ -64,11 +73,13 @@ export function getPocketBaseImageUrl(
         params.append('thumb', `${sizeConfig.width}x0`);
       }
       
+      // Add format and quality parameters
       params.append('format', format);
       params.append('quality', sizeConfig.quality.toString());
       
-      // Add cache-busting parameter based on size and format to ensure proper caching
-      params.append('v', `${size}-${format}`);
+      // Add cache control hints to maximize caching
+      const cacheVersion = '1'; // Increment this when image processing changes
+      params.append('v', `${cacheVersion}-${size}-${format}`);
       
       if (params.toString()) {
         fullUrl += `?${params.toString()}`;
@@ -93,6 +104,7 @@ export function getPocketBaseImageUrl(
  */
 export function getResponsiveImageSources(url: string, collection: string) {
   return [
+    // WebP sources for modern browsers (preferred format)
     {
       srcSet: getPocketBaseImageUrl(url, collection, "small", "webp"),
       media: "(max-width: 640px)",
@@ -140,31 +152,64 @@ export function preloadImages(
   size: ImageSize = "small",
   highPriority = false
 ): void {
-  urls.forEach(url => {
+  // Use a queue to prevent too many simultaneous requests
+  const queue = [...urls];
+  const maxParallelPreloads = 4;
+  let activePreloads = 0;
+  
+  const processQueue = () => {
+    if (queue.length === 0 || activePreloads >= maxParallelPreloads) return;
+    
+    const url = queue.shift();
+    if (!url) return;
+    
     const cacheKey = `${url}-${size}-preload`;
     
     // Skip if already preloaded
     if (preloadedImages.has(cacheKey)) {
+      processQueue();
       return;
     }
     
+    activePreloads++;
     const imageUrl = getPocketBaseImageUrl(url, collection, size, "webp");
+    
     if (imageUrl) {
-      const link = document.createElement('link');
-      link.rel = 'preload';
-      link.as = 'image';
-      link.href = imageUrl;
-      link.type = 'image/webp';
+      const img = new Image();
       
-      // Set high priority for critical images
+      // Listen for load and error events to continue the queue
+      const continueQueue = () => {
+        activePreloads--;
+        processQueue();
+      };
+      
+      img.onload = continueQueue;
+      img.onerror = continueQueue;
+      
+      // For critical above-the-fold images, add a preload link
       if (highPriority) {
+        const link = document.createElement('link');
+        link.rel = 'preload';
+        link.as = 'image';
+        link.href = imageUrl;
+        link.type = 'image/webp';
         link.setAttribute('fetchpriority', 'high');
+        document.head.appendChild(link);
       }
       
-      document.head.appendChild(link);
+      // Start loading the image
+      img.src = imageUrl;
       preloadedImages.add(cacheKey);
+    } else {
+      activePreloads--;
+      processQueue();
     }
-  });
+  };
+  
+  // Start initial batch of preloads
+  for (let i = 0; i < maxParallelPreloads; i++) {
+    processQueue();
+  }
 }
 
 /**
@@ -173,14 +218,21 @@ export function preloadImages(
  * @param collection - The PocketBase collection name
  */
 export function preloadCriticalImages(productIds: string[], collection: string): void {
-  // Create a preload link for each critical image
-  productIds.forEach(id => {
+  // Create a preload link for each critical image - limit to first 4 to avoid too many requests
+  const criticalIds = productIds.slice(0, 4);
+  
+  criticalIds.forEach((id, index) => {
     const link = document.createElement('link');
     link.rel = 'preload';
     link.as = 'image';
-    link.href = `${window.location.origin}/api/image-proxy?id=${id}&size=medium&format=webp`;
+    link.href = getPocketBaseImageUrl(id, collection, "medium", "webp");
     link.type = 'image/webp';
-    link.setAttribute('fetchpriority', 'high');
+    
+    // Only set the highest priority on the very first image
+    if (index === 0) {
+      link.setAttribute('fetchpriority', 'high');
+    }
+    
     document.head.appendChild(link);
   });
 }
@@ -191,9 +243,12 @@ export function preloadCriticalImages(productIds: string[], collection: string):
 export function clearImageCache(): void {
   imageUrlCache.clear();
   preloadedImages.clear();
+  imageDimensionCache.clear();
 }
 
-// Set maximum cache size to prevent memory issues
+/**
+ * Set maximum cache size to prevent memory issues
+ */
 export function limitCacheSize(maxSize: number = 100): void {
   if (imageUrlCache.size > maxSize) {
     // Remove oldest entries (first items in the map)
@@ -207,5 +262,12 @@ export function limitCacheSize(maxSize: number = 100): void {
     const entriesToRemove = preloadedImages.size - maxSize;
     const keysToRemove = Array.from(preloadedImages).slice(0, entriesToRemove);
     keysToRemove.forEach(key => preloadedImages.delete(key));
+  }
+  
+  // Limit dimension cache
+  if (imageDimensionCache.size > maxSize) {
+    const entriesToRemove = imageDimensionCache.size - maxSize;
+    const keysToRemove = Array.from(imageDimensionCache.keys()).slice(0, entriesToRemove);
+    keysToRemove.forEach(key => imageDimensionCache.delete(key));
   }
 } 
