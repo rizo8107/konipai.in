@@ -27,6 +27,22 @@ function debugLog(...args) {
 }
 
 /**
+ * Direct log to PocketBase console - use for important operational logs
+ */
+function directLog(message) {
+    try {
+        console.log('============================');
+        console.log(`[WEBHOOK LOG] ${message}`);
+        console.log('============================');
+    } catch (e) {
+        // Fail silently if logging doesn't work
+    }
+}
+
+// Keep track of which orders we've processed to avoid duplicates
+const processedOrders = new Set();
+
+/**
  * Function to send order details to external webhook
  * @param {object} order - The order record 
  * @param {object} user - The user record
@@ -34,13 +50,45 @@ function debugLog(...args) {
  * @returns {boolean} - Success status
  */
 async function sendOrderToWebhook(order, user, eventType) {
+    // Check if we've already processed this exact order + event combination
+    const orderEventKey = `${order.id}_${eventType}_${Date.now()}`;
+    if (processedOrders.has(orderEventKey)) {
+        console.log(`Skipping duplicate order event: ${orderEventKey}`);
+        return true;
+    }
+
+    // Mark this order as being processed
+    processedOrders.add(orderEventKey);
+    
+    // Clean old entries from the Set to avoid memory leaks
+    if (processedOrders.size > 100) {
+        // Keep only the 50 most recent entries
+        const entries = Array.from(processedOrders);
+        const newEntries = entries.slice(entries.length - 50);
+        processedOrders.clear();
+        newEntries.forEach(entry => processedOrders.add(entry));
+    }
+
     try {
-        console.log(`Preparing to send order ${order.id} to webhook (${eventType})...`);
+        directLog(`Preparing to send order ${order.id} to webhook (${eventType})...`);
         debugLog('Order object:', JSON.stringify(order));
         debugLog('User object:', JSON.stringify(user));
         
+        if (!order || !order.id) {
+            directLog('ERROR: Invalid order object - missing ID');
+            return false;
+        }
+
+        if (!user || !user.email) {
+            directLog('ERROR: Invalid user object - missing email');
+            return false;
+        }
+        
         // Function to format currency
         const formatCurrency = (amount) => {
+            if (typeof amount !== 'number') {
+                amount = Number(amount) || 0;
+            }
             return new Intl.NumberFormat('en-IN', {
                 style: 'currency',
                 currency: 'INR'
@@ -51,9 +99,20 @@ async function sendOrderToWebhook(order, user, eventType) {
         let orderProducts = [];
         try {
             debugLog('Parsing products:', order.products);
-            orderProducts = typeof order.products === 'string' 
-                ? JSON.parse(order.products) 
-                : order.products;
+            if (!order.products) {
+                directLog('WARNING: Order has no products array');
+                orderProducts = [];
+            } else {
+                orderProducts = typeof order.products === 'string' 
+                    ? JSON.parse(order.products) 
+                    : order.products;
+                
+                // Ensure orderProducts is an array
+                if (!Array.isArray(orderProducts)) {
+                    directLog('WARNING: Products is not an array, converting to empty array');
+                    orderProducts = [];
+                }
+            }
             debugLog('Parsed products:', JSON.stringify(orderProducts));
         } catch (e) {
             console.error('Error parsing products:', e);
@@ -62,12 +121,15 @@ async function sendOrderToWebhook(order, user, eventType) {
 
         // Build a formatted shipping address for email templates
         let formattedAddress = '';
+        let shippingAddressObj = {};
         if (order.shipping_address) {
             try {
                 debugLog('Parsing shipping address:', order.shipping_address);
                 const address = typeof order.shipping_address === 'string'
-                    ? JSON.parse(order.shipping_address)
+                    ? JSON.parse(order.shipping_address) 
                     : order.shipping_address;
+                
+                shippingAddressObj = address;
                 
                 const addressParts = [];
                 if (address.street) addressParts.push(address.street);
@@ -81,7 +143,10 @@ async function sendOrderToWebhook(order, user, eventType) {
             } catch (e) {
                 console.error('Error parsing shipping address:', e);
                 formattedAddress = 'Address information not available';
+                shippingAddressObj = { error: 'Could not parse address' };
             }
+        } else {
+            directLog('WARNING: Order has no shipping address');
         }
 
         // Create a readable order summary for emails
@@ -90,14 +155,22 @@ async function sendOrderToWebhook(order, user, eventType) {
 
         try {
             debugLog('Generating order summary from products');
-            orderProducts.forEach(item => {
-                totalItems += item.quantity || 0;
-                orderSummary += `- ${item.quantity || 1}x ${item.name || 'Product'} (${formatCurrency(item.price || 0)})`;
-                if (item.color) {
-                    orderSummary += ` - Color: ${item.color}`;
-                }
-                orderSummary += "\n";
-            });
+            if (orderProducts.length === 0) {
+                orderSummary = "No products in order";
+            } else {
+                orderProducts.forEach(item => {
+                    const quantity = typeof item.quantity === 'number' ? item.quantity : 1;
+                    totalItems += quantity;
+                    const price = typeof item.price === 'number' ? item.price : 0;
+                    const name = item.name || 'Product';
+                    
+                    orderSummary += `- ${quantity}x ${name} (${formatCurrency(price)})`;
+                    if (item.color) {
+                        orderSummary += ` - Color: ${item.color}`;
+                    }
+                    orderSummary += "\n";
+                });
+            }
             debugLog('Generated order summary:', orderSummary);
         } catch (e) {
             console.error("Error generating product list:", e);
@@ -118,45 +191,45 @@ async function sendOrderToWebhook(order, user, eventType) {
             
             // Customer information
             customerInfo: {
-                name: user.name,
+                name: user.name || 'Customer',
                 email: user.email,
                 phone: order.customer_phone || user.phone || ""
             },
             
             // Address information
-            shippingAddress: order.shipping_address || {},
+            shippingAddress: shippingAddressObj,
             formattedAddress: formattedAddress,
             
             // Payment information
             paymentInfo: {
-                paymentId: order.payment_id,
-                paymentOrderId: order.payment_order_id,
-                paymentStatus: order.payment_status
+                paymentId: order.payment_id || '',
+                paymentOrderId: order.payment_order_id || '',
+                paymentStatus: order.payment_status || 'pending'
             },
             
             // Order status
-            orderStatus: order.status,
+            orderStatus: order.status || 'pending',
             
             // Product information
             products: orderProducts.map(item => ({
-                productId: item.productId,
-                name: item.name,
-                quantity: item.quantity,
-                price: item.price,
-                color: item.color,
-                imageUrl: item.image
+                productId: item.productId || '',
+                name: item.name || 'Product',
+                quantity: typeof item.quantity === 'number' ? item.quantity : 1,
+                price: typeof item.price === 'number' ? item.price : 0,
+                color: item.color || '',
+                imageUrl: item.image || ''
             })),
             totalItems: totalItems,
             orderSummary: orderSummary,
             
             // Financial details
             financialDetails: {
-                subtotal: order.subtotal || order.totalAmount,
+                subtotal: order.subtotal || order.totalAmount || 0,
                 shippingCost: order.shipping_cost || 0,
-                total: order.total || order.totalAmount,
-                subtotalFormatted: formatCurrency(order.subtotal || order.totalAmount),
+                total: order.total || order.totalAmount || 0,
+                subtotalFormatted: formatCurrency(order.subtotal || order.totalAmount || 0),
                 shippingCostFormatted: formatCurrency(order.shipping_cost || 0),
-                totalFormatted: formatCurrency(order.total || order.totalAmount)
+                totalFormatted: formatCurrency(order.total || order.totalAmount || 0)
             },
             
             // Email template data
@@ -182,7 +255,7 @@ async function sendOrderToWebhook(order, user, eventType) {
         debugLog('Using auth header:', authHeader);
 
         // Use fetch to send the data to the webhook
-        console.log(`Attempting to send order ${order.id} to webhook...`);
+        directLog(`Attempting to send order ${order.id} to webhook...`);
         
         try {
             const response = await fetch(WEBHOOK_URL, {
@@ -206,19 +279,19 @@ async function sendOrderToWebhook(order, user, eventType) {
                     debugLog('Failed to read response body', e);
                 }
                 
-                console.log(`✅ Successfully sent order ${order.id} to webhook (${eventType})`);
+                directLog(`✅ Successfully sent order ${order.id} to webhook (${eventType})`);
                 return true;
             } else {
                 const responseText = await response.text();
-                console.error(`❌ Failed to send order to webhook: ${response.status} ${response.statusText}`);
-                console.error(`Response: ${responseText}`);
+                directLog(`❌ Failed to send order to webhook: ${response.status} ${response.statusText}`);
+                directLog(`Response: ${responseText}`);
                 return false;
             }
         } catch (fetchError) {
-            console.error(`❌ Network error when sending to webhook:`, fetchError);
+            directLog(`❌ Network error when sending to webhook: ${fetchError.message}`);
             
             // Try a direct XMLHttpRequest approach as a fallback
-            console.log('Trying alternative approach to send webhook...');
+            directLog('Trying alternative approach to send webhook...');
             
             try {
                 // Direct HTTP request via a different method
@@ -235,20 +308,46 @@ async function sendOrderToWebhook(order, user, eventType) {
                 debugLog('Alternative request response:', alternativeResult);
                 
                 if (alternativeResult && alternativeResult.statusCode >= 200 && alternativeResult.statusCode < 300) {
-                    console.log(`✅ Successfully sent order ${order.id} to webhook using alternative method`);
+                    directLog(`✅ Successfully sent order ${order.id} to webhook using alternative method`);
                     return true;
                 } else {
-                    console.error(`❌ Alternative request also failed:`, alternativeResult);
+                    directLog(`❌ Alternative request also failed: Status ${alternativeResult?.statusCode || 'unknown'}`);
                     return false;
                 }
             } catch (altError) {
-                console.error(`❌ Alternative request also failed with error:`, altError);
+                directLog(`❌ Alternative request also failed with error: ${altError.message}`);
                 return false;
             }
         }
     } catch (error) {
-        console.error(`Error sending order to webhook:`, error);
+        directLog(`Error sending order to webhook: ${error.message}`);
         return false;
+    }
+}
+
+/**
+ * Debug function to print information about the order
+ */
+function logOrderInfo(order, message) {
+    if (!DEBUG) return;
+    
+    directLog(`${message || 'Order Info'} - Order ID: ${order.id}`);
+    directLog(`Status: ${order.status}, Payment Status: ${order.payment_status}`);
+    directLog(`Created: ${order.created}, Updated: ${order.updated}`);
+    
+    try {
+        const products = typeof order.products === 'string' 
+            ? JSON.parse(order.products) 
+            : order.products;
+        
+        directLog(`Products: ${products ? products.length : 0}`);
+        if (products && products.length > 0) {
+            products.forEach((p, i) => {
+                directLog(`Product ${i+1}: ${p.name}, Qty: ${p.quantity}, Price: ${p.price}`);
+            });
+        }
+    } catch (e) {
+        directLog(`Could not parse products: ${e.message}`);
     }
 }
 
@@ -258,32 +357,34 @@ onRecordAfterCreateRequest("orders", (e) => {
         // Get the created order record
         const order = e.record;
         
-        debugLog('Order created hook triggered for order:', order.id);
+        directLog(`🔔 Order created hook triggered for order: ${order.id}`);
+        logOrderInfo(order, 'New Order Created');
         
         // Fetch the user information
         const userRecord = $app.dao().findRecordById("users", order.user);
         
         if (!userRecord) {
-            console.error("User not found for order:", order.id);
+            directLog(`❌ User not found for order: ${order.id}`);
             return;
         }
         
         debugLog('Found user record:', userRecord.id);
+        directLog(`User found: ${userRecord.email}`);
         
         // Always send to webhook with event type "created"
         sendOrderToWebhook(order, userRecord, "created")
             .then(success => {
                 if (success) {
-                    console.log(`Order ${order.id} creation event successfully sent to webhook`);
+                    directLog(`✅ Order ${order.id} creation event successfully sent to webhook`);
                 } else {
-                    console.error(`Failed to send order ${order.id} creation event to webhook`);
+                    directLog(`❌ Failed to send order ${order.id} creation event to webhook`);
                 }
             })
             .catch(error => {
-                console.error(`Error in webhook process for order ${order.id}:`, error);
+                directLog(`❌ Error in webhook process for order ${order.id}: ${error.message}`);
             });
     } catch (error) {
-        console.error("Error in onRecordAfterCreateRequest hook:", error);
+        directLog(`❌ Error in onRecordAfterCreateRequest hook: ${error.message}`);
     }
 });
 
@@ -293,17 +394,19 @@ onRecordAfterUpdateRequest("orders", (e) => {
         const record = e.record;
         const oldRecord = e.oldRecord;
         
-        debugLog('Order updated hook triggered for order:', record.id);
+        directLog(`🔄 Order updated hook triggered for order: ${record.id}`);
+        logOrderInfo(record, 'Order Updated');
         
         // Get the user information
         const userRecord = $app.dao().findRecordById("users", record.user);
         
         if (!userRecord) {
-            console.error("User not found for order:", record.id);
+            directLog(`❌ User not found for order: ${record.id}`);
             return;
         }
         
         debugLog('Found user record:', userRecord.id);
+        directLog(`User found: ${userRecord.email}`);
         
         // Determine event type based on what changed
         let eventType = "updated";
@@ -311,10 +414,10 @@ onRecordAfterUpdateRequest("orders", (e) => {
         // Check for specific changes to determine more specific event types
         if (record.status !== oldRecord.status) {
             eventType = `status_changed_to_${record.status}`;
-            console.log(`Order ${record.id} status changed from ${oldRecord.status} to ${record.status}`);
+            directLog(`Order ${record.id} status changed from ${oldRecord.status} to ${record.status}`);
         } else if (record.payment_status !== oldRecord.payment_status) {
             eventType = `payment_status_changed_to_${record.payment_status}`;
-            console.log(`Order ${record.id} payment status changed from ${oldRecord.payment_status} to ${record.payment_status}`);
+            directLog(`Order ${record.id} payment status changed from ${oldRecord.payment_status} to ${record.payment_status}`);
         }
         
         debugLog('Determined event type:', eventType);
@@ -323,15 +426,15 @@ onRecordAfterUpdateRequest("orders", (e) => {
         sendOrderToWebhook(record, userRecord, eventType)
             .then(success => {
                 if (success) {
-                    console.log(`Order ${record.id} update (${eventType}) successfully sent to webhook`);
+                    directLog(`✅ Order ${record.id} update (${eventType}) successfully sent to webhook`);
                 } else {
-                    console.error(`Failed to send order ${record.id} update (${eventType}) to webhook`);
+                    directLog(`❌ Failed to send order ${record.id} update (${eventType}) to webhook`);
                 }
             })
             .catch(error => {
-                console.error(`Error in webhook process for order ${record.id} update:`, error);
+                directLog(`❌ Error in webhook process for order ${record.id} update: ${error.message}`);
             });
     } catch (error) {
-        console.error("Error in onRecordAfterUpdateRequest hook:", error);
+        directLog(`❌ Error in onRecordAfterUpdateRequest hook: ${error.message}`);
     }
 }); 
