@@ -303,7 +303,7 @@
       </div>
       {{/if}}
       
-      {{#if $json.notificationType === 'order_payment_success' || $json.paymentInfo.paymentStatus === 'paid'}}
+      {{#if $json.notificationType === 'order_payment_success'}}
       <div class="status-banner status-paid">
         Payment Confirmed
       </div>
@@ -329,7 +329,7 @@
           </div>
           <div class="order-detail">
             <div class="detail-label">Order Date</div>
-            <div class="detail-value">{{$formatDate($json.orderDate)}}</div>
+            <div class="detail-value">{{#if $json.orderDate}}{{$formatDate($json.orderDate)}}{{else}}{{$formatDate($json.timestamp)}}{{/if}}</div>
           </div>
           <div class="order-detail">
             <div class="detail-label">Order Status</div>

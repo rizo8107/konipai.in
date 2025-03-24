@@ -165,8 +165,8 @@ const sendOrderToWebhook = async (order, user) => {
         formattedAddress = addressParts.join(', ');
       } catch (e) {
         console.error('Error parsing shipping address:', e);
-        formattedAddress = 'Address information not available';
-        shippingAddressObj = { error: 'Could not parse address' };
+        formattedAddress = '';
+        shippingAddressObj = {};
       }
     }
 
@@ -195,6 +195,11 @@ const sendOrderToWebhook = async (order, user) => {
       console.error("Error generating product list:", e);
       orderSummary = "Error generating product list. Please check your order online.";
     }
+
+    // Get the subtotal, shipping cost and total values with fallbacks
+    const subtotal = order.subtotal || order.totalAmount || 0;
+    const shippingCost = order.shipping_cost || 0;
+    const total = order.total || order.totalAmount || subtotal + shippingCost || 0;
 
     // Prepare the order data for the webhook
     const orderForWebhook = {
@@ -232,23 +237,23 @@ const sendOrderToWebhook = async (order, user) => {
       // Product information
       products: orderProducts.map(item => ({
         productId: item.productId || '',
-        name: item.name || 'Product',
+        name: item.name || item.product?.name || 'Product',
         quantity: typeof item.quantity === 'number' ? item.quantity : 1,
-        price: typeof item.price === 'number' ? item.price : 0,
-        color: item.color || '',
-        imageUrl: item.image || ''
+        price: typeof item.price === 'number' ? item.price : (item.product?.price || 0),
+        color: item.color || 'Default',
+        imageUrl: item.image || item.product?.image || ''
       })),
       totalItems: totalItems,
       orderSummary: orderSummary,
       
       // Financial details
       financialDetails: {
-        subtotal: order.subtotal || order.totalAmount || 0,
-        shippingCost: order.shipping_cost || 0,
-        total: order.total || order.totalAmount || 0,
-        subtotalFormatted: formatCurrency(order.subtotal || order.totalAmount || 0),
-        shippingCostFormatted: formatCurrency(order.shipping_cost || 0),
-        totalFormatted: formatCurrency(order.total || order.totalAmount || 0)
+        subtotal: subtotal,
+        shippingCost: shippingCost,
+        total: total,
+        subtotalFormatted: formatCurrency(subtotal),
+        shippingCostFormatted: formatCurrency(shippingCost),
+        totalFormatted: formatCurrency(total)
       },
       
       // Email template data
@@ -268,6 +273,8 @@ const sendOrderToWebhook = async (order, user) => {
     
     // Send the data to n8n webhook
     console.log('Sending order data to n8n webhook...');
+    console.log('Order data for webhook:', JSON.stringify(orderForWebhook, null, 2));
+    
     const response = await fetch(N8N_WEBHOOK_URL, {
       method: 'POST',
       headers: {

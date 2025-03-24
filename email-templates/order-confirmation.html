@@ -273,7 +273,7 @@
           </div>
           <div class="order-detail">
             <div class="detail-label">Order Date</div>
-            <div class="detail-value">{{$formatDate($json.orderDate)}}</div>
+            <div class="detail-value">{{#if $json.orderDate}}{{$formatDate($json.orderDate)}}{{else}}{{$formatDate($json.timestamp)}}{{/if}}</div>
           </div>
           <div class="order-detail">
             <div class="detail-label">Order Status</div>
@@ -343,7 +343,11 @@
       <!-- Shipping Address -->
       <div class="shipping-address">
         <h2 class="order-header">Shipping Address</h2>
+        {{#if $json.formattedAddress}}
         <div>{{$json.formattedAddress}}</div>
+        {{else}}
+        <div>Address information will be updated soon.</div>
+        {{/if}}
         {{#if $json.customerInfo.phone}}
         <div style="margin-top: 10px;">Phone: {{$json.customerInfo.phone}}</div>
         {{/if}}
