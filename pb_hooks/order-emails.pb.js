@@ -272,66 +272,62 @@ async function sendOrderToWebhook(order, user, eventType) {
                 try {
                     const productId = item.productId || (item.product ? item.product.id : '');
                     
-                    // Try to fetch the product directly from the database if we have a productId
+                    // Get images directly from the product object or database
                     let productImages = [];
                     if (productId) {
                         try {
-                            // Attempt to get product directly from PocketBase
-                            directLog(`Fetching product ${productId} from database to get images...`);
-                            const productRecord = $app.dao().findRecordById("pbc_4092854851", productId);
-                            
-                            if (productRecord) {
-                                directLog(`Found product ${productId} in database`);
-                                // Extract images from the product record
-                                productImages = productRecord.get('images') || [];
-                                directLog(`Product images from database: ${JSON.stringify(productImages)}`);
+                            // First try directly from the product data
+                            if (item.product && item.product.images && item.product.images.length > 0) {
+                                productImages = item.product.images;
+                                directLog(`Using images from product data: ${JSON.stringify(productImages)}`);
                             } else {
-                                directLog(`Product ${productId} not found in database`);
+                                // If not available in the product data, get from database
+                                directLog(`Fetching product ${productId} from database to get images...`);
+                                const productRecord = $app.dao().findRecordById("pbc_4092854851", productId);
+                                
+                                if (productRecord) {
+                                    directLog(`Found product ${productId} in database`);
+                                    // Extract images from the product record
+                                    productImages = productRecord.get('images') || [];
+                                    directLog(`Product images from database: ${JSON.stringify(productImages)}`);
+                                } else {
+                                    directLog(`Product ${productId} not found in database`);
+                                }
                             }
                         } catch (dbError) {
-                            directLog(`Error fetching product ${productId} from database: ${dbError.message}`);
-                            // Continue with the images we already have
+                            directLog(`Error fetching product images: ${dbError.message}`);
                         }
                     }
                     
-                    // If we got images from database, use those; otherwise use the ones from the order
-                    const imagesToUse = productImages.length > 0 ? 
-                        productImages : 
-                        (item.product && item.product.images && item.product.images.length > 0 ? 
-                            item.product.images : []);
-                    
-                    if (imagesToUse && imagesToUse.length > 0) {
-                        // Format: /api/files/COLLECTION_ID/RECORD_ID/FILENAME
+                    // Generate the image URL exactly like the OrderDetail page does
+                    if (productImages.length > 0 && productId) {
+                        // Generate URL in the exact same format as the OrderDetail page:
+                        // ${import.meta.env.VITE_POCKETBASE_URL.replace(/\/$/, '')}/api/files/pbc_4092854851/${item.product.id}/${item.product.images[0].split('/').pop()}
+                        
                         const pocketbaseUrl = 'https://pocketbase.konipai.in';
                         const collectionId = 'pbc_4092854851'; // products collection
                         
-                        // Handle different image path formats
-                        let imagePath = imagesToUse[0];
-                        directLog(`Using image path: ${imagePath}`);
+                        // Handle image filename extraction
+                        let imagePath = productImages[0];
+                        let imageName = '';
                         
-                        // If it's a full URL, extract just the filename
-                        let imageName;
+                        // Extract just the filename
                         if (typeof imagePath === 'string') {
                             if (imagePath.includes('/')) {
                                 imageName = imagePath.split('/').pop();
                             } else {
-                                imageName = imagePath; // It's already just a filename
+                                imageName = imagePath;
                             }
+                            directLog(`Using image name: ${imageName}`);
+                            
+                            // Construct the URL in exactly the same way as the OrderDetail page
+                            imageUrl = `${pocketbaseUrl}/api/files/${collectionId}/${productId}/${imageName}`;
+                            directLog(`Generated image URL: ${imageUrl}`);
                         } else {
-                            // If it's not a string, use a placeholder
-                            directLog('Image path is not a string');
-                            imageName = 'placeholder.jpg';
+                            directLog(`Unable to use image path: ${imagePath}`);
                         }
-                        
-                        directLog(`Extracted image name: ${imageName}`);
-                        imageUrl = `${pocketbaseUrl}/api/files/${collectionId}/${productId}/${imageName}`;
-                        directLog(`Final image URL: ${imageUrl}`);
-                    } else if (item.image) {
-                        // Use legacy image field if present
-                        imageUrl = item.image;
-                        directLog(`Using legacy image URL: ${imageUrl}`);
                     } else {
-                        directLog(`No image data found for product ${productId}`);
+                        directLog(`No product images found for product ${productId}`);
                     }
                 } catch (e) {
                     console.error('Error generating product image URL:', e);
