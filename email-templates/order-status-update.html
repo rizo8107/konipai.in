@@ -264,10 +264,10 @@
     
     <!-- Main Content -->
     <div class="email-content">
-      <div class="greeting">Hello {{$json.customerInfo.name}},</div>
+      <div class="greeting">Hello {{$json.body.customerInfo.name || $json.customerInfo.name}},</div>
       
       <!-- Dynamic status message based on status type -->
-      {{#if $json.notificationType === 'order_status_update' && $json.orderStatus === 'processing'}}
+      {{#if ($json.body.notificationType || $json.notificationType) === 'order_status_update' && ($json.body.orderStatus || $json.orderStatus) === 'processing'}}
       <div class="status-banner status-processing">
         Your Order is Being Processed
       </div>
@@ -276,7 +276,7 @@
       </div>
       {{/if}}
       
-      {{#if $json.notificationType === 'order_status_update' && $json.orderStatus === 'shipped'}}
+      {{#if ($json.body.notificationType || $json.notificationType) === 'order_status_update' && ($json.body.orderStatus || $json.orderStatus) === 'shipped'}}
       <div class="status-banner status-shipped">
         Your Order Has Been Shipped
       </div>
@@ -285,7 +285,7 @@
       </div>
       {{/if}}
       
-      {{#if $json.notificationType === 'order_status_update' && $json.orderStatus === 'delivered'}}
+      {{#if ($json.body.notificationType || $json.notificationType) === 'order_status_update' && ($json.body.orderStatus || $json.orderStatus) === 'delivered'}}
       <div class="status-banner status-delivered">
         Your Order Has Been Delivered
       </div>
@@ -294,7 +294,7 @@
       </div>
       {{/if}}
       
-      {{#if $json.notificationType === 'order_status_update' && $json.orderStatus === 'cancelled'}}
+      {{#if ($json.body.notificationType || $json.notificationType) === 'order_status_update' && ($json.body.orderStatus || $json.orderStatus) === 'cancelled'}}
       <div class="status-banner status-cancelled">
         Your Order Has Been Cancelled
       </div>
@@ -303,7 +303,7 @@
       </div>
       {{/if}}
       
-      {{#if $json.notificationType === 'order_payment_success'}}
+      {{#if ($json.body.notificationType || $json.notificationType) === 'order_payment_success'}}
       <div class="status-banner status-paid">
         Payment Confirmed
       </div>
@@ -313,7 +313,7 @@
       {{/if}}
       
       <!-- If no specific status template matches -->
-      {{#if !$json.notificationType}}
+      {{#if !($json.body.notificationType || $json.notificationType)}}
       <div class="message">
         We're writing to let you know that there has been an update to your order. Please see the latest status below.
       </div>
@@ -325,25 +325,25 @@
         <div class="order-details">
           <div class="order-detail">
             <div class="detail-label">Order Number</div>
-            <div class="detail-value">#{{$json.orderId}}</div>
+            <div class="detail-value">#{{$json.body.orderId || $json.orderId}}</div>
           </div>
           <div class="order-detail">
             <div class="detail-label">Order Date</div>
-            <div class="detail-value">{{#if $json.orderDate}}{{$formatDate($json.orderDate)}}{{else}}{{$formatDate($json.timestamp)}}{{/if}}</div>
+            <div class="detail-value">{{#if $json.body.orderDate}}{{$formatDate($json.body.orderDate)}}{{else if $json.orderDate}}{{$formatDate($json.orderDate)}}{{else}}{{$formatDate($json.body.timestamp || $json.timestamp || $now)}}{{/if}}</div>
           </div>
           <div class="order-detail">
             <div class="detail-label">Order Status</div>
-            <div class="detail-value" style="text-transform: capitalize;">{{$json.orderStatus}}</div>
+            <div class="detail-value" style="text-transform: capitalize;">{{$json.body.orderStatus || $json.orderStatus}}</div>
           </div>
           <div class="order-detail">
             <div class="detail-label">Payment Status</div>
-            <div class="detail-value" style="text-transform: capitalize;">{{$json.paymentInfo.paymentStatus}}</div>
+            <div class="detail-value" style="text-transform: capitalize;">{{$json.body.paymentInfo.paymentStatus || $json.paymentInfo.paymentStatus}}</div>
           </div>
         </div>
       </div>
       
       <!-- Product Table (Abbreviated for status updates) -->
-      <h2 class="order-header">Order Summary ({{$json.totalItems}} items)</h2>
+      <h2 class="order-header">Order Summary ({{$json.body.totalItems || $json.totalItems}} items)</h2>
       <table class="products-table">
         <thead>
           <tr>
@@ -354,7 +354,7 @@
           </tr>
         </thead>
         <tbody>
-          {{#each $json.products}}
+          {{#each $json.body.products || $json.products}}
           <tr>
             <td>
               {{#if this.imageUrl}}
@@ -381,25 +381,25 @@
       </table>
       
       <!-- Order Totals (for some status updates it makes sense to show totals) -->
-      {{#if $json.notificationType === 'order_payment_success' || $json.paymentInfo.paymentStatus === 'paid'}}
+      {{#if ($json.body.notificationType || $json.notificationType) === 'order_payment_success' || ($json.body.paymentInfo.paymentStatus || $json.paymentInfo.paymentStatus) === 'paid'}}
       <div class="order-totals">
         <div class="total-row">
           <div class="total-label">Subtotal</div>
-          <div class="total-value">{{$json.financialDetails.subtotalFormatted}}</div>
+          <div class="total-value">{{$json.body.financialDetails.subtotalFormatted || $json.financialDetails.subtotalFormatted}}</div>
         </div>
         <div class="total-row">
           <div class="total-label">Shipping</div>
-          <div class="total-value">{{$json.financialDetails.shippingCostFormatted}}</div>
+          <div class="total-value">{{$json.body.financialDetails.shippingCostFormatted || $json.financialDetails.shippingCostFormatted}}</div>
         </div>
         <div class="total-row" style="border-top: 1px solid #eee; padding-top: 10px; margin-top: 5px;">
           <div class="total-label order-total">Total</div>
-          <div class="total-value order-total">{{$json.financialDetails.totalFormatted}}</div>
+          <div class="total-value order-total">{{$json.body.financialDetails.totalFormatted || $json.financialDetails.totalFormatted}}</div>
         </div>
       </div>
       {{/if}}
       
       <!-- CTA Button -->
-      <a href="{{$json.emailTemplateData.viewOrderUrl}}" class="cta-button">View Order Details</a>
+      <a href="{{$json.body.emailTemplateData.viewOrderUrl || $json.emailTemplateData.viewOrderUrl}}" class="cta-button">View Order Details</a>
       
       <div class="message">
         If you have any questions about your order, please contact our customer service team.
@@ -409,8 +409,8 @@
     <!-- Footer -->
     <div class="email-footer">
       <div class="contact-info">
-        <div>Email: <a href="mailto:{{$json.emailTemplateData.supportEmail}}" class="contact-link">{{$json.emailTemplateData.supportEmail}}</a></div>
-        <div>Phone: {{$json.emailTemplateData.supportPhone}}</div>
+        <div>Email: <a href="mailto:{{$json.body.emailTemplateData.supportEmail || $json.emailTemplateData.supportEmail}}" class="contact-link">{{$json.body.emailTemplateData.supportEmail || $json.emailTemplateData.supportEmail}}</a></div>
+        <div>Phone: {{$json.body.emailTemplateData.supportPhone || $json.emailTemplateData.supportPhone}}</div>
       </div>
       
       <div class="social-links">
@@ -420,7 +420,7 @@
       </div>
       
       <div class="copyright">
-        &copy; {{$json.emailTemplateData.year}} {{$json.emailTemplateData.siteName}}. All rights reserved.
+        &copy; {{$json.body.emailTemplateData.year || $json.emailTemplateData.year}} {{$json.body.emailTemplateData.siteName || $json.emailTemplateData.siteName}}. All rights reserved.
       </div>
     </div>
   </div>
