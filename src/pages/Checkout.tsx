@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/components/ui/use-toast';
-import { Loader2, ShoppingBag } from 'lucide-react';
+import { Loader2, ShoppingBag, CheckCircle, XCircle } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { 
   loadRazorpayScript, 
@@ -29,6 +29,20 @@ interface CheckoutFormData {
   phone: string;
 }
 
+interface CouponData {
+  couponId: string;
+  code: string;
+  type: 'percentage' | 'fixed_amount';
+  amount: number;
+  discountAmount: number;
+}
+
+// Update interface to be compatible with PocketBase RecordModel
+interface OrderData {
+  id: string;
+  [key: string]: any; // Allow any additional properties that might be on the record
+}
+
 export default function CheckoutPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -46,6 +60,10 @@ export default function CheckoutPage() {
     zipCode: '',
     phone: user?.phone || '',
   });
+  const [couponCode, setCouponCode] = useState('');
+  const [appliedCoupon, setAppliedCoupon] = useState<CouponData | null>(null);
+  const [couponLoading, setCouponLoading] = useState(false);
+  const [couponError, setCouponError] = useState<string | null>(null);
 
   // Load Razorpay script
   useEffect(() => {
@@ -122,6 +140,167 @@ export default function CheckoutPage() {
     }));
   };
 
+  // New function to validate coupons directly in frontend
+  const validateCouponInFrontend = async (code: string, currentSubtotal: number) => {
+    try {
+      // Search for the coupon directly
+      const coupons = await pocketbase.collection('coupons').getList(1, 1, {
+        filter: `code="${code}" && active=true`
+      });
+
+      if (coupons.items.length === 0) {
+        return { valid: false, message: 'Invalid coupon code' };
+      }
+
+      const coupon = coupons.items[0];
+
+      // Check expiration
+      if (coupon.expiration_date && new Date(coupon.expiration_date) < new Date()) {
+        return { valid: false, message: 'Coupon has expired' };
+      }
+
+      // Check usage limits
+      if (coupon.max_uses && coupon.current_uses >= coupon.max_uses) {
+        return { valid: false, message: 'Coupon usage limit exceeded' };
+      }
+
+      // Check minimum purchase
+      if (coupon.min_purchase && currentSubtotal < coupon.min_purchase) {
+        return {
+          valid: false,
+          message: `Minimum purchase of ₹${coupon.min_purchase} required for this coupon`
+        };
+      }
+
+      // Calculate discount
+      let discountAmount = 0;
+      if (coupon.type === 'percentage') {
+        discountAmount = (currentSubtotal * coupon.amount) / 100;
+      } else {
+        // Apply full fixed amount regardless of subtotal
+        discountAmount = coupon.amount;
+      }
+
+      return {
+        valid: true,
+        message: 'Coupon applied successfully',
+        coupon,
+        discountAmount
+      };
+    } catch (error) {
+      console.error('Error validating coupon:', error);
+      return { valid: false, message: 'Failed to validate coupon' };
+    }
+  };
+
+  // New function to apply coupon code
+  const applyCoupon = async () => {
+    // Reset previous coupon states
+    setCouponError(null);
+    setAppliedCoupon(null);
+    
+    if (!couponCode.trim()) {
+      setCouponError('Please enter a coupon code');
+      return;
+    }
+    
+    setCouponLoading(true);
+    
+    try {
+      try {
+        // First try the API endpoint if available
+        const baseUrl = pocketbase.baseUrl.endsWith('/') 
+          ? pocketbase.baseUrl.slice(0, -1) 
+          : pocketbase.baseUrl;
+        
+        const response = await fetch(`${baseUrl}/api/coupons/validate`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            code: couponCode.trim(),
+            subtotal: subtotal
+          }),
+        });
+        
+        if (response.status === 404) {
+          // API endpoint not found - fallback to frontend validation
+          console.warn('Coupon API endpoint not available, using frontend validation');
+          const result = await validateCouponInFrontend(couponCode.trim(), subtotal);
+          
+          if (result.valid) {
+            setAppliedCoupon({
+              couponId: result.coupon.id,
+              code: result.coupon.code,
+              type: result.coupon.type,
+              amount: result.coupon.amount,
+              discountAmount: result.discountAmount
+            });
+            setCouponError(null);
+            toast({
+              title: "Coupon Applied",
+              description: result.message,
+            });
+          } else {
+            setCouponError(result.message);
+            setAppliedCoupon(null);
+          }
+          return;
+        }
+        
+        const apiResult = await response.json();
+        
+        if (response.ok && apiResult.success) {
+          setAppliedCoupon(apiResult.data);
+          setCouponError(null);
+          toast({
+            title: "Coupon Applied",
+            description: apiResult.message,
+          });
+        } else {
+          setCouponError(apiResult.message || 'Invalid coupon code');
+          setAppliedCoupon(null);
+        }
+      } catch (fetchError) {
+        console.error('Error accessing coupon API:', fetchError);
+        // Fallback to frontend validation
+        const result = await validateCouponInFrontend(couponCode.trim(), subtotal);
+        
+        if (result.valid) {
+          setAppliedCoupon({
+            couponId: result.coupon.id,
+            code: result.coupon.code,
+            type: result.coupon.type,
+            amount: result.coupon.amount,
+            discountAmount: result.discountAmount
+          });
+          setCouponError(null);
+          toast({
+            title: "Coupon Applied",
+            description: result.message,
+          });
+        } else {
+          setCouponError(result.message);
+          setAppliedCoupon(null);
+        }
+      }
+    } catch (error) {
+      console.error('Error applying coupon:', error);
+      setCouponError('Failed to apply coupon. Please try again.');
+      setAppliedCoupon(null);
+    } finally {
+      setCouponLoading(false);
+    }
+  };
+  
+  // Function to remove applied coupon
+  const removeCoupon = () => {
+    setAppliedCoupon(null);
+    setCouponCode('');
+    setCouponError(null);
+  };
+
   const handlePaymentSuccess = async (response: RazorpayResponse, orderId: string) => {
     try {
       setIsPaymentProcessing(true);
@@ -141,6 +320,13 @@ export default function CheckoutPage() {
         throw new Error('Payment verification failed. Please contact support.');
       }
 
+      // Update the order with payment status
+      await pocketbase.collection('orders').update(orderId, {
+        payment_id: paymentId,
+        payment_status: 'captured', 
+        status: 'processing'
+      });
+
       // Clear the cart after successful payment
       clearCart();
       
@@ -149,6 +335,19 @@ export default function CheckoutPage() {
       
     } catch (error) {
       console.error('Payment verification error:', error);
+      
+      // Try to update order with failed status
+      try {
+        if (orderId) {
+          await pocketbase.collection('orders').update(orderId, {
+            payment_status: 'failed',
+            status: 'payment_failed'
+          });
+        }
+      } catch (updateError) {
+        console.error('Failed to update order status:', updateError);
+      }
+      
       toast({
         variant: "destructive",
         title: "Payment Verification Failed",
@@ -157,6 +356,23 @@ export default function CheckoutPage() {
       setIsPaymentProcessing(false);
       setIsSubmitting(false);
     }
+  };
+
+  const calculateFinalTotal = () => {
+    const shipping_cost = subtotal >= 100 ? 0 : 10;
+    let finalTotal = subtotal + shipping_cost;
+    
+    // Apply coupon discount if available
+    if (appliedCoupon) {
+      finalTotal -= appliedCoupon.discountAmount;
+      // Allow negative totals (minimum 0)
+      finalTotal = Math.max(finalTotal, 0);
+    }
+    
+    return {
+      finalTotal,
+      shipping_cost
+    };
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -238,8 +454,10 @@ export default function CheckoutPage() {
         }
       }
 
-      // Create order
-      const shipping_cost = subtotal >= 100 ? 0 : 10;
+      // Calculate final total with coupon discount
+      const { finalTotal, shipping_cost } = calculateFinalTotal();
+      
+      // Create order - Basic version first without coupon fields
       const orderData = {
         user: user.id,
         products: JSON.stringify(items.map(item => ({
@@ -254,55 +472,44 @@ export default function CheckoutPage() {
           color: item.color,
         }))),
         subtotal,
-        total,
+        total: finalTotal,
         shipping_cost,
         status: 'pending',
-        shippingAddress: addressId, // Changed from shipping_address to match PocketBase field name
+        shippingAddress: addressId, // Match PocketBase field name
         customer_name: formData.name,
         customer_email: formData.email,
         customer_phone: formData.phone,
         payment_status: 'pending',
       };
 
-      const order = await pocketbase.collection('orders').create(orderData);
-
-      // Create Razorpay order
-      const razorpayOrderResponse = await createRazorpayOrder(
-        total, // amount in INR
-        'INR',  // currency
-        order.id // receipt (using our order ID)
-      );
-
-      if (!razorpayOrderResponse || !razorpayOrderResponse.id) {
-        throw new Error('Failed to create payment order. Please try again.');
-      }
-
-      // Open Razorpay payment form
-      openRazorpayCheckout({
-        key: getRazorpayKeyId(),
-        amount: total * 100, // Razorpay expects amount in paise
-        currency: 'INR',
-        name: 'Konipai',
-        description: `Order #${order.id}`,
-        image: import.meta.env.VITE_SITE_LOGO || 'https://konipai.in/assets/logo.png',
-        handler: (response) => handlePaymentSuccess(response, order.id),
-        prefill: {
-          name: formData.name,
-          email: formData.email,
-          contact: formData.phone,
-        },
-        notes: {
-          order_id: order.id,
-          address: `${formData.address}, ${formData.city}, ${formData.state} - ${formData.zipCode}`
-        },
-        theme: {
-          color: '#4F46E5', // Indigo color that matches Konipai theme
+      // Only add coupon fields if they exist in schema
+      try {
+        // Attempt to create order with coupon fields
+        if (appliedCoupon) {
+          const order = await pocketbase.collection('orders').create({
+            ...orderData,
+            coupon_code: appliedCoupon.code,
+            coupon_id: appliedCoupon.couponId,
+            discount_amount: appliedCoupon.discountAmount,
+          });
+          return handleNextSteps(order);
+        } else {
+          const order = await pocketbase.collection('orders').create(orderData);
+          return handleNextSteps(order);
         }
-      });
-
-      // NOTE: After this point, the payment flow is handled by Razorpay's modal
-      // The handlePaymentSuccess function will be called when payment is completed
-      
+      } catch (error) {
+        console.error('Failed to create order with coupon fields:', error);
+        
+        // If failed, try again without coupon fields
+        const order = await pocketbase.collection('orders').create(orderData);
+        
+        // Log that coupon was applied but not saved to order
+        if (appliedCoupon) {
+          console.warn('Coupon was applied but not saved to order due to schema issue:', appliedCoupon);
+        }
+        
+        return handleNextSteps(order);
+      }
     } catch (error) {
       console.error('Checkout error:', error);
       toast({
@@ -312,6 +519,45 @@ export default function CheckoutPage() {
       });
       setIsSubmitting(false);
     }
+  };
+
+  const handleNextSteps = async (order: OrderData) => {
+    // Create Razorpay order
+    const razorpayOrderResponse = await createRazorpayOrder(
+      order.total, // amount in INR with coupon discount applied
+      'INR',  // currency
+      order.id // receipt (using our order ID)
+    );
+
+    if (!razorpayOrderResponse || !razorpayOrderResponse.id) {
+      throw new Error('Failed to create payment order. Please try again.');
+    }
+
+    // Open Razorpay payment form
+    openRazorpayCheckout({
+      key: getRazorpayKeyId(),
+      amount: order.total * 100, // Razorpay expects amount in paise
+      currency: 'INR',
+      name: 'Konipai',
+      description: `Order #${order.id}`,
+      image: import.meta.env.VITE_SITE_LOGO || 'https://konipai.in/assets/logo.png',
+      handler: (response) => handlePaymentSuccess(response, order.id),
+      prefill: {
+        name: formData.name,
+        email: formData.email,
+        contact: formData.phone,
+      },
+      notes: {
+        order_id: order.id,
+        address: `${formData.address}, ${formData.city}, ${formData.state} - ${formData.zipCode}`
+      },
+      theme: {
+        color: '#4F46E5', // Indigo color that matches Konipai theme
+      }
+    });
+
+    // NOTE: After this point, the payment flow is handled by Razorpay's modal
+    // The handlePaymentSuccess function will be called when payment is completed
   };
 
   if (cartLoading) {
@@ -449,11 +695,49 @@ export default function CheckoutPage() {
               <span className="text-gray-600">Shipping</span>
               <span className="font-medium">{subtotal >= 100 ? 'Free' : `₹${10.00.toFixed(2)}`}</span>
             </div>
+            {appliedCoupon && (
+              <div className="flex justify-between py-1">
+                <span className="text-gray-600">Discount ({appliedCoupon.code})</span>
+                <span className="font-medium">-₹{appliedCoupon.discountAmount.toFixed(2)}</span>
+              </div>
+            )}
             <div className="flex justify-between py-1 font-semibold">
               <span>Total</span>
-              <span>₹{total.toFixed(2)}</span>
+              <span>₹{calculateFinalTotal().finalTotal.toFixed(2)}</span>
             </div>
           </div>
+        </div>
+
+        <div className="space-y-4">
+          <h2 className="text-lg font-semibold">Coupon Code</h2>
+          <div className="flex items-center space-x-3">
+            <Input
+              id="couponCode"
+              name="couponCode"
+              type="text"
+              value={couponCode}
+              onChange={(e) => setCouponCode(e.target.value)}
+              placeholder="Enter coupon code"
+            />
+            {couponLoading ? (
+              <Button disabled className="w-24">
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Applying...
+              </Button>
+            ) : (
+              <Button type="button" onClick={applyCoupon} className="w-24">
+                Apply
+              </Button>
+            )}
+            {appliedCoupon && (
+              <Button type="button" onClick={removeCoupon} className="w-24">
+                Remove
+              </Button>
+            )}
+          </div>
+          {couponError && (
+            <p className="text-red-600">{couponError}</p>
+          )}
         </div>
 
         <div className="space-y-4">
@@ -474,7 +758,7 @@ export default function CheckoutPage() {
           </Button>
         ) : (
           <Button type="submit" className="w-full mt-3">
-            {`Pay Now - ₹${total.toFixed(2)}`}
+            {`Pay Now - ₹${calculateFinalTotal().finalTotal.toFixed(2)}`}
           </Button>
         )}
       </form>
