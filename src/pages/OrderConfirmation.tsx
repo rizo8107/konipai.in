@@ -9,11 +9,12 @@ import { CheckCircle, ShoppingBag, Loader2, Package } from 'lucide-react';
 
 // Define interface for product in order
 interface OrderProduct {
+  productId: string;
   product: {
     id: string;
     name: string;
     price: number;
-    image?: string;
+    images?: string[];
   };
   quantity: number;
   color?: string;
@@ -142,19 +143,21 @@ export default function OrderConfirmation() {
           {products.map((item, index) => (
             <div key={index} className="flex items-center gap-4 py-2 border-b border-gray-100 last:border-0">
               <div className="h-16 w-16 rounded-md bg-gray-50 overflow-hidden flex-shrink-0">
-                {item.product.image ? (
+                {item.product?.images && item.product.images[0] ? (
                   <img 
-                    src={item.product.image.startsWith('http') ? item.product.image : `https://konipai.in/${item.product.image}`} 
+                    src={`${import.meta.env.VITE_POCKETBASE_URL?.replace(/\/$/, '') || 'https://pocketbase.konipai.in'}/api/files/pbc_4092854851/${item.product.id}/${item.product.images[0].split('/').pop()}`} 
                     alt={item.product.name} 
                     className="h-full w-full object-cover"
+                    loading="eager"
+                    crossOrigin="anonymous"
                     onError={(e) => {
-                      e.currentTarget.onerror = null;
-                      e.currentTarget.src = '/placeholder-product.png';
+                      console.error('Image load error:', e);
+                      e.currentTarget.src = '/placeholder-product.svg';
                     }}
                   />
                 ) : (
-                  <div className="h-full w-full flex items-center justify-center text-gray-400">
-                    <Package className="h-6 w-6" />
+                  <div className="h-full w-full flex items-center justify-center bg-gray-100">
+                    <Package className="h-6 w-6 text-gray-400" />
                   </div>
                 )}
               </div>
