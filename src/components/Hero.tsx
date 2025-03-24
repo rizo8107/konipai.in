@@ -82,7 +82,7 @@ const Hero = () => {
 
   if (loading) {
     return (
-      <section className="relative w-full h-[600px] md:h-[700px] lg:h-[800px] flex items-center justify-center bg-gray-50">
+      <section className="relative w-full h-[400px] md:h-[600px] lg:h-[800px] flex items-center justify-center bg-gray-50">
         <Loader2 className="h-12 w-12 animate-spin text-[#219898]" />
       </section>
     );
@@ -90,14 +90,14 @@ const Hero = () => {
 
   if (sliderImages.length === 0) {
     return (
-      <section className="relative w-full h-[600px] md:h-[700px] lg:h-[800px] flex items-center justify-center bg-gray-50">
+      <section className="relative w-full h-[400px] md:h-[600px] lg:h-[800px] flex items-center justify-center bg-gray-50">
         <p className="text-gray-500">No slider images available</p>
       </section>
     );
   }
 
   return (
-    <section className="relative w-full h-[600px] md:h-[700px] lg:h-[800px] overflow-hidden">
+    <section className="relative w-full h-[400px] md:h-[600px] lg:h-[800px] overflow-hidden">
       {/* Image Slider */}
       <div className="absolute inset-0 w-full h-full">
         {sliderImages.map((slide, index) => (
@@ -154,7 +154,7 @@ const Hero = () => {
         ))}
       </div>
       
-      <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-white to-transparent z-20" />
+      <div className="absolute bottom-0 left-0 right-0 h-24 md:h-32 bg-gradient-to-t from-white to-transparent z-20" />
     </section>
   );
 };
