@@ -272,67 +272,97 @@ async function sendOrderToWebhook(order, user, eventType) {
                 try {
                     const productId = item.productId || (item.product ? item.product.id : '');
                     
-                    // Get images directly from the product object or database
-                    let productImages = [];
-                    if (productId) {
-                        try {
-                            // First try directly from the product data
-                            if (item.product && item.product.images && item.product.images.length > 0) {
-                                productImages = item.product.images;
-                                directLog(`Using images from product data: ${JSON.stringify(productImages)}`);
-                            } else {
-                                // If not available in the product data, get from database
-                                directLog(`Fetching product ${productId} from database to get images...`);
-                                const productRecord = $app.dao().findRecordById("pbc_4092854851", productId);
-                                
-                                if (productRecord) {
-                                    directLog(`Found product ${productId} in database`);
-                                    // Extract images from the product record
-                                    productImages = productRecord.get('images') || [];
-                                    directLog(`Product images from database: ${JSON.stringify(productImages)}`);
-                                } else {
-                                    directLog(`Product ${productId} not found in database`);
-                                }
+                    // Add detailed debugging
+                    directLog("========= PRODUCT IMAGE DEBUG =========");
+                    directLog(`Product ID: ${productId}`);
+                    directLog(`Has product object: ${item.product ? 'YES' : 'NO'}`);
+                    if (item.product) {
+                        directLog(`Product name: ${item.product.name}`);
+                        directLog(`Has images array: ${item.product.images ? 'YES' : 'NO'}`);
+                        if (item.product.images) {
+                            directLog(`Images array length: ${item.product.images.length}`);
+                            directLog(`Images array type: ${typeof item.product.images}`);
+                            if (item.product.images.length > 0) {
+                                directLog(`First image: ${item.product.images[0]}`);
+                                directLog(`First image type: ${typeof item.product.images[0]}`);
                             }
-                        } catch (dbError) {
-                            directLog(`Error fetching product images: ${dbError.message}`);
                         }
                     }
-                    
-                    // Generate the image URL exactly like the OrderDetail page does
-                    if (productImages.length > 0 && productId) {
-                        // Generate URL in the exact same format as the OrderDetail page:
+                    directLog("=======================================");
+
+                    // Use the EXACT same approach as in the OrderConfirmation page
+                    // This is a direct copy of what's in the React component
+                    if (item.product && item.product.images && item.product.images[0]) {
                         // ${import.meta.env.VITE_POCKETBASE_URL.replace(/\/$/, '')}/api/files/pbc_4092854851/${item.product.id}/${item.product.images[0].split('/').pop()}
                         
                         const pocketbaseUrl = 'https://pocketbase.konipai.in';
                         const collectionId = 'pbc_4092854851'; // products collection
                         
-                        // Handle image filename extraction
-                        let imagePath = productImages[0];
-                        let imageName = '';
-                        
-                        // Extract just the filename
-                        if (typeof imagePath === 'string') {
-                            if (imagePath.includes('/')) {
-                                imageName = imagePath.split('/').pop();
+                        // Extract filename the exact same way, with error handling
+                        let imageName;
+                        try {
+                            // Make sure the image path is a string
+                            if (typeof item.product.images[0] === 'string') {
+                                imageName = item.product.images[0].split('/').pop();
+                                directLog(`Successfully extracted image name: ${imageName}`);
                             } else {
-                                imageName = imagePath;
+                                imageName = 'unknown-image';
+                                directLog(`Image path is not a string: ${typeof item.product.images[0]}`);
                             }
-                            directLog(`Using image name: ${imageName}`);
-                            
-                            // Construct the URL in exactly the same way as the OrderDetail page
-                            imageUrl = `${pocketbaseUrl}/api/files/${collectionId}/${productId}/${imageName}`;
-                            directLog(`Generated image URL: ${imageUrl}`);
-                        } else {
-                            directLog(`Unable to use image path: ${imagePath}`);
+                        } catch (error) {
+                            // Fallback if split fails
+                            imageName = 'image-error';
+                            directLog(`Error extracting image filename: ${error.message}`);
                         }
+                        
+                        // Build the URL exactly as in the React component
+                        imageUrl = `${pocketbaseUrl}/api/files/${collectionId}/${productId}/${imageName}`;
+                        
+                        directLog(`Directly copied URL format: ${imageUrl}`);
                     } else {
-                        directLog(`No product images found for product ${productId}`);
+                        // If there's no image in the order data, try to fetch from database
+                        try {
+                            directLog(`No image in order data, checking database for product ${productId}...`);
+                            const productRecord = $app.dao().findRecordById("pbc_4092854851", productId);
+                            
+                            if (productRecord && productRecord.get('images') && productRecord.get('images').length > 0) {
+                                const pocketbaseUrl = 'https://pocketbase.konipai.in';
+                                const collectionId = 'pbc_4092854851';
+                                
+                                // Extract filename exactly the same way, with error handling
+                                let imageName;
+                                try {
+                                    // Make sure the image path is a string
+                                    if (typeof productRecord.get('images')[0] === 'string') {
+                                        imageName = productRecord.get('images')[0].split('/').pop();
+                                        directLog(`Successfully extracted image name from DB: ${imageName}`);
+                                    } else {
+                                        imageName = 'unknown-image-db';
+                                        directLog(`DB image path is not a string: ${typeof productRecord.get('images')[0]}`);
+                                    }
+                                } catch (error) {
+                                    // Fallback if split fails
+                                    imageName = 'image-error-db';
+                                    directLog(`Error extracting DB image filename: ${error.message}`);
+                                }
+                                
+                                // Build the URL exactly as in the React component
+                                imageUrl = `${pocketbaseUrl}/api/files/${collectionId}/${productId}/${imageName}`;
+                                
+                                directLog(`URL from database image: ${imageUrl}`);
+                            } else {
+                                directLog(`No images found in database for product ${productId}`);
+                            }
+                        } catch (dbError) {
+                            directLog(`Database error: ${dbError.message}`);
+                        }
                     }
                 } catch (e) {
                     console.error('Error generating product image URL:', e);
                     directLog(`Failed to generate image URL for product: ${e.message}`);
                 }
+
+                directLog(`Final imageUrl for product ${item.product?.name || 'unknown'}: "${imageUrl}"`);
 
                 return {
                     productId: item.productId || (item.product ? item.product.id : '') || '',
@@ -561,4 +591,4 @@ onRecordAfterUpdateRequest("orders", (e) => {
     } catch (error) {
         directLog(`❌ Error in onRecordAfterUpdateRequest hook: ${error.message}`);
     }
-}); 
+});
