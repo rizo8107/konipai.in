@@ -182,7 +182,7 @@ const Hero = () => {
           if (!isCurrentImage && !isNextImage) return null;
           
           // Get both large and small versions of the image
-          const smallImageUrl = getOptimizedImageUrl(slide.image, "small");
+          const smallImageUrl = getOptimizedImageUrl(slide.image, "medium");
           const largeImageUrl = getOptimizedImageUrl(slide.image, "large");
           
           return (
@@ -193,16 +193,16 @@ const Hero = () => {
               } cursor-pointer`}
               onClick={() => handleSlideClick(slide)}
             >
-              {/* Small blurry image that loads immediately for blur-up effect */}
+              {/* Small blurry image that loads immediately for blur-up effect - with reduced blur and faster transition */}
               {isCurrentImage && (
-                <div className="absolute inset-0">
+                <div className="absolute inset-0 transition-opacity duration-300" 
+                     style={{ opacity: largeImageUrl ? 0 : 0.5 }}>
                   <img 
                     src={smallImageUrl}
                     alt=""
-                    className="h-full w-full object-cover filter blur-lg scale-110"
+                    className="h-full w-full object-cover filter blur-sm scale-105"
                     aria-hidden="true"
                     loading="eager"
-                    style={{ opacity: 0.8 }}
                   />
                 </div>
               )}
@@ -222,10 +222,19 @@ const Hero = () => {
                 <img 
                   src={largeImageUrl}
                   alt={slide.alt || `Slide ${index + 1}`}
-                  className="h-full w-full object-cover"
+                  className="h-full w-full object-cover transition-opacity duration-500"
                   loading={isCurrentImage ? "eager" : "lazy"}
                   fetchPriority={isCurrentImage ? "high" : "auto"}
                   decoding={isCurrentImage ? "sync" : "async"}
+                  onLoad={(e) => {
+                    // Hide the placeholder when the main image loads
+                    if (e.currentTarget.parentElement?.previousElementSibling) {
+                      const placeholder = e.currentTarget.parentElement.previousElementSibling as HTMLElement;
+                      if (placeholder) {
+                        placeholder.style.opacity = "0";
+                      }
+                    }
+                  }}
                 />
               </picture>
               
