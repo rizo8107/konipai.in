@@ -267,105 +267,35 @@ async function sendOrderToWebhook(order, user, eventType) {
             
             // Product information
             products: orderProducts.map(item => {
-                // Generate product image URL if product has images
+                // Get the product ID
+                const productId = item.productId || (item.product ? item.product.id : '');
+                
+                // Generate product image URL - EXACT copy from OrderConfirmation
                 let imageUrl = '';
                 try {
-                    const productId = item.productId || (item.product ? item.product.id : '');
-                    
-                    // Add detailed debugging
-                    directLog("========= PRODUCT IMAGE DEBUG =========");
-                    directLog(`Product ID: ${productId}`);
-                    directLog(`Has product object: ${item.product ? 'YES' : 'NO'}`);
-                    if (item.product) {
-                        directLog(`Product name: ${item.product.name}`);
-                        directLog(`Has images array: ${item.product.images ? 'YES' : 'NO'}`);
-                        if (item.product.images) {
-                            directLog(`Images array length: ${item.product.images.length}`);
-                            directLog(`Images array type: ${typeof item.product.images}`);
-                            if (item.product.images.length > 0) {
-                                directLog(`First image: ${item.product.images[0]}`);
-                                directLog(`First image type: ${typeof item.product.images[0]}`);
-                            }
-                        }
-                    }
-                    directLog("=======================================");
+                    // This is exactly as seen in the order confirmation screenshot
+                    // Format: https://pocketbase.konipai.in/api/files/pbc_4092854851/{item.product.id}/{item.product.images[0].split('/').pop()}
 
-                    // Use the EXACT same approach as in the OrderConfirmation page
-                    // This is a direct copy of what's in the React component
-                    if (item.product && item.product.images && item.product.images[0]) {
-                        // ${import.meta.env.VITE_POCKETBASE_URL.replace(/\/$/, '')}/api/files/pbc_4092854851/${item.product.id}/${item.product.images[0].split('/').pop()}
+                    if (productId && item.product && item.product.images && item.product.images.length > 0) {
+                        imageUrl = `https://pocketbase.konipai.in/api/files/pbc_4092854851/${productId}/${item.product.images[0].split('/').pop()}`;
+                        directLog(`Set image URL to: ${imageUrl}`);
+                    } else if (productId) {
+                        // Fallback: Try to get directly from database
+                        const productRecord = $app.dao().findRecordById("pbc_4092854851", productId);
                         
-                        const pocketbaseUrl = 'https://pocketbase.konipai.in';
-                        const collectionId = 'pbc_4092854851'; // products collection
-                        
-                        // Extract filename the exact same way, with error handling
-                        let imageName;
-                        try {
-                            // Make sure the image path is a string
-                            if (typeof item.product.images[0] === 'string') {
-                                imageName = item.product.images[0].split('/').pop();
-                                directLog(`Successfully extracted image name: ${imageName}`);
-                            } else {
-                                imageName = 'unknown-image';
-                                directLog(`Image path is not a string: ${typeof item.product.images[0]}`);
-                            }
-                        } catch (error) {
-                            // Fallback if split fails
-                            imageName = 'image-error';
-                            directLog(`Error extracting image filename: ${error.message}`);
-                        }
-                        
-                        // Build the URL exactly as in the React component
-                        imageUrl = `${pocketbaseUrl}/api/files/${collectionId}/${productId}/${imageName}`;
-                        
-                        directLog(`Directly copied URL format: ${imageUrl}`);
-                    } else {
-                        // If there's no image in the order data, try to fetch from database
-                        try {
-                            directLog(`No image in order data, checking database for product ${productId}...`);
-                            const productRecord = $app.dao().findRecordById("pbc_4092854851", productId);
-                            
-                            if (productRecord && productRecord.get('images') && productRecord.get('images').length > 0) {
-                                const pocketbaseUrl = 'https://pocketbase.konipai.in';
-                                const collectionId = 'pbc_4092854851';
-                                
-                                // Extract filename exactly the same way, with error handling
-                                let imageName;
-                                try {
-                                    // Make sure the image path is a string
-                                    if (typeof productRecord.get('images')[0] === 'string') {
-                                        imageName = productRecord.get('images')[0].split('/').pop();
-                                        directLog(`Successfully extracted image name from DB: ${imageName}`);
-                                    } else {
-                                        imageName = 'unknown-image-db';
-                                        directLog(`DB image path is not a string: ${typeof productRecord.get('images')[0]}`);
-                                    }
-                                } catch (error) {
-                                    // Fallback if split fails
-                                    imageName = 'image-error-db';
-                                    directLog(`Error extracting DB image filename: ${error.message}`);
-                                }
-                                
-                                // Build the URL exactly as in the React component
-                                imageUrl = `${pocketbaseUrl}/api/files/${collectionId}/${productId}/${imageName}`;
-                                
-                                directLog(`URL from database image: ${imageUrl}`);
-                            } else {
-                                directLog(`No images found in database for product ${productId}`);
-                            }
-                        } catch (dbError) {
-                            directLog(`Database error: ${dbError.message}`);
+                        if (productRecord && productRecord.get('images') && productRecord.get('images').length > 0) {
+                            imageUrl = `https://pocketbase.konipai.in/api/files/pbc_4092854851/${productId}/${productRecord.get('images')[0].split('/').pop()}`;
+                            directLog(`Set image URL from database: ${imageUrl}`);
                         }
                     }
                 } catch (e) {
-                    console.error('Error generating product image URL:', e);
-                    directLog(`Failed to generate image URL for product: ${e.message}`);
+                    directLog(`Error setting image URL: ${e.message}`);
                 }
-
-                directLog(`Final imageUrl for product ${item.product?.name || 'unknown'}: "${imageUrl}"`);
+                
+                directLog(`Final imageUrl for ${item.product?.name || item.name || 'unknown'}: "${imageUrl}"`);
 
                 return {
-                    productId: item.productId || (item.product ? item.product.id : '') || '',
+                    productId: productId,
                     name: item.product ? item.product.name : (item.name || 'Product'),
                     quantity: typeof item.quantity === 'number' ? item.quantity : 1,
                     price: item.product ? item.product.price : (typeof item.price === 'number' ? item.price : 0),
