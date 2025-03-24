@@ -1,16 +1,14 @@
 /// <reference path="../pb_typings.d.ts" />
 
 /**
- * Order Webhook Integration for PocketBase
+ * Order Email Integration for PocketBase using Direct SMTP
  * 
- * This file sets up hooks to send order details to an external webhook
- * for handling email notifications through n8n.
+ * This file sets up hooks to send order confirmation emails directly via SMTP
+ * without relying on external webhook services.
  */
 
-// Webhook configuration
-const WEBHOOK_URL = "https://backend-n8n.7za6uc.easypanel.host/webhook/e09ff5b4-57f4-4549-91ea-18f9cee355c7";
-const AUTH_USERNAME = "nirmal@lifedemy.in";
-const AUTH_PASSWORD = "Life@123";
+// Import the SMTP module
+const smtp = require('../smtp.js');
 
 // Enable debug logging
 const DEBUG = true;
@@ -25,7 +23,7 @@ function debugLog(...args) {
 function directLog(message) {
     try {
         console.log('============================');
-        console.log(`[WEBHOOK LOG] ${message}`);
+        console.log(`[EMAIL LOG] ${message}`);
         console.log('============================');
     } catch (e) {
         // Fail silently if logging doesn't work
@@ -139,6 +137,48 @@ function parseShippingAddress(orderData) {
 }
 
 /**
+ * Add parsing function for shipping address with async support
+ */
+async function parseShippingAddressAsync(orderData) {
+    try {
+        const addressId = orderData.shipping_address || orderData.shippingAddress;
+        if (!addressId) {
+            return { formatted: '', data: {} };
+        }
+        
+        // Try to fetch address from database
+        try {
+            const address = await $app.dao().findRecordById('addresses', addressId);
+            
+            if (address) {
+                const addressParts = [];
+                if (address.street) addressParts.push(address.street);
+                if (address.city) addressParts.push(address.city);
+                if (address.state) addressParts.push(address.state);
+                if (address.postalCode) addressParts.push(address.postalCode);
+                if (address.country) addressParts.push(address.country);
+                
+                return { 
+                    formatted: addressParts.join(', '),
+                    data: address
+                };
+            }
+        } catch (error) {
+            directLog(`Error fetching address record: ${error.message}`);
+        }
+        
+        // Fallback to parsing from string if direct fetch failed
+        return parseShippingAddress(orderData);
+    } catch (error) {
+        directLog(`Error parsing shipping address async: ${error.message}`);
+        return { 
+            formatted: 'Address information not available',
+            data: { error: 'Could not parse address' }
+        };
+    }
+}
+
+/**
  * Generate an order summary text
  */
 function generateOrderSummary(products) {
@@ -175,9 +215,100 @@ function generateOrderSummary(products) {
 }
 
 /**
- * Main function to send order details to webhook
+ * Process order created hook
  */
-async function sendOrderToWebhook(order, user, eventType) {
+async function processOrderCreated(order) {
+    try {
+        // Skip if order doesn't have valid user information
+        if (!order.customer_email) {
+            directLog(`Skipping email for order ${order.id} - no customer email`);
+            return;
+        }
+        
+        directLog(`Processing new order ${order.id}...`);
+        
+        // Log basic order info
+        logOrderInfo(order, 'New order created');
+        
+        // Determine if this is a new order
+        const eventType = 'created';
+
+        // Send confirmation email
+        await sendOrderEmail(order, null, eventType);
+        directLog(`Email sent for new order ${order.id}`);
+        
+        return true;
+    } catch (error) {
+        directLog(`Error processing new order: ${error.message}`);
+        return false;
+    }
+}
+
+/**
+ * Process Razorpay payment status webhook
+ */
+async function processPaymentWebhook(event, orderId, paymentId, paymentStatus) {
+    try {
+        directLog(`Processing payment webhook for order ${orderId}`);
+        
+        if (!orderId) {
+            directLog('Invalid webhook: missing order ID');
+            return false;
+        }
+        
+        // Get order from database
+        const order = await $app.dao().findRecordById('orders', orderId);
+        if (!order) {
+            directLog(`Order ${orderId} not found`);
+            return false;
+        }
+        
+        // Skip if already processed with this status
+        if (order.payment_status === paymentStatus) {
+            directLog(`Order ${orderId} already has status ${paymentStatus}`);  
+            return true;
+        }
+        
+        // Clone order for tracking changes
+        const oldOrder = { ...order };
+        
+        // Update order with payment information
+        order.payment_status = paymentStatus;
+        if (paymentId) {
+            order.payment_id = paymentId;
+        }
+        
+        // Update order status based on payment status
+        if (paymentStatus === 'captured' || paymentStatus === 'paid') {
+            // Payment successful - mark as processing
+            order.status = 'processing';
+        } else if (paymentStatus === 'failed') {
+            // Payment failed - mark as payment_failed
+            order.status = 'payment_failed';
+        } else if (paymentStatus === 'refunded') {
+            // Payment refunded - mark as cancelled
+            order.status = 'cancelled';
+        }
+        
+        // Save changes
+        await $app.dao().saveRecord(order);
+        
+        // Send appropriate email based on payment status
+        const eventType = 'payment_' + paymentStatus;
+        await sendOrderEmail(order, oldOrder, eventType);
+        
+        directLog(`Payment status updated for order ${orderId}: ${paymentStatus}`);
+        return true;
+    } catch (error) {
+        directLog(`Error processing payment webhook: ${error.message}`);
+        return false;
+    }
+}
+
+/**
+ * Main function to send order email via SMTP
+ */
+async function sendOrderEmail(order, oldOrder, eventType) {
     // Prevent duplicate processing
     const orderEventKey = `${order.id}_${eventType}_${Date.now()}`;
     if (processedOrders.has(orderEventKey)) {
@@ -197,192 +328,110 @@ async function sendOrderToWebhook(order, user, eventType) {
     }
     
     try {
-        directLog(`Preparing to send order ${order.id} to webhook (${eventType})...`);
+        directLog(`Preparing to send email for order ${order.id} (${eventType})...`);
         
         // Validate required data
         if (!order || !order.id) {
-            directLog('ERROR: Invalid order object - missing ID');
-            return false;
-        }
-
-        if (!user || !user.email) {
-            directLog('ERROR: Invalid user object - missing email');
             return false;
         }
         
-        // Parse order data
-        const products = parseOrderProducts(order);
-        const { formatted: formattedAddress, data: shippingAddressObj } = parseShippingAddress(order);
-        const { text: orderSummary, count: totalItems } = generateOrderSummary(products);
+        // Get user email
+        let userEmail = order.customer_email || null;
+        let userName = order.customer_name || null;
         
-        // Prepare the order data for the webhook
-        const orderForWebhook = {
-            // Event metadata
-            eventType: eventType,
-            notificationType: 'order_' + eventType,
-            timestamp: new Date().toISOString(),
-            
-            // Order details
-            orderId: order.id,
-            orderDate: order.created,
-            updatedDate: order.updated,
-            
-            // Customer information
-            customerInfo: {
-                name: user.name || 'Customer',
-                email: user.email,
-                phone: order.customer_phone || user.phone || ""
-            },
-            
-            // Address information
-            shippingAddress: shippingAddressObj,
-            formattedAddress: formattedAddress,
-            
-            // Payment information
-            paymentInfo: {
-                paymentId: order.payment_id || '',
-                paymentOrderId: order.payment_order_id || '',
-                paymentStatus: order.payment_status || 'pending'
-            },
-            
-            // Order status
-            orderStatus: order.status || 'pending',
-            
-            // Product information
-            products: products.map(item => {
-                // Get core product details
-                const productId = item.productId;
-                const productName = item.product.name;
-                const productPrice = item.product.price;
-                const quantity = item.quantity;
-                const color = item.color;
-                
-                // Generate image URL exactly as done in OrderConfirmation.tsx
-                let imageUrl = '';
-                
-                try {
-                    // Directly copied from OrderConfirmation.tsx approach:
-                    // src={`${import.meta.env.VITE_POCKETBASE_URL?.replace(/\/$/, '') || 'https://pocketbase.konipai.in'}/api/files/pbc_4092854851/${item.product.id}/${item.product.images[0].split('/').pop()}`}
-                    if (item.product.images && item.product.images[0]) {
-                        const pocketbaseUrl = 'https://pocketbase.konipai.in';
-                        const collectionId = 'pbc_4092854851';
-                        const imageName = item.product.images[0].split('/').pop();
-                        
-                        imageUrl = `${pocketbaseUrl}/api/files/${collectionId}/${productId}/${imageName}`;
-                        directLog(`Image URL for product ${productName}: ${imageUrl}`);
-                    } else {
-                        directLog(`No images found for product ${productName} (ID: ${productId})`);
-                    }
-                } catch (error) {
-                    directLog(`Error generating image URL: ${error.message}`);
+        // If we don't have customer email directly in the order, try to get it from the user record
+        if (!userEmail && order.user) {
+            try {
+                const user = await $app.dao().findRecordById('users', order.user);
+                if (user) {
+                    userEmail = user.email;
+                    userName = user.name;
                 }
-                
-                return {
-                    productId,
-                    name: productName,
-                    quantity,
-                    price: productPrice,
-                    color,
-                    imageUrl
-                };
-            }),
-            totalItems,
-            orderSummary,
-            
-            // Financial details
-            financialDetails: {
-                subtotal: order.subtotal || order.totalAmount || 0,
-                shippingCost: order.shipping_cost || 0,
-                total: order.total || order.totalAmount || 0,
-                subtotalFormatted: formatCurrency(order.subtotal || order.totalAmount || 0),
-                shippingCostFormatted: formatCurrency(order.shipping_cost || 0),
-                totalFormatted: formatCurrency(order.total || order.totalAmount || 0)
-            },
-            
-            // Email template data
-            emailTemplateData: {
-                siteName: "Konipai",
-                siteUrl: "https://konipai.in",
-                logoUrl: "https://konipai.in/assets/logo.png",
-                year: new Date().getFullYear(),
-                viewOrderUrl: `https://konipai.in/orders/${order.id}`,
-                supportEmail: "contact@konipai.in",
-                supportPhone: "+91 9363020252"
+            } catch (error) {
+                directLog(`Error fetching user data: ${error.message}`);
             }
-        };
-        
-        // Send the data to the webhook
-        return await sendDataToWebhook(orderForWebhook, order.id, eventType);
-    } catch (error) {
-        directLog(`Error preparing webhook data: ${error.message}`);
-        return false;
-    }
-}
-
-/**
- * Send prepared data to the webhook endpoint
- */
-async function sendDataToWebhook(data, orderId, eventType) {
-    // Create authentication header
-    const base64Credentials = Buffer.from(`${AUTH_USERNAME}:${AUTH_PASSWORD}`).toString('base64');
-    const authHeader = `Basic ${base64Credentials}`;
-    
-    directLog(`Sending order ${orderId} to webhook...`);
-    
-    try {
-        // Primary method using fetch
-        const response = await fetch(WEBHOOK_URL, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': authHeader
-            },
-            body: JSON.stringify(data),
-        });
-        
-        if (response.ok) {
-            directLog(`✅ Successfully sent order ${orderId} (${eventType}) to webhook`);
-            return true;
-        } else {
-            const responseText = await response.text();
-            directLog(`❌ Webhook error: ${response.status} ${response.statusText}`);
-            directLog(`Response: ${responseText}`);
-            
-            // Try alternative method
-            return await sendDataAlternativeMethod(data, orderId, eventType, authHeader);
         }
-    } catch (error) {
-        directLog(`❌ Webhook network error: ${error.message}`);
-        return await sendDataAlternativeMethod(data, orderId, eventType, authHeader);
-    }
-}
-
-/**
- * Alternative method to send data if the primary method fails
- */
-async function sendDataAlternativeMethod(data, orderId, eventType, authHeader) {
-    directLog('Trying alternative method to send webhook...');
-    
-    try {
-        const alternativeResult = await $http.send({
-            url: WEBHOOK_URL,
-            method: 'POST',
-            body: JSON.stringify(data),
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': authHeader
-            }
-        });
         
-        if (alternativeResult && alternativeResult.statusCode >= 200 && alternativeResult.statusCode < 300) {
-            directLog(`✅ Successfully sent order ${orderId} (${eventType}) with alternative method`);
-            return true;
-        } else {
-            directLog(`❌ Alternative method failed: Status ${alternativeResult?.statusCode || 'unknown'}`);
+        // If still no email, we can't send
+        if (!userEmail) {
+            directLog(`No email address found for order ${order.id}`);
             return false;
         }
+        
+        // Determine base URL for images and links - match the OrderConfirmation component pattern
+        const baseUrl = process.env.VITE_POCKETBASE_URL?.replace(/\/$/, '') || 'https://pocketbase.konipai.in';
+        directLog(`Using base URL for images: ${baseUrl}`);
+        
+        // Prepare data for email
+        try {
+            // Parse products
+            const products = parseOrderProducts(order);
+            const { text: productSummary, count: itemCount } = generateOrderSummary(products);
+            
+            // Parse shipping address
+            let shippingAddress = null;
+            if (order.shipping_address || order.shippingAddress) {
+                shippingAddress = await parseShippingAddressAsync(order);
+            }
+
+            // Prepare email context based on event type
+            const emailContext = {
+                orderId: order.id,
+                userName: userName || 'Valued Customer',
+                products,
+                itemCount,
+                productSummary,
+                shippingAddress,
+                total: order.total || 0,
+                subtotal: order.subtotal || 0,
+                shippingCost: order.shipping_cost || 0,
+                couponCode: order.coupon_code || null,
+                discountAmount: order.discount_amount || 0,
+                paymentStatus: order.payment_status || 'pending',
+                orderStatus: order.status || 'pending',
+                baseUrl: baseUrl
+            };
+
+            // Log email context for debugging
+            directLog(`Email context prepared with ${products.length} products`);
+            if (products.length > 0) {
+                directLog(`First product: ID=${products[0].product.id}, Image paths: ${JSON.stringify(products[0].product.images)}`);
+            }
+
+            // Send appropriate email based on event type
+            let emailResult;
+            
+            if (eventType === 'created') {
+                emailResult = await smtp.sendOrderConfirmationEmail(order, userEmail, userName);
+                directLog(`Sent order confirmation email to ${userEmail}`);
+            } 
+            else if (eventType === 'payment_captured' || eventType === 'payment_paid') {
+                emailResult = await smtp.sendOrderStatusEmail(order, userEmail, userName, 'payment_confirmed');
+                directLog(`Sent payment confirmation email to ${userEmail}`);
+            }
+            else if (eventType === 'payment_failed') {
+                emailResult = await smtp.sendOrderStatusEmail(order, userEmail, userName, 'payment_failed');
+                directLog(`Sent payment failure email to ${userEmail}`);
+            }
+            else if (eventType === 'status_updated' && oldOrder) {
+                const newStatus = order.status;
+                emailResult = await smtp.sendOrderStatusEmail(order, userEmail, userName, newStatus);
+                directLog(`Sent order status update email (${newStatus}) to ${userEmail}`);
+            }
+            else {
+                directLog(`No email template for event type: ${eventType}`);
+                return false;
+            }
+            
+            return emailResult && emailResult.success;
+            
+        } catch (error) {
+            directLog(`Error preparing email data: ${error.message}`);
+            return false;
+        }
+        
     } catch (error) {
-        directLog(`❌ Alternative method error: ${error.message}`);
+        directLog(`Error sending order email: ${error.message}`);
         return false;
     }
 }
@@ -391,25 +440,24 @@ async function sendDataAlternativeMethod(data, orderId, eventType, authHeader) {
  * Log order information for debugging
  */
 function logOrderInfo(order, message) {
-    if (!DEBUG) return;
-    
-    directLog(`${message || 'Order Info'} - Order ID: ${order.id}`);
-    directLog(`Status: ${order.status}, Payment Status: ${order.payment_status}`);
-    directLog(`Created: ${order.created}, Updated: ${order.updated}`);
-    
     try {
-        const products = typeof order.products === 'string' 
-            ? JSON.parse(order.products) 
-            : order.products;
-        
-        directLog(`Products: ${products ? products.length : 0}`);
-        if (products && products.length > 0) {
-            products.forEach((p, i) => {
-                directLog(`Product ${i+1}: ${p.name || p.product?.name}, Qty: ${p.quantity}`);
-            });
+        if (!order) {
+            directLog("Cannot log order info: Order is null or undefined");
+            return;
         }
-    } catch (e) {
-        directLog(`Could not parse products: ${e.message}`);
+        
+        directLog(`${message || 'Order info'}:`);
+        directLog(`  ID: ${order.id}`);
+        directLog(`  Status: ${order.status}`);
+        directLog(`  Total: ${formatCurrency(order.total || order.totalAmount || 0)}`);
+        directLog(`  Created: ${order.created}`);
+        directLog(`  Updated: ${order.updated}`);
+        
+        if (order.expand && order.expand.user) {
+            directLog(`  Customer: ${order.expand.user.name} (${order.expand.user.email})`);
+        }
+    } catch (error) {
+        directLog(`Error logging order info: ${error.message}`);
     }
 }
 
@@ -417,78 +465,156 @@ function logOrderInfo(order, message) {
  * Determine event type based on order changes
  */
 function determineEventType(newOrder, oldOrder) {
-    if (newOrder.status !== oldOrder.status) {
-        return `status_changed_to_${newOrder.status}`;
-    } else if (newOrder.payment_status !== oldOrder.payment_status) {
-        return `payment_status_changed_to_${newOrder.payment_status}`;
-    } else {
-        return "updated";
+    if (!oldOrder) {
+        return 'created';
     }
+    
+    if (newOrder.status !== oldOrder.status) {
+        return 'status_changed';
+    }
+    
+    return 'updated';
 }
 
+// Payment status constants
+const PAYMENT_STATUS = {
+    PENDING: 'pending',
+    CREATED: 'created',
+    AUTHORIZED: 'authorized',
+    CAPTURED: 'captured',
+    PAID: 'paid',
+    FAILED: 'failed',
+    REFUNDED: 'refunded'
+};
+
 /**
- * Process order created hook
+ * Map Razorpay payment status to our internal status
  */
-function processOrderCreated(order) {
-    directLog(`🔔 Order created: ${order.id}`);
-    logOrderInfo(order, 'New Order Created');
-    
-    // Get the user information
-    try {
-        const userRecord = $app.dao().findRecordById("users", order.user);
-        
-        if (!userRecord) {
-            directLog(`❌ User not found for order: ${order.id}`);
-            return;
-        }
-        
-        // Send to webhook
-        sendOrderToWebhook(order, userRecord, "created")
-            .then(success => {
-                directLog(`Order creation webhook ${success ? 'succeeded' : 'failed'}`);
-            })
-            .catch(error => {
-                directLog(`❌ Order creation webhook error: ${error.message}`);
-            });
-    } catch (error) {
-        directLog(`❌ Error processing created order: ${error.message}`);
+function mapRazorpayStatus(razorpayStatus) {
+    switch (razorpayStatus) {
+        case 'created':
+            return PAYMENT_STATUS.CREATED;
+        case 'authorized':
+            return PAYMENT_STATUS.AUTHORIZED;
+        case 'captured':
+            return PAYMENT_STATUS.CAPTURED;
+        case 'refunded':
+            return PAYMENT_STATUS.REFUNDED;
+        case 'failed':
+            return PAYMENT_STATUS.FAILED;
+        default:
+            return PAYMENT_STATUS.PENDING;
     }
 }
 
 /**
  * Process order updated hook
  */
-function processOrderUpdated(newOrder, oldOrder) {
-    directLog(`🔄 Order updated: ${newOrder.id}`);
-    logOrderInfo(newOrder, 'Order Updated');
-    
-    // Get the user information
+async function processOrderUpdated(newOrder, oldOrder) {
     try {
-        const userRecord = $app.dao().findRecordById("users", newOrder.user);
+        const eventType = determineEventType(newOrder, oldOrder);
+        debugLog(`Processing order update (${eventType}):`, newOrder.id);
         
-        if (!userRecord) {
-            directLog(`❌ User not found for order: ${newOrder.id}`);
-            return;
+        // Only process specific update types
+        if (eventType !== 'status_changed' && eventType !== 'created') {
+            debugLog('Skipping update that is not status change or creation');
+            return true; // Not an error, just nothing to do
         }
         
-        // Determine what changed
-        const eventType = determineEventType(newOrder, oldOrder);
-        directLog(`Change type: ${eventType}`);
+        // Try to expand the user data
+        let user;
+        try {
+            const usersCollection = $app.dao().findCollectionByNameOrId('users');
+            if (newOrder.user) {
+                user = await $app.dao().findFirstRecordByData(usersCollection.id, 'id', newOrder.user);
+            }
+        } catch (e) {
+            directLog(`Could not expand user data: ${e.message}`);
+        }
         
-        // Send to webhook
-        sendOrderToWebhook(newOrder, userRecord, eventType)
-            .then(success => {
-                directLog(`Order update webhook ${success ? 'succeeded' : 'failed'}`);
-            })
-            .catch(error => {
-                directLog(`❌ Order update webhook error: ${error.message}`);
-            });
+        if (!user) {
+            directLog('WARNING: User data not found for order ' + newOrder.id);
+            return false;
+        }
+        
+        return await sendOrderEmail(newOrder, oldOrder, eventType);
     } catch (error) {
-        directLog(`❌ Error processing updated order: ${error.message}`);
+        directLog(`Error processing order update: ${error.message}`);
+        return false;
     }
 }
 
-// Register hooks
+// Register Razorpay webhook route
+$app.onRequest('POST', '/api/razorpay-webhook', (e) => {
+    e.bypassAuth = true; // Allow public access
+    
+    try {
+        // Get request body
+        const body = JSON.parse(e.bodyString);
+        directLog('Received Razorpay webhook:', JSON.stringify(body));
+        
+        // Extract event details
+        const event = body.event || '';
+        
+        // Validate webhook signature if available
+        // This should be implemented for production to verify requests are from Razorpay
+        // const signature = e.request.headers.get('X-Razorpay-Signature');
+        
+        // Handle payment events
+        if (event.startsWith('payment.')) {
+            const payload = body.payload?.payment?.entity || {};
+            
+            const paymentId = payload.id || '';
+            const orderId = payload.notes?.order_id || '';
+            let paymentStatus = '';
+            
+            // Map Razorpay event to status
+            switch (event) {
+                case 'payment.authorized':
+                    paymentStatus = 'authorized';
+                    break;
+                case 'payment.captured':
+                    paymentStatus = 'captured';
+                    break;
+                case 'payment.failed':
+                    paymentStatus = 'failed';
+                    break;
+                case 'payment.refunded':
+                    paymentStatus = 'refunded';
+                    break;
+                default:
+                    paymentStatus = 'pending';
+            }
+            
+            // Process the payment status update
+            if (orderId && paymentStatus) {
+                // Process payment asynchronously (don't block response)
+                setTimeout(async () => {
+                    await processPaymentWebhook(event, orderId, paymentId, paymentStatus);
+                }, 0);
+            }
+        }
+        
+        // Return success response
+        return new Response(JSON.stringify({ success: true }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' }
+        });
+    } catch (error) {
+        directLog(`Error processing Razorpay webhook: ${error.message}`);
+        
+        // Return error response
+        return new Response(JSON.stringify({ 
+            success: false, 
+            error: error.message 
+        }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json' }
+        });
+    }
+});
+
+// Register existing hooks
 onRecordAfterCreateRequest("orders", (e) => {
     processOrderCreated(e.record);
 });

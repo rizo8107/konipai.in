@@ -32,6 +32,8 @@ interface Order {
   customer_name?: string;
   customer_phone?: string;
   customer_email?: string;
+  coupon_code?: string;
+  discount_amount?: number;
   expand?: {
     shipping_address?: {
       street: string;
@@ -186,6 +188,12 @@ export default function OrderConfirmation() {
                   : `₹${parseFloat(order.shipping_cost.toString()).toFixed(2)}`}
             </span>
           </div>
+          {order.discount_amount && (
+            <div className="flex justify-between py-1">
+              <span className="text-gray-600">Discount</span>
+              <span className="font-medium">-₹{parseFloat(order.discount_amount.toString()).toFixed(2)}</span>
+            </div>
+          )}
           <div className="flex justify-between py-1 font-semibold">
             <span>Total</span>
             <span>₹{parseFloat(order.total.toString()).toFixed(2)}</span>
