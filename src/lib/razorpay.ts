@@ -48,7 +48,12 @@ export const loadRazorpayScript = (): Promise<boolean> => {
 
 // Get Razorpay Key ID from environment variables
 export const getRazorpayKeyId = (): string => {
-  return import.meta.env.VITE_RAZORPAY_KEY_ID;
+  const key = import.meta.env.VITE_RAZORPAY_KEY_ID;
+  if (!key) {
+    console.warn('VITE_RAZORPAY_KEY_ID not found in environment variables, using default live key');
+    return 'rzp_live_3rZx2njbNwMEE1'; // Fallback to your live key
+  }
+  return key;
 };
 
 // Create a Razorpay order via PocketBase
