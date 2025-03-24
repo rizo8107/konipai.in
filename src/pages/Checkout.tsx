@@ -128,81 +128,32 @@ export default function CheckoutPage() {
       
       console.log('Payment success:', response);
       
-      // For direct payment flow (test mode), razorpay_order_id may not be present
-      // In this case, we use the orderId from our database
+      // Get payment ID from Razorpay response
       const paymentId = response.razorpay_payment_id;
-      const orderIdToUse = response.razorpay_order_id || orderId;
-      const signature = response.razorpay_signature || 'test_signature';
       
       // Verify payment
       const verified = await verifyRazorpayPayment(
         paymentId,
-        orderIdToUse,
-        signature
+        orderId
       );
 
       if (!verified) {
         throw new Error('Payment verification failed. Please contact support.');
       }
 
-      // Update order with payment information
-      try {
-        await pocketbase.collection('orders').update(orderId, {
-          payment_status: 'paid',
-          razorpay_order_id: orderIdToUse,  // Using the exact field name from PocketBase schema
-          razorpay_payment_id: paymentId,   // Using the exact field name from PocketBase schema
-          notes: `Payment completed via Razorpay. Payment ID: ${paymentId}` // Adding notes about the payment
-        });
-        console.log('Order updated with payment information:', {
-          orderId,
-          razorpay_order_id: orderIdToUse,
-          razorpay_payment_id: paymentId,
-          notes: `Payment completed via Razorpay. Payment ID: ${paymentId}`
-        });
-      } catch (updateError) {
-        console.error('Failed to update order with payment details:', updateError);
-        // Continue with checkout process even if update fails
-      }
-
-      // Clear cart data - do this after payment is successfully processed
-      try {
-        // First try to delete the server cart
-        if (user?.id) {
-          try {
-            const serverCart = await pocketbase.collection('carts').getFirstListItem(`user="${user.id}"`);
-            if (serverCart?.id) {
-              await pocketbase.collection('carts').delete(serverCart.id);
-            }
-          } catch (error) {
-            if (error.status !== 404) {
-              console.warn('Failed to delete server cart:', error);
-            }
-          }
-        }
-
-        // Then clear local cart state and storage
-        clearCart();
-        localStorage.removeItem('checkout_cart');
-      } catch (error) {
-        console.warn('Failed to clear cart:', error);
-      }
-
-      // Show success message
-      toast({
-        title: "Payment successful!",
-        description: "Thank you for your purchase.",
-      });
-
-      // Redirect to order confirmation page
+      // Clear the cart after successful payment
+      clearCart();
+      
+      // Navigate to order confirmation
       navigate(`/order-confirmation/${orderId}`);
+      
     } catch (error) {
-      console.error('Payment processing error:', error);
+      console.error('Payment verification error:', error);
       toast({
         variant: "destructive",
-        title: "Payment Processing Failed",
-        description: error instanceof Error ? error.message : "Failed to process your payment. Please try again or contact support.",
+        title: "Payment Verification Failed",
+        description: error instanceof Error ? error.message : "We couldn't verify your payment. Please contact support.",
       });
-    } finally {
       setIsPaymentProcessing(false);
       setIsSubmitting(false);
     }
@@ -334,7 +285,6 @@ export default function CheckoutPage() {
         name: 'Konipai',
         description: `Order #${order.id}`,
         image: import.meta.env.VITE_SITE_LOGO || 'https://konipai.in/assets/logo.png',
-        order_id: razorpayOrderResponse.id,
         handler: (response) => handlePaymentSuccess(response, order.id),
         prefill: {
           name: formData.name,
