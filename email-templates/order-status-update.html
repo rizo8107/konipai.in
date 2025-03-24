@@ -165,6 +165,7 @@
       height: 60px;
       object-fit: cover;
       border-radius: 4px;
+      background-color: #f5f5f5;
     }
     
     .product-name {
@@ -266,7 +267,7 @@
       <div class="greeting">Hello {{$json.customerInfo.name}},</div>
       
       <!-- Dynamic status message based on status type -->
-      {{#if $json.eventType.includes('status_changed_to_processing')}}
+      {{#if $json.notificationType === 'order_status_update' && $json.orderStatus === 'processing'}}
       <div class="status-banner status-processing">
         Your Order is Being Processed
       </div>
@@ -275,7 +276,7 @@
       </div>
       {{/if}}
       
-      {{#if $json.eventType.includes('status_changed_to_shipped')}}
+      {{#if $json.notificationType === 'order_status_update' && $json.orderStatus === 'shipped'}}
       <div class="status-banner status-shipped">
         Your Order Has Been Shipped
       </div>
@@ -284,7 +285,7 @@
       </div>
       {{/if}}
       
-      {{#if $json.eventType.includes('status_changed_to_delivered')}}
+      {{#if $json.notificationType === 'order_status_update' && $json.orderStatus === 'delivered'}}
       <div class="status-banner status-delivered">
         Your Order Has Been Delivered
       </div>
@@ -293,7 +294,7 @@
       </div>
       {{/if}}
       
-      {{#if $json.eventType.includes('status_changed_to_cancelled')}}
+      {{#if $json.notificationType === 'order_status_update' && $json.orderStatus === 'cancelled'}}
       <div class="status-banner status-cancelled">
         Your Order Has Been Cancelled
       </div>
@@ -302,7 +303,7 @@
       </div>
       {{/if}}
       
-      {{#if $json.eventType.includes('payment_status_changed_to_paid')}}
+      {{#if $json.notificationType === 'order_payment_success' || $json.paymentInfo.paymentStatus === 'paid'}}
       <div class="status-banner status-paid">
         Payment Confirmed
       </div>
@@ -312,7 +313,7 @@
       {{/if}}
       
       <!-- If no specific status template matches -->
-      {{#if !$json.eventType.includes('status_changed_to_') && !$json.eventType.includes('payment_status_changed_to_')}}
+      {{#if !$json.notificationType}}
       <div class="message">
         We're writing to let you know that there has been an update to your order. Please see the latest status below.
       </div>
@@ -328,7 +329,7 @@
           </div>
           <div class="order-detail">
             <div class="detail-label">Order Date</div>
-            <div class="detail-value">{{$formatDate($json.orderDate, 'MMMM D, YYYY')}}</div>
+            <div class="detail-value">{{$formatDate($json.orderDate)}}</div>
           </div>
           <div class="order-detail">
             <div class="detail-label">Order Status</div>
@@ -349,13 +350,18 @@
             <th style="width: 70px;"></th>
             <th>Product</th>
             <th style="text-align: center;">Qty</th>
+            <th style="text-align: right;">Price</th>
           </tr>
         </thead>
         <tbody>
           {{#each $json.products}}
           <tr>
             <td>
+              {{#if this.imageUrl}}
               <img src="{{this.imageUrl}}" alt="{{this.name}}" class="product-image">
+              {{else}}
+              <div class="product-image" style="display: flex; align-items: center; justify-content: center; background-color: #f5f5f5; color: #999; font-size: 10px;">No Image</div>
+              {{/if}}
             </td>
             <td>
               <div class="product-name">{{this.name}}</div>
@@ -366,10 +372,31 @@
             <td style="text-align: center;">
               {{this.quantity}}
             </td>
+            <td style="text-align: right;">
+              {{$formatNumber(this.price, {format: 'INR'})}}
+            </td>
           </tr>
           {{/each}}
         </tbody>
       </table>
+      
+      <!-- Order Totals (for some status updates it makes sense to show totals) -->
+      {{#if $json.notificationType === 'order_payment_success' || $json.paymentInfo.paymentStatus === 'paid'}}
+      <div class="order-totals">
+        <div class="total-row">
+          <div class="total-label">Subtotal</div>
+          <div class="total-value">{{$json.financialDetails.subtotalFormatted}}</div>
+        </div>
+        <div class="total-row">
+          <div class="total-label">Shipping</div>
+          <div class="total-value">{{$json.financialDetails.shippingCostFormatted}}</div>
+        </div>
+        <div class="total-row" style="border-top: 1px solid #eee; padding-top: 10px; margin-top: 5px;">
+          <div class="total-label order-total">Total</div>
+          <div class="total-value order-total">{{$json.financialDetails.totalFormatted}}</div>
+        </div>
+      </div>
+      {{/if}}
       
       <!-- CTA Button -->
       <a href="{{$json.emailTemplateData.viewOrderUrl}}" class="cta-button">View Order Details</a>

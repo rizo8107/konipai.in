@@ -125,6 +125,7 @@
       height: 60px;
       object-fit: cover;
       border-radius: 4px;
+      background-color: #f5f5f5;
     }
     
     .product-name {
@@ -272,7 +273,7 @@
           </div>
           <div class="order-detail">
             <div class="detail-label">Order Date</div>
-            <div class="detail-value">{{$formatDate($json.orderDate, 'MMMM D, YYYY')}}</div>
+            <div class="detail-value">{{$formatDate($json.orderDate)}}</div>
           </div>
           <div class="order-detail">
             <div class="detail-label">Order Status</div>
@@ -300,7 +301,11 @@
           {{#each $json.products}}
           <tr>
             <td>
+              {{#if this.imageUrl}}
               <img src="{{this.imageUrl}}" alt="{{this.name}}" class="product-image">
+              {{else}}
+              <div class="product-image" style="display: flex; align-items: center; justify-content: center; background-color: #f5f5f5; color: #999; font-size: 10px;">No Image</div>
+              {{/if}}
             </td>
             <td>
               <div class="product-name">{{this.name}}</div>
@@ -312,7 +317,7 @@
               {{this.quantity}}
             </td>
             <td style="text-align: right;">
-              {{$formatNumber(this.price/100, {format: 'currency', currency: 'INR'})}}
+              {{$formatNumber(this.price, {format: 'INR'})}}
             </td>
           </tr>
           {{/each}}
@@ -339,6 +344,9 @@
       <div class="shipping-address">
         <h2 class="order-header">Shipping Address</h2>
         <div>{{$json.formattedAddress}}</div>
+        {{#if $json.customerInfo.phone}}
+        <div style="margin-top: 10px;">Phone: {{$json.customerInfo.phone}}</div>
+        {{/if}}
       </div>
       
       <!-- CTA Button -->
