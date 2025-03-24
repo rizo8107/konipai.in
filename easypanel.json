@@ -20,11 +20,19 @@
   "env": [
     {
       "name": "VITE_POCKETBASE_URL",
-      "value": "https://backend-pocketbase.7za6uc.easypanel.host"
+      "value": "${VITE_POCKETBASE_URL}"
     },
     {
       "name": "VITE_RAZORPAY_KEY_ID",
-      "value": "rzp_live_3rZx2njbNwMEE1"
+      "value": "${VITE_RAZORPAY_KEY_ID}"
+    },
+    {
+      "name": "VITE_SITE_TITLE",
+      "value": "${VITE_SITE_TITLE}"
+    },
+    {
+      "name": "VITE_SITE_LOGO",
+      "value": "${VITE_SITE_LOGO}"
     }
   ],
   "resources": {
