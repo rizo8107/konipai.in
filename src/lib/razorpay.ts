@@ -61,27 +61,9 @@ export const createRazorpayOrder = async (
     // For development/testing in browser environment (CORS prevents direct API calls)
     const isTestMode = !import.meta.env.PROD || import.meta.env.VITE_RAZORPAY_TEST_MODE === 'true';
     
-    if (isTestMode) {
-      console.log('Using test mode payment flow');
+    if (isTestMode && !pocketbase.authStore.isValid) {
+      console.log('Using test mode payment flow (no auth)');
       const mockOrderId = `order_mock_${Date.now()}`;
-      
-      // Save reference in PocketBase
-      try {
-        const record = await pocketbase.collection('razorpay_orders').create({
-          order_id: mockOrderId,
-          user_id: pocketbase.authStore.model?.id,
-          amount: amount * 100,
-          currency,
-          receipt,
-          status: 'created',
-          payment_status: 'pending',
-          created: new Date().toISOString()
-        });
-        
-        console.log('Test order record created:', record);
-      } catch (dbError) {
-        console.warn('Failed to save test order record:', dbError);
-      }
       
       // Return mock order data
       return {
@@ -93,8 +75,43 @@ export const createRazorpayOrder = async (
       };
     }
     
-    // In production, this should call your backend API which creates a Razorpay order
-    throw new Error('Direct Razorpay API integration required. Please implement a backend endpoint.');
+    // Use the PocketBase custom API endpoint for creating orders
+    try {
+      // Make sure we're working with the amount in paise (100 paise = 1 INR)
+      const amountInPaise = Math.round(amount * 100);
+      
+      // Call the PocketBase API endpoint
+      const response = await pocketbase.send('/api/razorpay/create-order', {
+        method: 'POST',
+        body: {
+          amount: amountInPaise,
+          currency: currency,
+          receipt: receipt
+        }
+      });
+      
+      console.log('Razorpay order created:', response);
+      return response as CreateOrderResponse;
+    } catch (apiError: unknown) {
+      console.error('Error calling Razorpay API:', apiError);
+      
+      // If we're in test mode, fall back to mock order
+      if (isTestMode) {
+        console.log('Falling back to test mode payment flow after API error');
+        const mockOrderId = `order_mock_${Date.now()}`;
+        
+        // Return mock order data
+        return {
+          id: mockOrderId,
+          amount: amount * 100,
+          currency,
+          receipt,
+          status: 'created'
+        };
+      }
+      
+      throw apiError;
+    }
   } catch (error) {
     console.error('Error creating Razorpay order:', error);
     throw error;
@@ -168,8 +185,9 @@ export const verifyRazorpayPayment = async (
             try {
               await pocketbase.collection('orders').update(record.receipt, {
                 payment_status: 'paid',
-                payment_id: paymentId,
-                payment_order_id: orderId
+                razorpay_payment_id: paymentId,
+                razorpay_order_id: orderId,
+                notes: `Test payment completed via Razorpay. Payment ID: ${paymentId}, Order ID: ${orderId}`
               });
             } catch (orderError) {
               console.error('Error updating order:', orderError);
@@ -183,9 +201,24 @@ export const verifyRazorpayPayment = async (
       return true;
     }
     
-    // In production, signature validation should be done on the server
-    console.warn('WARNING: Payment verification should be done server-side in production');
-    return true;
+    // Use the PocketBase API endpoint for payment verification
+    try {
+      const response = await pocketbase.send('/api/razorpay/verify-payment', {
+        method: 'POST',
+        body: {
+          razorpay_payment_id: paymentId,
+          razorpay_order_id: orderId,
+          razorpay_signature: signature
+        }
+      });
+      
+      console.log('Payment verification response:', response);
+      return response.verified === true;
+    } catch (apiError) {
+      console.error('Error verifying payment with API:', apiError);
+      // In test mode or if API fails, assume payment is valid
+      return import.meta.env.VITE_RAZORPAY_TEST_MODE === 'true';
+    }
   } catch (error) {
     console.error('Error verifying payment:', error);
     throw error;
@@ -195,6 +228,8 @@ export const verifyRazorpayPayment = async (
 // Add global window type declaration for Razorpay
 declare global {
   interface Window {
-    Razorpay: any;
+    Razorpay: new (options: RazorpayOptions) => {
+      open: () => void;
+    };
   }
-} 
+}
