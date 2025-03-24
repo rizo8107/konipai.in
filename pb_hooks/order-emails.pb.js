@@ -267,27 +267,59 @@ async function sendOrderToWebhook(order, user, eventType) {
             
             // Product information
             products: orderProducts.map(item => {
+                // Extract product ID
                 const productId = item.productId || (item.product ? item.product.id : '');
                 
-                // Super simple direct approach - directly map product IDs to known image URLs
+                // Initialize empty image URL
                 let imageUrl = '';
                 
-                // Log the product ID we're working with
-                directLog(`DIRECT IMAGE MAPPING: Product ID: "${productId}"`);
+                // Log the product we're working with
+                directLog(`Processing image for product: ${item.product?.name || 'unknown'} (ID: ${productId})`);
                 
-                // The product ID you've shared: 2yqo7r8y2o2xs02
-                if (productId === '2yqo7r8y2o2xs02') {
-                    // Directly use a guaranteed working image URL for this product
-                    imageUrl = 'https://pocketbase.konipai.in/api/files/pbc_4092854851/2yqo7r8y2o2xs02/create-a-mockup-of-white-jute-purse-aesthetic-back.png';
-                    directLog(`USING DIRECT MAPPING for product ID ${productId}: ${imageUrl}`);
-                } else {
-                    // For all other products, use a generic approach
-                    imageUrl = `https://pocketbase.konipai.in/api/files/pbc_4092854851/${productId}/create-a-mockup-of-white-jute-purse-aesthetic-back.png`;
-                    directLog(`Using generic image URL for product ID ${productId}: ${imageUrl}`);
+                try {
+                    // EXACTLY follow the OrderConfirmation page approach:
+                    // <img src={`${import.meta.env.VITE_POCKETBASE_URL?.replace(/\/$/, '') || 'https://pocketbase.konipai.in'}/api/files/pbc_4092854851/${item.product.id}/${item.product.images[0].split('/').pop()}`} 
+                    
+                    if (item.product && item.product.images && item.product.images.length > 0 && typeof item.product.images[0] === 'string') {
+                        // This is the EXACT format used in the OrderConfirmation page
+                        const pocketbaseUrl = 'https://pocketbase.konipai.in';
+                        const collectionId = 'pbc_4092854851';
+                        const imageName = item.product.images[0].split('/').pop();
+                        
+                        imageUrl = `${pocketbaseUrl}/api/files/${collectionId}/${productId}/${imageName}`;
+                        directLog(`Generated image URL using OrderConfirmation format: ${imageUrl}`);
+                    } else {
+                        // Try to get the image from the database
+                        try {
+                            const productRecord = $app.dao().findRecordById("pbc_4092854851", productId);
+                            if (productRecord && productRecord.get('images') && productRecord.get('images').length > 0) {
+                                const imageFilename = productRecord.get('images')[0].split('/').pop();
+                                
+                                imageUrl = `https://pocketbase.konipai.in/api/files/pbc_4092854851/${productId}/${imageFilename}`;
+                                directLog(`Retrieved image URL from database: ${imageUrl}`);
+                            } else {
+                                // Fallback - use a hardcoded URL with the right product ID
+                                imageUrl = `https://pocketbase.konipai.in/api/files/pbc_4092854851/${productId}/create-a-mockup-of-white-jute-purse-aesthetic-back.png`;
+                                directLog(`Using fallback image URL: ${imageUrl}`);
+                            }
+                        } catch (dbError) {
+                            directLog(`Database lookup error: ${dbError.message}`);
+                            // Use hardcoded fallback
+                            imageUrl = `https://pocketbase.konipai.in/api/files/pbc_4092854851/${productId}/create-a-mockup-of-white-jute-purse-aesthetic-back.png`;
+                            directLog(`Using fallback image URL after error: ${imageUrl}`);
+                        }
+                    }
+                } catch (error) {
+                    directLog(`Error generating image URL: ${error.message}`);
+                    // If all else fails, use our known working hardcoded URL
+                    if (productId) {
+                        imageUrl = `https://pocketbase.konipai.in/api/files/pbc_4092854851/${productId}/create-a-mockup-of-white-jute-purse-aesthetic-back.png`;
+                        directLog(`Using emergency fallback image URL: ${imageUrl}`);
+                    }
                 }
                 
-                // Final result
-                directLog(`Final imageUrl for product ${productId} (${item.product?.name || 'unknown'}): "${imageUrl}"`);
+                // Log the final URL we're using
+                directLog(`Final image URL for ${item.product?.name || 'unknown'}: ${imageUrl}`);
                 
                 return {
                     productId: productId,
