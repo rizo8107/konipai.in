@@ -267,20 +267,19 @@ async function sendOrderToWebhook(order, user, eventType) {
             
             // Product information
             products: orderProducts.map(item => {
-                // Hard-code the working image URL pattern exactly as we see in the order confirmation email
+                // Extract product ID from the item
                 const productId = item.productId || (item.product ? item.product.id : '');
                 
-                // DIRECT HARD-CODED URL - this is what works in the email
+                // Initialize image URL
                 let imageUrl = '';
                 
                 // Log raw data for debugging
                 directLog(`PRODUCT DATA: ${JSON.stringify(item)}`);
                 
-                // Use the exact same image pattern from the confirmation email
+                // Construct image URL using exact format from order confirmation email
                 if (productId) {
-                    // This is the exact format that works in the email template
                     imageUrl = `https://pocketbase.konipai.in/api/files/pbc_4092854851/${productId}/create-a-mockup-of-white-jute-purse-aesthetic-back.png`;
-                    directLog(`USING HARDCODED IMAGE URL: ${imageUrl}`);
+                    directLog(`Using hardcoded image URL: ${imageUrl}`);
                 }
 
                 return {
