@@ -1,18 +1,18 @@
 /// <reference path="../pb_typings.d.ts" />
 
 /**
- * Order Email Notifications for PocketBase
+ * Order Email Notifications and Webhook Integration for PocketBase
  * 
- * This file sets up hooks to send email notifications when orders are created or updated
+ * This file sets up hooks to:
+ * 1. Send email notifications when orders are created or updated
+ * 2. Send order details to an external webhook for further processing
  */
 
-// Log all hook activity to help debug email issues
-console.log("[ORDER EMAILS] Order email hooks loaded");
+// Webhook URL for sending order data
+const WEBHOOK_URL = "https://backend-n8n.7za6uc.easypanel.host/webhook/e09ff5b4-57f4-4549-91ea-18f9cee355c7";
 
 // Function to send an order confirmation email
 function sendOrderConfirmationEmail(order, user) {
-    console.log(`[ORDER EMAILS] Attempting to send email for order #${order.id} to user ${user.email}`);
-    
     // Format currency for display
     const formatCurrency = (amount) => {
         return new Intl.NumberFormat('en-IN', {
@@ -36,256 +36,264 @@ function sendOrderConfirmationEmail(order, user) {
             orderSummary += "\n";
         });
     } catch (e) {
-        console.error("[ORDER EMAILS] Error parsing products:", e);
+        console.error("Error parsing products:", e);
         orderSummary = "Error generating product list. Please check your order online.";
     }
 
     // Create the email content
-    const subject = `Your Konipai Order #${order.id} is Confirmed!`;
-    
-    // Build a better product list as HTML table
-    let productsHtml = '';
-    try {
-        const products = JSON.parse(order.products);
-        productsHtml = `
-        <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
-            <thead>
-                <tr style="background-color: #f4f4f4;">
-                    <th style="padding: 10px; text-align: left; border-bottom: 1px solid #ddd;">Product</th>
-                    <th style="padding: 10px; text-align: center; border-bottom: 1px solid #ddd;">Quantity</th>
-                    <th style="padding: 10px; text-align: right; border-bottom: 1px solid #ddd;">Price</th>
-                </tr>
-            </thead>
-            <tbody>
-        `;
-        
-        products.forEach(item => {
-            productsHtml += `
-                <tr>
-                    <td style="padding: 10px; text-align: left; border-bottom: 1px solid #ddd;">
-                        <strong>${item.name}</strong>
-                        ${item.color ? `<br><span style="color: #777;">Color: ${item.color}</span>` : ''}
-                    </td>
-                    <td style="padding: 10px; text-align: center; border-bottom: 1px solid #ddd;">${item.quantity}</td>
-                    <td style="padding: 10px; text-align: right; border-bottom: 1px solid #ddd;">${formatCurrency(item.price)}</td>
-                </tr>
-            `;
-        });
-        
-        productsHtml += `
-            </tbody>
-        </table>
-        `;
-    } catch (e) {
-        console.error("[ORDER EMAILS] Error parsing products for HTML:", e);
-        productsHtml = `<p style="color: #d32f2f; padding: 15px; background-color: #ffebee; border-radius: 4px;">
-            Error generating product list. Please check your order details online.
-        </p>`;
-    }
+    const subject = `Konipai Order Confirmation #${order.id}`;
     
     const htmlContent = `
-        <!DOCTYPE html>
-        <html lang="en">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Order Confirmation</title>
-        </head>
-        <body style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; background-color: #f9f9f9; margin: 0; padding: 0;">
-            <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-                <!-- Header -->
-                <div style="background-color: #219898; padding: 20px; text-align: center;">
-                    <img src="https://konipai.in/assets/logo.png" alt="Konipai Logo" style="max-width: 150px;">
-                </div>
-                
-                <!-- Content -->
-                <div style="padding: 30px;">
-                    <h1 style="color: #219898; margin-top: 0;">Your Order is Confirmed!</h1>
-                    
-                    <p style="font-size: 16px;">Hello ${user.name},</p>
-                    
-                    <p>Thank you for your order! We're pleased to confirm that we've received your order and it's currently being processed.</p>
-                    
-                    <!-- Order Info Box -->
-                    <div style="background-color: #f5f5f5; border-left: 4px solid #219898; padding: 15px; margin: 20px 0; border-radius: 4px;">
-                        <h2 style="margin-top: 0; color: #219898; font-size: 18px;">Order Information</h2>
-                        <table style="width: 100%;">
-                            <tr>
-                                <td style="padding: 5px 0;"><strong>Order Number:</strong></td>
-                                <td style="padding: 5px 0;">#${order.id}</td>
-                            </tr>
-                            <tr>
-                                <td style="padding: 5px 0;"><strong>Order Date:</strong></td>
-                                <td style="padding: 5px 0;">${new Date(order.created).toLocaleDateString('en-IN', { 
-                                    year: 'numeric', 
-                                    month: 'long', 
-                                    day: 'numeric',
-                                    hour: '2-digit',
-                                    minute: '2-digit'
-                                })}</td>
-                            </tr>
-                            <tr>
-                                <td style="padding: 5px 0;"><strong>Order Status:</strong></td>
-                                <td style="padding: 5px 0;">
-                                    <span style="display: inline-block; background-color: #e8f5e9; color: #2e7d32; padding: 3px 8px; border-radius: 12px; font-size: 14px;">
-                                        ${order.status}
-                                    </span>
-                                </td>
-                            </tr>
-                            <tr>
-                                <td style="padding: 5px 0;"><strong>Payment Status:</strong></td>
-                                <td style="padding: 5px 0;">
-                                    <span style="display: inline-block; background-color: #e3f2fd; color: #1565c0; padding: 3px 8px; border-radius: 12px; font-size: 14px;">
-                                        ${order.payment_status || 'Processing'}
-                                    </span>
-                                </td>
-                            </tr>
-                        </table>
-                    </div>
-                    
-                    <!-- Order Items -->
-                    <h2 style="color: #219898; border-bottom: 1px solid #eee; padding-bottom: 10px;">Order Summary (${totalItems} items)</h2>
-                    
-                    ${productsHtml}
-                    
-                    <!-- Order Totals -->
-                    <table style="width: 100%; margin: 20px 0; border-collapse: collapse;">
-                        <tr>
-                            <td style="padding: 8px 0;"><strong>Subtotal:</strong></td>
-                            <td style="padding: 8px 0; text-align: right;">${formatCurrency(order.totalAmount)}</td>
-                        </tr>
-                        <tr>
-                            <td style="padding: 8px 0;"><strong>Shipping:</strong></td>
-                            <td style="padding: 8px 0; text-align: right;">${formatCurrency(order.shipping_fee || 0)}</td>
-                        </tr>
-                        <tr style="font-size: 18px; font-weight: bold;">
-                            <td style="padding: 12px 0; border-top: 2px solid #eee;"><strong>Total:</strong></td>
-                            <td style="padding: 12px 0; text-align: right; border-top: 2px solid #eee; color: #219898;">
-                                ${formatCurrency(order.totalAmount + (order.shipping_fee || 0))}
-                            </td>
-                        </tr>
-                    </table>
-                    
-                    <!-- Shipping Address -->
-                    <div style="background-color: #f5f5f5; padding: 15px; margin: 20px 0; border-radius: 4px;">
-                        <h3 style="margin-top: 0; color: #219898; font-size: 16px;">Shipping Address</h3>
-                        <p style="margin-bottom: 0;">${order.shipping_address || 'Address information not available'}</p>
-                    </div>
-                    
-                    <!-- CTA Button -->
-                    <div style="text-align: center; margin: 30px 0;">
-                        <a href="https://konipai.in/orders/${order.id}" style="background-color: #219898; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold; display: inline-block;">
-                            View Order Details
-                        </a>
-                    </div>
-                    
-                    <p>If you have any questions about your order, please contact our customer service at:</p>
-                    <p>
-                        Email: <a href="mailto:konipaishop@gmail.com" style="color: #219898; text-decoration: none;">konipaishop@gmail.com</a><br>
-                        Phone: +91 9363020252
-                    </p>
-                </div>
-                
-                <!-- Footer -->
-                <div style="background-color: #f5f5f5; padding: 20px; text-align: center; color: #777; font-size: 14px; border-top: 1px solid #eee;">
-                    <p style="margin-top: 0;">Thank you for shopping with Konipai!</p>
-                    <p style="margin-bottom: 0;">&copy; ${new Date().getFullYear()} Konipai. All rights reserved.</p>
-                </div>
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e1e1e1; border-radius: 5px;">
+            <div style="text-align: center; margin-bottom: 20px;">
+                <img src="https://konipai.in/assets/logo.png" alt="Konipai Logo" style="max-width: 150px;">
             </div>
-        </body>
-        </html>
+            
+            <h1 style="color: #333; text-align: center;">Your Order is Confirmed!</h1>
+            
+            <p>Hello ${user.name},</p>
+            
+            <p>Thank you for your order! We're pleased to confirm that we've received your order and it's being processed.</p>
+            
+            <div style="background-color: #f9f9f9; padding: 15px; border-radius: 4px; margin: 20px 0;">
+                <h2 style="margin-top: 0; color: #444; font-size: 18px;">Order Details</h2>
+                <p><strong>Order Number:</strong> #${order.id}</p>
+                <p><strong>Order Date:</strong> ${new Date(order.created).toLocaleDateString()}</p>
+                <p><strong>Order Status:</strong> ${order.status}</p>
+                <p><strong>Payment Status:</strong> ${order.payment_status || 'Processing'}</p>
+            </div>
+            
+            <h3 style="color: #444;">Order Summary (${totalItems} items)</h3>
+            <pre style="background-color: #f9f9f9; padding: 15px; border-radius: 4px; white-space: pre-wrap;">${orderSummary}</pre>
+            
+            <div style="margin: 20px 0; padding: 10px 0; border-top: 1px solid #e1e1e1; border-bottom: 1px solid #e1e1e1;">
+                <p><strong>Subtotal:</strong> ${formatCurrency(order.totalAmount)}</p>
+                <p><strong>Shipping:</strong> ${formatCurrency(order.shipping_fee || 0)}</p>
+                <h3 style="color: #444;">Total: ${formatCurrency(order.totalAmount + (order.shipping_fee || 0))}</h3>
+            </div>
+            
+            <div style="background-color: #f9f9f9; padding: 15px; border-radius: 4px; margin: 20px 0;">
+                <h3 style="margin-top: 0; color: #444; font-size: 18px;">Shipping Address</h3>
+                <p>${order.shipping_address || 'Address information not available'}</p>
+            </div>
+            
+            <p>You can view the details of your order by <a href="https://konipai.in/orders/${order.id}" style="color: #007bff; text-decoration: none;">clicking here</a>.</p>
+            
+            <p>If you have any questions about your order, please contact our customer service at:</p>
+            <p>Email: <a href="mailto:contact@konipai.in" style="color: #007bff; text-decoration: none;">contact@konipai.in</a></p>
+            <p>Phone: +91 9363020252</p>
+            
+            <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #e1e1e1; color: #777; font-size: 12px;">
+                <p>Thank you for shopping with Konipai!</p>
+                <p>&copy; ${new Date().getFullYear()} Konipai. All rights reserved.</p>
+            </div>
+        </div>
     `;
 
     // Send the email using PocketBase's email sending functionality
     try {
-        console.log("[ORDER EMAILS] Attempting to send email with newMailClient()");
-        const result = $app.newMailClient().send(
-            "konipaishop@gmail.com", // from address - use the configured Gmail address
+        $app.newMailClient().send(
+            "contact@konipai.in", // from address
             user.email, // to address
             subject,
             htmlContent
         );
-        console.log(`[ORDER EMAILS] ✓ Email sent successfully to ${user.email} for order #${order.id}`);
+        console.log(`Order confirmation email sent to ${user.email} for order #${order.id}`);
         return true;
     } catch (error) {
-        console.error(`[ORDER EMAILS] ✗ Failed to send order confirmation email:`, error);
+        console.error(`Failed to send order confirmation email: ${error}`);
+        return false;
+    }
+}
+
+/**
+ * Function to send order details to external webhook
+ * @param {object} order - The order record 
+ * @param {object} user - The user record
+ * @returns {boolean} - Success status
+ */
+async function sendOrderToWebhook(order, user) {
+    try {
+        console.log(`Preparing to send order ${order.id} to webhook...`);
         
-        // Try alternative method if the first one fails
+        // Function to format currency
+        const formatCurrency = (amount) => {
+            return new Intl.NumberFormat('en-IN', {
+                style: 'currency',
+                currency: 'INR'
+            }).format(amount / 100); // Convert paisa to rupees
+        };
+
+        // Parse products if they are stored as a string
+        let orderProducts = [];
         try {
-            console.log("[ORDER EMAILS] Attempting to send email with alternative method...");
-            $app.newMailClient()
-                .setFrom("konipaishop@gmail.com")
-                .setTo(user.email)
-                .setSubject(subject)
-                .setHtml(htmlContent)
-                .send(true); // set to true for asynchronous sending
-            console.log(`[ORDER EMAILS] ✓ Email sent successfully using alternative method to ${user.email}`);
+            orderProducts = typeof order.products === 'string' 
+                ? JSON.parse(order.products) 
+                : order.products;
+        } catch (e) {
+            console.error('Error parsing products:', e);
+            orderProducts = [];
+        }
+
+        // Prepare the order data for the webhook
+        const orderForWebhook = {
+            orderId: order.id,
+            orderDate: order.created,
+            updatedDate: order.updated,
+            customerInfo: {
+                name: user.name,
+                email: user.email,
+                phone: order.customer_phone || user.phone || ""
+            },
+            shippingAddress: order.shipping_address || {},
+            paymentInfo: {
+                paymentId: order.payment_id,
+                paymentOrderId: order.payment_order_id,
+                paymentStatus: order.payment_status
+            },
+            orderStatus: order.status,
+            products: orderProducts.map(item => ({
+                productId: item.productId,
+                name: item.name,
+                quantity: item.quantity,
+                price: item.price,
+                color: item.color,
+                imageUrl: item.image
+            })),
+            financialDetails: {
+                subtotal: order.subtotal || order.totalAmount,
+                shippingCost: order.shipping_cost || 0,
+                total: order.total || order.totalAmount,
+                subtotalFormatted: formatCurrency(order.subtotal || order.totalAmount),
+                shippingCostFormatted: formatCurrency(order.shipping_cost || 0),
+                totalFormatted: formatCurrency(order.total || order.totalAmount)
+            }
+        };
+
+        // Use fetch to send the data to the webhook
+        const response = await fetch(WEBHOOK_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(orderForWebhook),
+        });
+
+        // Check if the request was successful
+        if (response.ok) {
+            console.log(`✅ Successfully sent order ${order.id} to webhook`);
             return true;
-        } catch (altError) {
-            console.error(`[ORDER EMAILS] ✗ Alternative method also failed:`, altError);
+        } else {
+            const responseText = await response.text();
+            console.error(`❌ Failed to send order to webhook: ${response.status} ${response.statusText}`);
+            console.error(`Response: ${responseText}`);
             return false;
         }
+    } catch (error) {
+        console.error(`Error sending order to webhook:`, error);
+        return false;
     }
 }
 
 // Hook for when an order is created
 onRecordAfterCreateRequest("orders", (e) => {
-    console.log("[ORDER EMAILS] onRecordAfterCreateRequest hook triggered for order:", e.record.id);
     try {
         // Get the created order record
         const order = e.record;
         
         // Fetch the user information
-        console.log("[ORDER EMAILS] Fetching user information for user ID:", order.user);
         const userRecord = $app.dao().findRecordById("users", order.user);
         
         if (!userRecord) {
-            console.error("[ORDER EMAILS] User not found for order:", order.id);
+            console.error("User not found for order:", order.id);
             return;
         }
         
-        console.log(`[ORDER EMAILS] User found: ${userRecord.email}`);
-        
         // Send confirmation email
-        const emailSent = sendOrderConfirmationEmail(order, userRecord);
-        console.log(`[ORDER EMAILS] Email sending completed with result: ${emailSent}`);
+        sendOrderConfirmationEmail(order, userRecord);
+        
+        // Send to webhook if order is confirmed or paid
+        if (order.status === 'processing' || order.payment_status === 'paid') {
+            sendOrderToWebhook(order, userRecord)
+                .then(success => {
+                    if (success) {
+                        console.log(`Order ${order.id} successfully sent to webhook`);
+                    } else {
+                        console.error(`Failed to send order ${order.id} to webhook`);
+                    }
+                })
+                .catch(error => {
+                    console.error(`Error in webhook process for order ${order.id}:`, error);
+                });
+        }
     } catch (error) {
-        console.error("[ORDER EMAILS] Error in onRecordAfterCreateRequest hook:", error);
+        console.error("Error in onRecordAfterCreateRequest hook:", error);
     }
 });
 
 // Hook for when an order status is updated (for shipping notifications, etc.)
 onRecordAfterUpdateRequest("orders", (e) => {
-    console.log("[ORDER EMAILS] onRecordAfterUpdateRequest hook triggered for order:", e.record.id);
     try {
         const record = e.record;
         const oldRecord = e.oldRecord;
         
-        // Only send notification if status has changed
+        // Get the user information
+        const userRecord = $app.dao().findRecordById("users", record.user);
+        
+        if (!userRecord) {
+            console.error("User not found for order:", record.id);
+            return;
+        }
+        
+        // Handle status changes
         if (record.status !== oldRecord.status) {
-            console.log(`[ORDER EMAILS] Order status changed from ${oldRecord.status} to ${record.status}`);
+            console.log(`Order ${record.id} status changed from ${oldRecord.status} to ${record.status}`);
             
-            // Get the user information
-            const userRecord = $app.dao().findRecordById("users", record.user);
-            
-            if (!userRecord) {
-                console.error("[ORDER EMAILS] User not found for order:", record.id);
-                return;
+            // If order has been confirmed or moved to processing, send to webhook
+            if (
+                (record.status === 'processing' && oldRecord.status === 'pending') ||
+                (record.status === 'confirmed' && oldRecord.status === 'pending') ||
+                (record.payment_status === 'paid' && oldRecord.payment_status !== 'paid')
+            ) {
+                console.log(`Order ${record.id} confirmed/paid - sending to webhook`);
+                sendOrderToWebhook(record, userRecord)
+                    .then(success => {
+                        if (success) {
+                            console.log(`Order ${record.id} successfully sent to webhook`);
+                        } else {
+                            console.error(`Failed to send order ${record.id} to webhook`);
+                        }
+                    })
+                    .catch(error => {
+                        console.error(`Error in webhook process for order ${record.id}:`, error);
+                    });
             }
             
-            console.log(`[ORDER EMAILS] Found user ${userRecord.email} for status update notification`);
+            // TODO: Implement different email templates based on status change
+            // e.g., shipping confirmation, delivery confirmation, etc.
+        }
+        
+        // Handle payment status changes
+        if (record.payment_status !== oldRecord.payment_status) {
+            console.log(`Order ${record.id} payment status changed from ${oldRecord.payment_status} to ${record.payment_status}`);
             
-            // If the status changed to "shipped", let's send a shipping notification
-            if (record.status === "shipped") {
-                // TODO: Implement shipping notification email
-                console.log(`[ORDER EMAILS] Order ${record.id} has been shipped - notification should be sent to user`);
+            // If payment has been confirmed, send to webhook
+            if (record.payment_status === 'paid' && oldRecord.payment_status !== 'paid') {
+                console.log(`Order ${record.id} payment confirmed - sending to webhook`);
+                sendOrderToWebhook(record, userRecord)
+                    .then(success => {
+                        if (success) {
+                            console.log(`Order ${record.id} successfully sent to webhook after payment`);
+                        } else {
+                            console.error(`Failed to send order ${record.id} to webhook after payment`);
+                        }
+                    })
+                    .catch(error => {
+                        console.error(`Error in webhook process for order ${record.id} after payment:`, error);
+                    });
             }
-            
-            // For all status changes, you could also resend a modified order confirmation
-            // with status update highlighted
-            sendOrderConfirmationEmail(record, userRecord);
         }
     } catch (error) {
-        console.error("[ORDER EMAILS] Error in onRecordAfterUpdateRequest hook:", error);
+        console.error("Error in onRecordAfterUpdateRequest hook:", error);
     }
 }); 
