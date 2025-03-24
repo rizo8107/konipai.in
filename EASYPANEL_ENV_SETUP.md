@@ -15,7 +15,7 @@ This guide explains how to set up environment variables in EasyPanel for your Ko
 | Environment Variable | Value | Description |
 |---------------------|-------|-------------|
 | VITE_POCKETBASE_URL | https://backend-pocketbase.7za6uc.easypanel.host/ | URL to your PocketBase backend |
-| VITE_RAZORPAY_KEY_ID | rzp_live_3rZx2njbNwMEE1 | Your Razorpay live API key |
+| VITE_RAZORPAY_KEY_ID | rzp_test_trImBTMCiZgDuF | Your Razorpay test mode API key |
 | VITE_SITE_TITLE | Konipai | Your site title |
 | VITE_SITE_LOGO | https://konipai.in/assets/logo.png | URL to your site logo |
 | GITHUB_PAT | [Your GitHub Personal Access Token] | Token for pulling from GitHub Container Registry |
