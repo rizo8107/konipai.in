@@ -15,7 +15,8 @@ async function sendTestEmail() {
         );
         console.log('✅ Successfully authenticated as admin');
 
-        const emailRecipient = 'nirmal@lifedemy.in'; // The recipient's email
+        // Use the specific email address that's reported to not receive emails
+        const emailRecipient = 'nnirmal7107@gmail.com'; 
         console.log(`Sending test email to ${emailRecipient}...`);
 
         // First, check if we have the test user account or create one
@@ -32,7 +33,7 @@ async function sendTestEmail() {
                 email: emailRecipient,
                 password: 'Test12345!@#', // This is just a test account
                 passwordConfirm: 'Test12345!@#',
-                name: 'Test User',
+                name: 'Nirmal', // Use their actual name if this is a real user
                 emailVisibility: true,
             });
             console.log('Test user created successfully');
@@ -66,7 +67,8 @@ async function sendTestEmail() {
 
         console.log(`✅ Test order created with ID: ${testOrder.id}`);
         console.log('✅ Order confirmation email should be sent automatically via PocketBase hooks');
-        console.log('Please check your email inbox for the test email');
+        console.log('Please check the email inbox for nnirmal7107@gmail.com for the test email');
+        console.log('Note: It may take a few minutes for the email to arrive. Also check spam/junk folders.');
 
     } catch (error) {
         console.error('❌ Error sending test email:', error);

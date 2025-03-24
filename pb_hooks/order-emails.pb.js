@@ -6,8 +6,13 @@
  * This file sets up hooks to send email notifications when orders are created or updated
  */
 
+// Log all hook activity to help debug email issues
+console.log("[ORDER EMAILS] Order email hooks loaded");
+
 // Function to send an order confirmation email
 function sendOrderConfirmationEmail(order, user) {
+    console.log(`[ORDER EMAILS] Attempting to send email for order #${order.id} to user ${user.email}`);
+    
     // Format currency for display
     const formatCurrency = (amount) => {
         return new Intl.NumberFormat('en-IN', {
@@ -31,7 +36,7 @@ function sendOrderConfirmationEmail(order, user) {
             orderSummary += "\n";
         });
     } catch (e) {
-        console.error("Error parsing products:", e);
+        console.error("[ORDER EMAILS] Error parsing products:", e);
         orderSummary = "Error generating product list. Please check your order online.";
     }
 
@@ -72,7 +77,7 @@ function sendOrderConfirmationEmail(order, user) {
         </table>
         `;
     } catch (e) {
-        console.error("Error parsing products for HTML:", e);
+        console.error("[ORDER EMAILS] Error parsing products for HTML:", e);
         productsHtml = `<p style="color: #d32f2f; padding: 15px; background-color: #ffebee; border-radius: 4px;">
             Error generating product list. Please check your order details online.
         </p>`;
@@ -193,61 +198,87 @@ function sendOrderConfirmationEmail(order, user) {
 
     // Send the email using PocketBase's email sending functionality
     try {
-        $app.newMailClient().send(
+        console.log("[ORDER EMAILS] Attempting to send email with newMailClient()");
+        const result = $app.newMailClient().send(
             "konipaishop@gmail.com", // from address - use the configured Gmail address
             user.email, // to address
             subject,
             htmlContent
         );
-        console.log(`Order confirmation email sent to ${user.email} for order #${order.id}`);
+        console.log(`[ORDER EMAILS] ✓ Email sent successfully to ${user.email} for order #${order.id}`);
         return true;
     } catch (error) {
-        console.error(`Failed to send order confirmation email: ${error}`);
-        return false;
+        console.error(`[ORDER EMAILS] ✗ Failed to send order confirmation email:`, error);
+        
+        // Try alternative method if the first one fails
+        try {
+            console.log("[ORDER EMAILS] Attempting to send email with alternative method...");
+            $app.newMailClient()
+                .setFrom("konipaishop@gmail.com")
+                .setTo(user.email)
+                .setSubject(subject)
+                .setHtml(htmlContent)
+                .send(true); // set to true for asynchronous sending
+            console.log(`[ORDER EMAILS] ✓ Email sent successfully using alternative method to ${user.email}`);
+            return true;
+        } catch (altError) {
+            console.error(`[ORDER EMAILS] ✗ Alternative method also failed:`, altError);
+            return false;
+        }
     }
 }
 
 // Hook for when an order is created
 onRecordAfterCreateRequest("orders", (e) => {
+    console.log("[ORDER EMAILS] onRecordAfterCreateRequest hook triggered for order:", e.record.id);
     try {
         // Get the created order record
         const order = e.record;
         
         // Fetch the user information
+        console.log("[ORDER EMAILS] Fetching user information for user ID:", order.user);
         const userRecord = $app.dao().findRecordById("users", order.user);
         
         if (!userRecord) {
-            console.error("User not found for order:", order.id);
+            console.error("[ORDER EMAILS] User not found for order:", order.id);
             return;
         }
         
+        console.log(`[ORDER EMAILS] User found: ${userRecord.email}`);
+        
         // Send confirmation email
-        sendOrderConfirmationEmail(order, userRecord);
+        const emailSent = sendOrderConfirmationEmail(order, userRecord);
+        console.log(`[ORDER EMAILS] Email sending completed with result: ${emailSent}`);
     } catch (error) {
-        console.error("Error in onRecordAfterCreateRequest hook:", error);
+        console.error("[ORDER EMAILS] Error in onRecordAfterCreateRequest hook:", error);
     }
 });
 
 // Hook for when an order status is updated (for shipping notifications, etc.)
 onRecordAfterUpdateRequest("orders", (e) => {
+    console.log("[ORDER EMAILS] onRecordAfterUpdateRequest hook triggered for order:", e.record.id);
     try {
         const record = e.record;
         const oldRecord = e.oldRecord;
         
         // Only send notification if status has changed
         if (record.status !== oldRecord.status) {
+            console.log(`[ORDER EMAILS] Order status changed from ${oldRecord.status} to ${record.status}`);
+            
             // Get the user information
             const userRecord = $app.dao().findRecordById("users", record.user);
             
             if (!userRecord) {
-                console.error("User not found for order:", record.id);
+                console.error("[ORDER EMAILS] User not found for order:", record.id);
                 return;
             }
+            
+            console.log(`[ORDER EMAILS] Found user ${userRecord.email} for status update notification`);
             
             // If the status changed to "shipped", let's send a shipping notification
             if (record.status === "shipped") {
                 // TODO: Implement shipping notification email
-                console.log(`Order ${record.id} has been shipped - notification should be sent to user`);
+                console.log(`[ORDER EMAILS] Order ${record.id} has been shipped - notification should be sent to user`);
             }
             
             // For all status changes, you could also resend a modified order confirmation
@@ -255,6 +286,6 @@ onRecordAfterUpdateRequest("orders", (e) => {
             sendOrderConfirmationEmail(record, userRecord);
         }
     } catch (error) {
-        console.error("Error in onRecordAfterUpdateRequest hook:", error);
+        console.error("[ORDER EMAILS] Error in onRecordAfterUpdateRequest hook:", error);
     }
 }); 
