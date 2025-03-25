@@ -144,17 +144,10 @@ export default function Shop() {
   }, [loading, products, filteredProducts]);
 
   const handleAddToCart = (product: Product) => {
-    if (!product.colors || !Array.isArray(product.colors) || product.colors.length === 0) {
-      addItem(product, 1, '');
-      toast({
-        title: 'Added to cart',
-        description: `${product.name} has been added to your cart.`,
-      });
-      return;
-    }
+    addItem(product, 1, product.colors && product.colors.length > 0 ? product.colors[0].value : '');
     
-    addItem(product, 1, product.colors[0].value);
     toast({
+      variant: "success",
       title: 'Added to cart',
       description: `${product.name} has been added to your cart.`,
     });

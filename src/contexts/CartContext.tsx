@@ -294,6 +294,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       setIsCartOpen(true);
 
       toast({
+        variant: "success",
         title: "Added to Cart",
         description: `${product.name} x${quantity} added to your cart.`,
       });

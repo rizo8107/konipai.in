@@ -284,6 +284,7 @@ const ProductDetail = () => {
     }]);
     
     toast({
+      variant: "success",
       title: "Added to cart",
       description: `${quantity} ${quantity === 1 ? 'item' : 'items'} of ${product.name} added to your cart.`,
     });
