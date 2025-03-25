@@ -560,32 +560,19 @@ export default function CheckoutPage() {
       throw new Error('Failed to create payment order. Please try again.');
     }
 
-    // Format phone number for Razorpay (ensure it starts with country code)
-    let phoneNumber = formData.phone;
-    if (phoneNumber && !phoneNumber.startsWith('+')) {
-      // Add India country code if not present
-      phoneNumber = phoneNumber.startsWith('91') ? `+${phoneNumber}` : `+91${phoneNumber}`;
-    }
-    
-    // Log to confirm key being used
-    console.log('Using Razorpay key:', getRazorpayKeyId());
-    console.log('Using Razorpay order ID:', razorpayOrderResponse.id);
-    
-    // In live mode, we need to use the order_id returned from the Razorpay order creation
     // Open Razorpay payment form
     openRazorpayCheckout({
       key: getRazorpayKeyId(),
-      amount: razorpayOrderResponse.amount, // Use the amount from the Razorpay order
+      amount: order.total * 100, // Razorpay expects amount in paise
       currency: 'INR',
       name: 'Konipai',
       description: `Order #${order.id}`,
       image: import.meta.env.VITE_SITE_LOGO || 'https://konipai.in/assets/logo.png',
-      order_id: razorpayOrderResponse.id, // This is crucial for live mode
       handler: (response) => handlePaymentSuccess(response, order.id),
       prefill: {
         name: formData.name,
         email: formData.email,
-        contact: phoneNumber, // Using properly formatted phone number
+        contact: formData.phone,
       },
       notes: {
         order_id: order.id,

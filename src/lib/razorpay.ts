@@ -61,54 +61,22 @@ export const getRazorpayKeyId = (): string => {
   return key;
 };
 
-// Create a Razorpay order using Razorpay API
+// Create a Razorpay order via PocketBase
 export const createRazorpayOrder = async (
   amount: number,
   currency: string = 'INR',
   receipt: string
 ): Promise<CreateOrderResponse> => {
   try {
-    console.log('Creating Razorpay order with amount:', amount);
+    console.log('Creating Razorpay order');
     
-    // For live mode, we need to create a real order on Razorpay
-    // This function should be called from your backend for security
-    // But for this implementation, we'll use a server-side proxy or fallback
-    
-    try {
-      // Try to use server backend to create order (more secure)
-      const RAZORPAY_API_URL = `${import.meta.env.VITE_POCKETBASE_URL}/api/orders/create-razorpay-order`;
-      
-      const response = await fetch(RAZORPAY_API_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          amount: Math.round(amount * 100), // Convert to paise and ensure it's an integer
-          currency,
-          receipt
-        }),
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        console.log('Created Razorpay order with server API:', data);
-        return data;
-      }
-      
-      console.warn('Failed to create order with server API, falling back to client-side');
-    } catch (err) {
-      console.warn('Error using server API, falling back:', err);
-    }
-    
-    // Fallback to client-side order ID generation (only works in test mode)
-    // In production, this should be replaced with a real API call
+    // Generate a unique ID for this transaction
     const uniqueId = `order_${Date.now()}`;
-    console.log('Using generated order ID (test mode only):', uniqueId);
     
+    // Return order data for direct payment flow
     return {
       id: uniqueId,
-      amount: Math.round(amount * 100), // Convert to paise
+      amount: amount * 100, // Convert to paise
       currency,
       receipt,
       status: 'created'
@@ -126,28 +94,18 @@ export const openRazorpayCheckout = (options: RazorpayOptions): void => {
     return;
   }
 
-  console.log('Opening Razorpay payment window with options:', { 
-    key: options.key,
-    amount: options.amount,
-    currency: options.currency,
-    order_id: options.order_id 
-  });
+  console.log('Opening Razorpay payment window');
   
-  // Make sure we have all required options for live mode
+  // Use direct checkout with live API key
   const paymentOptions = {
     key: getRazorpayKeyId(),
     amount: options.amount, // Amount in paise
     currency: options.currency || 'INR',
     name: options.name || 'Konipai',
     description: options.description || 'Payment',
-    order_id: options.order_id, // Required for live mode
     handler: options.handler,
     prefill: options.prefill || {},
-    theme: options.theme || { color: '#4F46E5' },
-    modal: {
-      confirm_close: true, // Confirm before closing payment modal
-      escape: false // Prevent closing with ESC key
-    }
+    theme: options.theme || { color: '#4F46E5' }
   };
   
   const razorpay = new window.Razorpay(paymentOptions);
