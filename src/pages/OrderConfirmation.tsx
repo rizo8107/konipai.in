@@ -5,9 +5,11 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/components/ui/use-toast';
-import { CheckCircle, ShoppingBag, Loader2, Package } from 'lucide-react';
+import { CheckCircle, ShoppingBag, Loader2, Package, Receipt } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import { trackPurchase, trackPageView, trackDynamicConversion } from '@/lib/analytics';
+import { OrderInvoice } from '@/components/OrderInvoice';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 // Define interfaces for products in order
 interface OrderProduct {
@@ -65,6 +67,7 @@ export default function OrderConfirmation() {
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<string>("order");
 
   useEffect(() => {
     document.title = 'Order Confirmation | Konipai';
@@ -201,96 +204,126 @@ export default function OrderConfirmation() {
         <p className="font-medium mt-2">Order #{order.id}</p>
       </div>
 
-      <Card className="p-6 mb-6">
-        <h2 className="text-lg font-semibold mb-4">Order Summary</h2>
-        <div className="space-y-4">
-          {products.map((item, index) => (
-            <div key={index} className="flex items-center gap-4 py-2 border-b border-gray-100 last:border-0">
-              <div className="h-16 w-16 rounded-md bg-gray-50 overflow-hidden flex-shrink-0">
-                {item.product?.images && item.product.images[0] ? (
-                  <img 
-                    src={`${import.meta.env.VITE_POCKETBASE_URL?.replace(/\/$/, '') || 'https://pocketbase.konipai.in'}/api/files/pbc_4092854851/${item.product.id}/${item.product.images[0].split('/').pop()}`} 
-                    alt={item.product.name} 
-                    className="h-full w-full object-cover"
-                    loading="eager"
-                    crossOrigin="anonymous"
-                    onError={(e) => {
-                      console.error('Image load error:', e);
-                      e.currentTarget.src = '/placeholder-product.svg';
-                    }}
-                  />
-                ) : (
-                  <div className="h-full w-full flex items-center justify-center bg-gray-100">
-                    <Package className="h-6 w-6 text-gray-400" />
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="order" className="flex items-center gap-2">
+            <Package className="h-4 w-4" />
+            Order Details
+          </TabsTrigger>
+          <TabsTrigger value="invoice" className="flex items-center gap-2">
+            <Receipt className="h-4 w-4" />
+            Invoice
+          </TabsTrigger>
+        </TabsList>
+        
+        <TabsContent value="order" className="mt-4">
+          <Card className="p-6 mb-6">
+            <h2 className="text-lg font-semibold mb-4">Order Summary</h2>
+            <div className="space-y-4">
+              {products.map((item, index) => (
+                <div key={index} className="flex items-center gap-4 py-2 border-b border-gray-100 last:border-0">
+                  <div className="h-16 w-16 rounded-md bg-gray-50 overflow-hidden flex-shrink-0">
+                    {item.product?.images && item.product.images[0] ? (
+                      <img 
+                        src={`${import.meta.env.VITE_POCKETBASE_URL?.replace(/\/$/, '') || 'https://pocketbase.konipai.in'}/api/files/pbc_4092854851/${item.product.id}/${item.product.images[0].split('/').pop()}`} 
+                        alt={item.product.name} 
+                        className="h-full w-full object-cover"
+                        loading="eager"
+                        crossOrigin="anonymous"
+                        onError={(e) => {
+                          console.error('Image load error:', e);
+                          e.currentTarget.src = '/placeholder-product.svg';
+                        }}
+                      />
+                    ) : (
+                      <div className="h-full w-full flex items-center justify-center bg-gray-100">
+                        <Package className="h-6 w-6 text-gray-400" />
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-              <div className="flex-grow flex flex-col">
-                <h3 className="font-medium">{item.product.name}</h3>
-                <div className="text-sm text-gray-600">
-                  <span>Qty: {item.quantity}</span>
-                  {item.color && <span className="ml-2">Color: {item.color}</span>}
+                  <div className="flex-grow flex flex-col">
+                    <h3 className="font-medium">{item.product.name}</h3>
+                    <div className="text-sm text-gray-600">
+                      <span>Qty: {item.quantity}</span>
+                      {item.color && <span className="ml-2">Color: {item.color}</span>}
+                    </div>
+                  </div>
+                  <div className="font-medium">{formatCurrency(item.product.price * item.quantity)}</div>
                 </div>
+              ))}
+              <Separator className="my-2" />
+              <div className="flex justify-between py-1">
+                <span className="text-gray-600">Subtotal</span>
+                <span className="font-medium">{formatCurrency(order.subtotal)}</span>
               </div>
-              <div className="font-medium">₹{(item.product.price * item.quantity).toFixed(2)}</div>
+              <div className="flex justify-between py-1">
+                <span className="text-gray-600">Shipping</span>
+                <span className="font-medium">
+                  {order.shipping_cost === null || order.shipping_cost === undefined || isNaN(parseFloat(order.shipping_cost.toString()))
+                    ? 'Free'
+                    : parseFloat(order.shipping_cost.toString()) === 0
+                      ? 'Free'
+                      : formatCurrency(order.shipping_cost)}
+                </span>
+              </div>
+              {order.discount_amount && (
+                <div className="flex justify-between py-1">
+                  <span className="text-gray-600">Discount</span>
+                  <span className="font-medium">-{formatCurrency(order.discount_amount)}</span>
+                </div>
+              )}
+              <div className="flex justify-between py-1 font-semibold">
+                <span>Total</span>
+                <span>{formatCurrency(order.total)}</span>
+              </div>
             </div>
-          ))}
-          <Separator className="my-2" />
-          <div className="flex justify-between py-1">
-            <span className="text-gray-600">Subtotal</span>
-            <span className="font-medium">{formatCurrency(order.subtotal)}</span>
-          </div>
-          <div className="flex justify-between py-1">
-            <span className="text-gray-600">Shipping</span>
-            <span className="font-medium">
-              {order.shipping_cost === null || order.shipping_cost === undefined || isNaN(parseFloat(order.shipping_cost.toString()))
-                ? 'Free'
-                : parseFloat(order.shipping_cost.toString()) === 0
-                  ? 'Free'
-                  : formatCurrency(order.shipping_cost)}
-            </span>
-          </div>
-          {order.discount_amount && (
-            <div className="flex justify-between py-1">
-              <span className="text-gray-600">Discount</span>
-              <span className="font-medium">-{formatCurrency(order.discount_amount)}</span>
-            </div>
+          </Card>
+
+          {shippingAddress && (
+            <Card className="p-6 mb-6">
+              <h2 className="text-lg font-semibold mb-4">Shipping Details</h2>
+              <p className="font-medium">{order.customer_name}</p>
+              <p>{shippingAddress.street}</p>
+              <p>{shippingAddress.city}, {shippingAddress.state} {shippingAddress.postalCode}</p>
+              <p>{shippingAddress.country}</p>
+              <p className="mt-2">Phone: {order.customer_phone}</p>
+              <p>Email: {order.customer_email}</p>
+            </Card>
           )}
-          <div className="flex justify-between py-1 font-semibold">
-            <span>Total</span>
-            <span>{formatCurrency(order.total)}</span>
-          </div>
-        </div>
-      </Card>
 
-      {shippingAddress && (
-        <Card className="p-6 mb-6">
-          <h2 className="text-lg font-semibold mb-4">Shipping Details</h2>
-          <p className="font-medium">{order.customer_name}</p>
-          <p>{shippingAddress.street}</p>
-          <p>{shippingAddress.city}, {shippingAddress.state} {shippingAddress.postalCode}</p>
-          <p>{shippingAddress.country}</p>
-          <p className="mt-2">Phone: {order.customer_phone}</p>
-          <p>Email: {order.customer_email}</p>
-        </Card>
-      )}
-
-      <Card className="p-6 mb-6">
-        <h2 className="text-lg font-semibold mb-4">Payment Information</h2>
-        <div className="flex items-center space-x-2">
-          <div className={`w-3 h-3 rounded-full ${isPaid ? 'bg-green-500' : 'bg-yellow-500'}`}></div>
-          <p className="font-medium">{isPaid ? 'Paid' : 'Payment Pending'}</p>
-        </div>
-        {order.payment_id && (
-          <p className="text-sm text-gray-600 mt-2">
-            Payment ID: {order.payment_id}
-          </p>
-        )}
-        <div className="flex items-center mt-4 space-x-2">
-          <img src="/razorpay-logo.svg" alt="Razorpay" className="h-5" onError={(e) => (e.currentTarget.src = 'https://razorpay.com/assets/razorpay-logo.svg')} />
-          <p className="text-sm text-gray-600">Paid via Razorpay</p>
-        </div>
-      </Card>
+          <Card className="p-6 mb-6">
+            <h2 className="text-lg font-semibold mb-4">Payment Information</h2>
+            <div className="flex items-center space-x-2">
+              <div className={`w-3 h-3 rounded-full ${isPaid ? 'bg-green-500' : 'bg-yellow-500'}`}></div>
+              <p className="font-medium">{isPaid ? 'Paid' : 'Payment Pending'}</p>
+            </div>
+            {order.payment_id && (
+              <p className="text-sm text-gray-600 mt-2">
+                Payment ID: {order.payment_id}
+              </p>
+            )}
+            <div className="flex items-center mt-4 space-x-2">
+              <img src="/razorpay-logo.svg" alt="Razorpay" className="h-5" onError={(e) => (e.currentTarget.src = 'https://razorpay.com/assets/razorpay-logo.svg')} />
+              <p className="text-sm text-gray-600">Paid via Razorpay</p>
+            </div>
+          </Card>
+        </TabsContent>
+        
+        <TabsContent value="invoice" className="mt-4">
+          {isPaid ? (
+            <OrderInvoice order={order} products={products} />
+          ) : (
+            <Card className="p-6">
+              <div className="text-center">
+                <h2 className="text-lg font-semibold mb-2">Invoice Not Available</h2>
+                <p className="text-muted-foreground mb-4">
+                  An invoice will be available once your payment has been confirmed.
+                </p>
+              </div>
+            </Card>
+          )}
+        </TabsContent>
+      </Tabs>
 
       <div className="flex justify-center space-x-4 mt-8">
         <Button asChild variant="outline" className="w-full">
