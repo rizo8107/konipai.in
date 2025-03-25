@@ -18,6 +18,7 @@ import {
   verifyRazorpayPayment,
   RazorpayResponse
 } from '@/lib/razorpay';
+import { trackEcommerceEvent } from '@/utils/analytics';
 
 interface CheckoutFormData {
   name: string;
@@ -327,6 +328,19 @@ export default function CheckoutPage() {
         status: 'processing'
       });
 
+      // Track purchase completion with Google Analytics
+      trackEcommerceEvent('purchase', 
+        items.map(item => ({
+          item_id: item.productId,
+          item_name: item.product.name,
+          price: Number(item.product.price) || 0,
+          quantity: item.quantity,
+          item_variant: item.color || undefined
+        })),
+        'INR',
+        calculateFinalTotal().finalTotal
+      );
+
       // Clear the cart after successful payment
       clearCart();
       
@@ -381,6 +395,19 @@ export default function CheckoutPage() {
     if (isSubmitting || isPaymentProcessing) {
       return; // Prevent double submission
     }
+
+    // Track beginning of checkout process with Google Analytics
+    trackEcommerceEvent('begin_checkout', 
+      items.map(item => ({
+        item_id: item.productId,
+        item_name: item.product.name,
+        price: Number(item.product.price) || 0,
+        quantity: item.quantity,
+        item_variant: item.color || undefined
+      })),
+      'INR',
+      calculateFinalTotal().finalTotal
+    );
 
     try {
       setIsSubmitting(true);
@@ -747,6 +774,9 @@ export default function CheckoutPage() {
             <div>
               <p className="font-medium">Pay with Razorpay</p>
               <p className="text-sm text-gray-500">Secure payment via Razorpay</p>
+              {import.meta.env.VITE_RAZORPAY_KEY_ID?.startsWith('rzp_live') && (
+                <p className="text-xs text-green-600 font-medium mt-1">Live payments enabled</p>
+              )}
             </div>
           </div>
         </div>

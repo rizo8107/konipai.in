@@ -6,6 +6,7 @@ import Navbar from "./components/Navbar"
 import Footer from "./components/Footer"
 import { lazy, Suspense, useEffect } from "react"
 import { Loader2 } from "lucide-react"
+import { trackPageView } from "@/utils/analytics"
 
 // Eager load critical pages
 import Index from "./pages/Index"
@@ -62,11 +63,16 @@ function PageLoader() {
 }
 
 // Scroll restoration component to ensure pages start at the top when navigating
+// Also tracks page views for Google Analytics
 function ScrollToTop() {
   const { pathname } = useLocation();
   
   useEffect(() => {
+    // Scroll to top of page
     window.scrollTo(0, 0);
+    
+    // Track page view in Google Analytics
+    trackPageView(pathname, document.title);
   }, [pathname]);
   
   return null;

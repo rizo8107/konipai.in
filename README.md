@@ -9,12 +9,14 @@ A modern e-commerce platform for tote bags built with React, TypeScript, and Poc
 - Shopping cart functionality
 - Order processing and history
 - Address management
+- Razorpay payment integration
 - Responsive design for all devices
 
 ## Tech Stack
 
 - **Frontend**: React, TypeScript, Vite, TailwindCSS, Shadcn UI
 - **Backend**: PocketBase (Authentication, Database, File Storage)
+- **Payments**: Razorpay
 - **Deployment**: Netlify
 
 ## Getting Started
@@ -136,6 +138,23 @@ Make sure to set the following environment variables in your production environm
 - `VITE_POCKETBASE_URL`: Your PocketBase server URL
 - `POCKETBASE_ADMIN_EMAIL`: Admin email for PocketBase
 - `POCKETBASE_ADMIN_PASSWORD`: Admin password for PocketBase
+- `VITE_RAZORPAY_KEY_ID`: Your Razorpay Key ID (use `rzp_live_` key for production)
+- `RAZORPAY_KEY_SECRET`: Your Razorpay Secret Key
+
+## Razorpay Integration
+
+The app uses Razorpay for payment processing. For detailed instructions on switching to live mode, see [RAZORPAY_LIVE_SETUP.md](./RAZORPAY_LIVE_SETUP.md).
+
+### Test vs Live Mode
+
+- **Test Mode**: Uses `rzp_test_` keys and simulated payments
+- **Live Mode**: Uses `rzp_live_` keys and processes real transactions
+
+To build with production payment settings:
+
+```bash
+npm run build:prod
+```
 
 ## License
 

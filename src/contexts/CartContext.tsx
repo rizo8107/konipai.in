@@ -3,6 +3,7 @@ import { Product, pocketbase } from '@/lib/pocketbase';
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { deduplicateCartItems, isValidCartItem } from '@/utils/cartUtils';
+import { trackEcommerceEvent } from '@/utils/analytics';
 
 export interface CartItem {
   productId: string;
@@ -248,50 +249,75 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Invalid quantity specified.",
+        description: "Please select a valid quantity.",
       });
       return;
     }
 
-    setItems(currentItems => {
-      // Create a unique identifier for the item based on product ID and color
-      const itemKey = `${product.id}-${color || 'Default'}`;
-      
-      // Check if this exact product+color combination already exists in the cart
-      const existingItemIndex = currentItems.findIndex(item => 
-        `${item.productId}-${item.color || 'Default'}` === itemKey
+    setItems((currentItems) => {
+      // Check if item already exists in cart with same color
+      const existingItemIndex = currentItems.findIndex(
+        (item) => item.productId === product.id && item.color === color
       );
 
-      if (existingItemIndex !== -1) {
-        // Update existing item's quantity instead of adding a duplicate
-        const updatedItems = [...currentItems];
-        updatedItems[existingItemIndex] = {
-          ...updatedItems[existingItemIndex],
-          quantity: updatedItems[existingItemIndex].quantity + quantity
+      let newItems;
+
+      if (existingItemIndex >= 0) {
+        // Update quantity if item exists
+        newItems = [...currentItems];
+        newItems[existingItemIndex] = {
+          ...newItems[existingItemIndex],
+          quantity: newItems[existingItemIndex].quantity + quantity,
         };
-        return updatedItems;
+      } else {
+        // Add new item if it doesn't exist
+        newItems = [
+          ...currentItems,
+          {
+            productId: product.id,
+            product,
+            quantity,
+            color,
+          },
+        ];
       }
 
-      // Add new item if it doesn't exist
-      return [...currentItems, {
-        productId: product.id,
-        product,
-        quantity,
-        color: color || 'Default'
-      }];
-    });
+      // Track the add to cart event for Google Analytics
+      trackEcommerceEvent('add_to_cart', [{
+        item_id: product.id,
+        item_name: product.name,
+        price: Number(product.price) || 0,
+        quantity: quantity,
+        item_variant: color || undefined
+      }]);
 
-    toast({
-      title: "Success",
-      description: `Added ${quantity} ${product.name} to cart`,
+      setIsCartOpen(true);
+
+      toast({
+        title: "Added to Cart",
+        description: `${product.name} x${quantity} added to your cart.`,
+      });
+
+      return newItems;
     });
   };
 
   const removeItem = (productId: string) => {
-    setItems(currentItems => currentItems.filter(item => item.productId !== productId));
-    toast({
-      title: "Item Removed",
-      description: "Item has been removed from your cart.",
+    setItems((currentItems) => {
+      const itemToRemove = currentItems.find(item => item.productId === productId);
+      
+      if (itemToRemove) {
+        // Track removal in Google Analytics
+        trackEcommerceEvent('remove_from_cart', [{
+          item_id: itemToRemove.productId,
+          item_name: itemToRemove.product.name,
+          price: Number(itemToRemove.product.price) || 0,
+          quantity: itemToRemove.quantity,
+          item_variant: itemToRemove.color || undefined
+        }]);
+      }
+      
+      return currentItems.filter((item) => item.productId !== productId);
     });
   };
 
@@ -301,22 +327,44 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    setItems(currentItems =>
-      currentItems.map(item =>
-        item.productId === productId
-          ? { ...item, quantity }
-          : item
-      )
-    );
+    setItems((currentItems) => {
+      const existingItem = currentItems.find(item => item.productId === productId);
+      const oldQuantity = existingItem ? existingItem.quantity : 0;
+      
+      const newItems = currentItems.map((item) =>
+        item.productId === productId ? { ...item, quantity } : item
+      );
+      
+      if (existingItem && quantity !== oldQuantity) {
+        // Track quantity update in Google Analytics
+        if (quantity > oldQuantity) {
+          // Added more items
+          trackEcommerceEvent('add_to_cart', [{
+            item_id: existingItem.productId, 
+            item_name: existingItem.product.name,
+            price: Number(existingItem.product.price) || 0,
+            quantity: quantity - oldQuantity,
+            item_variant: existingItem.color || undefined
+          }]);
+        } else {
+          // Removed some items
+          trackEcommerceEvent('remove_from_cart', [{
+            item_id: existingItem.productId,
+            item_name: existingItem.product.name,
+            price: Number(existingItem.product.price) || 0,
+            quantity: oldQuantity - quantity,
+            item_variant: existingItem.color || undefined
+          }]);
+        }
+      }
+      
+      return newItems;
+    });
   };
 
   const clearCart = () => {
+    // Don't track this in analytics since it's usually after checkout or other events
     setItems([]);
-    localStorage.removeItem(CART_STORAGE_KEY);
-    toast({
-      title: "Cart Cleared",
-      description: "Your cart has been cleared.",
-    });
   };
 
   const { subtotal, shipping, total } = calculateTotals(items);

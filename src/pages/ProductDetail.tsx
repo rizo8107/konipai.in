@@ -27,6 +27,7 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ProductImage } from '@/components/ProductImage';
 import { preloadImages, getPocketBaseImageUrl, ImageSize } from '@/utils/imageOptimizer';
+import { trackEcommerceEvent } from '@/utils/analytics';
 
 // Generate a very low-res placeholder
 const generatePlaceholder = (color = '#f3f4f6') => {
@@ -159,6 +160,15 @@ const ProductDetail = () => {
           setSelectedColor(productData.colors[0]);
         }
         
+        // Track product view in Google Analytics
+        trackEcommerceEvent('view_item', [{
+          item_id: productData.id,
+          item_name: productData.name,
+          price: Number(productData.price) || 0,
+          quantity: 1, // Viewing a single item
+          item_category: productData.category
+        }]);
+        
         // Fetch related products
         const allProducts = await getProducts({ category: productData.category });
         const related = allProducts
@@ -262,6 +272,16 @@ const ProductDetail = () => {
     // If product has colors, use selected color, otherwise use empty string
     const colorValue = product.colors?.length > 0 ? selectedColor?.value || '' : '';
     addItem(product, quantity, colorValue);
+    
+    // Track add to cart event in Google Analytics
+    trackEcommerceEvent('add_to_cart', [{
+      item_id: product.id,
+      item_name: product.name,
+      price: Number(product.price) || 0,
+      quantity: quantity,
+      item_variant: colorValue || undefined,
+      item_category: product.category
+    }]);
     
     toast({
       title: "Added to cart",

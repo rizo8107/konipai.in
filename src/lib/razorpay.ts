@@ -55,8 +55,8 @@ export const loadRazorpayScript = (): Promise<boolean> => {
 export const getRazorpayKeyId = (): string => {
   const key = import.meta.env.VITE_RAZORPAY_KEY_ID;
   if (!key) {
-    console.warn('VITE_RAZORPAY_KEY_ID not found in environment variables, using default test key');
-    return 'rzp_test_trImBTMCiZgDuF'; // Fallback to test key
+    console.error('VITE_RAZORPAY_KEY_ID not found in environment variables');
+    throw new Error('Razorpay key not configured. Please check your environment variables.');
   }
   return key;
 };
