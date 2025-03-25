@@ -1,6 +1,7 @@
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Card } from "@/components/ui/card";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, Building, Phone, Mail, MapPin } from "lucide-react";
+import { Separator } from "@/components/ui/separator";
 
 const CancellationsRefunds = () => {
   return (
@@ -15,6 +16,43 @@ const CancellationsRefunds = () => {
             June 15, 2023
           </AlertDescription>
         </Alert>
+
+        <Card className="p-6 mb-8 bg-gray-50 border-gray-200">
+          <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+            <Building className="h-5 w-5" />
+            Billing Information
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <h3 className="font-semibold text-lg mb-2">Billing Entity</h3>
+              <p className="text-gray-700 font-medium">ZentharaStudios</p>
+              <p className="text-gray-700">Vignarajapuram 1st Cross Street</p>
+              <p className="text-gray-700">Chennai, Tamil Nadu 600073</p>
+              <p className="text-gray-700">India</p>
+            
+            </div>
+            <div>
+              <h3 className="font-semibold text-lg mb-2">Contact for Refunds</h3>
+              <div className="flex items-center gap-2 mb-1">
+                <Mail className="h-4 w-4 text-gray-500" />
+                <p className="text-gray-700">support@konipai.in</p>
+              </div>
+              <div className="flex items-center gap-2 mb-1">
+                <Phone className="h-4 w-4 text-gray-500" />
+                <p className="text-gray-700">+91 93630 20252</p>
+              </div>
+              <div className="flex items-start gap-2">
+                <MapPin className="h-4 w-4 text-gray-500 mt-1" />
+                <p className="text-gray-700">Corporate Office: Vignarajapuram 1st Cross Street, Chennai, Tamil Nadu 600073, India</p>
+              </div>
+            </div>
+          </div>
+          <Separator className="my-4" />
+          <p className="text-sm text-gray-600">
+            All refunds will be processed by ZentharaStudios, the official billing entity for all purchases made on this website. 
+            For any refund-related inquiries, please use the contact information above and include your order number in all communications.
+          </p>
+        </Card>
 
         <Card className="p-6 space-y-6">
           <div>
@@ -56,6 +94,9 @@ const CancellationsRefunds = () => {
               <li>
                 The Customer Service Team after looking into your complaint will take an appropriate decision.
               </li>
+              <li>
+                All approved refunds will be processed by ZentharaStudios and will be credited back to the original payment method.
+              </li>
             </ul>
           </div>
 
@@ -81,12 +122,15 @@ const CancellationsRefunds = () => {
               For payments processed through Razorpay, refunds will be credited back to the original payment 
               method used for the purchase. The timing of the refund may vary depending on your payment provider.
             </p>
+            <p className="mt-2">
+              All transactions will appear as "ZentharaStudios" on your bank statement or payment method statement.
+            </p>
           </div>
 
           <div className="pt-4 border-t">
             <p>
               If you have any questions about our cancellations and refunds policy, please contact our customer 
-              service team at contact@konipai.in or call +91 9363020252.
+              service team at refunds@zenthrastudios.com or call +91 1234567890.
             </p>
           </div>
         </Card>

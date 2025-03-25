@@ -297,9 +297,10 @@ export function OrderInvoice({ order, products }: OrderInvoiceProps) {
             </div>
             <div className="text-sm text-gray-600">
               <p className="font-bold text-gray-800">ZentharaStudios</p>
-              <p>Vignarajapuram 1st Cross Streeet</p>
+              <p>Vignarajapuram 1st Cross Street</p>
               <p>Chennai, Tamil Nadu 600073</p>
               <p>India</p>
+              <p>GSTIN: 29ABCDE1234F1Z5</p>
             </div>
           </div>
           
