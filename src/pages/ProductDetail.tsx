@@ -30,6 +30,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ProductImage } from '@/components/ProductImage';
 import { preloadImages, getPocketBaseImageUrl, ImageSize } from '@/utils/imageOptimizer';
 import { trackEcommerceEvent } from '@/utils/analytics';
+import { useAuth } from '@/contexts/AuthContext';
+import { 
+  trackProductView, 
+  trackAddToCart, 
+  trackButtonClick 
+} from '@/lib/analytics';
 
 // Generate a very low-res placeholder
 const generatePlaceholder = (color = '#f3f4f6') => {
@@ -52,6 +58,7 @@ const ProductDetail = () => {
   const [selectedColor, setSelectedColor] = useState<ProductColor | null>(null);
   const { toast } = useToast();
   const relatedLoaded = useRef(false);
+  const { user } = useAuth();
   
   // Check if the current product is already in cart
   const isInCart = useMemo(() => {
@@ -146,6 +153,8 @@ const ProductDetail = () => {
   }, [relatedProducts]);
   
   useEffect(() => {
+    document.title = product?.name ? `${product.name} | Konipai` : 'Product | Konipai';
+    
     const fetchProduct = async () => {
       if (!id) {
         setError('Product ID is missing');
@@ -170,14 +179,14 @@ const ProductDetail = () => {
           setSelectedColor(productData.colors[0]);
         }
         
-        // Track product view in Google Analytics
-        trackEcommerceEvent('view_item', [{
+        // Track product view with GTM
+        trackProductView({
           item_id: productData.id,
           item_name: productData.name,
           price: Number(productData.price) || 0,
-          quantity: 1, // Viewing a single item
-          item_category: productData.category
-        }]);
+          quantity: 1,
+          item_category: productData.category || 'Tote Bag'
+        });
         
         // Fetch related products
         const allProducts = await getProducts({ category: productData.category });
@@ -283,15 +292,22 @@ const ProductDetail = () => {
     const colorValue = product.colors?.length > 0 ? selectedColor?.value || '' : '';
     addItem(product, quantity, colorValue);
     
-    // Track add to cart event in Google Analytics
-    trackEcommerceEvent('add_to_cart', [{
+    // Track add to cart with GTM
+    trackAddToCart({
       item_id: product.id,
       item_name: product.name,
       price: Number(product.price) || 0,
       quantity: quantity,
       item_variant: colorValue || undefined,
-      item_category: product.category
-    }]);
+      item_category: product.category || 'Tote Bag'
+    });
+    
+    // Track button click
+    trackButtonClick(
+      'add_to_cart_button',
+      'Add to Cart',
+      window.location.pathname
+    );
     
     toast({
       variant: "success",
@@ -300,27 +316,78 @@ const ProductDetail = () => {
     });
   };
 
-  const toggleWishlist = () => {
-    setIsWishlisted(!isWishlisted);
-    toast({
-      title: isWishlisted ? "Removed from wishlist" : "Added to wishlist",
-      description: isWishlisted ? "Product removed from your wishlist" : "Product added to your wishlist",
-    });
+  const toggleWishlist = async () => {
+    // Track wishlist button click
+    trackButtonClick(
+      isWishlisted ? 'remove_from_wishlist_button' : 'add_to_wishlist_button', 
+      isWishlisted ? 'Remove from Wishlist' : 'Add to Wishlist',
+      window.location.pathname
+    );
+    
+    try {
+      if (!user) {
+        toast({
+          variant: "destructive",
+          title: "Please Login",
+          description: "You need to login to add items to your wishlist.",
+        });
+        return;
+      }
+
+      setIsWishlisted(!isWishlisted);
+
+      if (!isWishlisted) {
+        // Add to wishlist
+        await pocketbase.collection('wishlist').create({
+          user: user.id,
+          product: product.id,
+        });
+        toast({
+          title: "Added to Wishlist",
+          description: `${product.name} has been added to your wishlist.`,
+        });
+      } else {
+        // Remove from wishlist
+        const record = await pocketbase.collection('wishlist').getFirstListItem(
+          `user="${user.id}" && product="${product.id}"`
+        );
+        await pocketbase.collection('wishlist').delete(record.id);
+        toast({
+          title: "Removed from Wishlist",
+          description: `${product.name} has been removed from your wishlist.`,
+        });
+      }
+    } catch (error) {
+      console.error('Error updating wishlist:', error);
+      setIsWishlisted(!isWishlisted); // Revert the state change
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to update your wishlist. Please try again.",
+      });
+    }
   };
 
   const handleShare = async () => {
     try {
-      await navigator.share({
-        title: product?.name || '',
-        text: product?.description || '',
-        url: window.location.href
-      });
-    } catch (err) {
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Failed to share product",
-      });
+      // Track share button click
+      trackButtonClick('share_button', 'Share', window.location.pathname);
+      
+      if (navigator.share) {
+        await navigator.share({
+          title: product.name,
+          text: `Check out ${product.name} at Konipai!`,
+          url: window.location.href,
+        });
+      } else {
+        await navigator.clipboard.writeText(window.location.href);
+        toast({
+          title: "Link Copied",
+          description: "The product link has been copied to your clipboard.",
+        });
+      }
+    } catch (error) {
+      console.error('Error sharing:', error);
     }
   };
   

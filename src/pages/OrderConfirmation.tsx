@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, useSearchParams, Link } from 'react-router-dom';
 import { pocketbase } from '@/lib/pocketbase';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -7,16 +7,19 @@ import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/components/ui/use-toast';
 import { CheckCircle, ShoppingBag, Loader2, Package } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
+import { trackPurchase, trackPageView } from '@/lib/analytics';
 
-// Define interface for product in order
+// Define interfaces for products in order
 interface OrderProduct {
-  productId: string;
-  product: {
-    id: string;
-    name: string;
-    price: number;
+  productId?: string;
+  product?: {
+    id?: string;
+    name?: string;
+    price?: number;
     images?: string[];
   };
+  name?: string;
+  price?: number;
   quantity: number;
   color?: string;
 }
@@ -52,40 +55,76 @@ interface Order {
 
 export default function OrderConfirmation() {
   const { orderId } = useParams<{ orderId: string }>();
+  const [searchParams] = useSearchParams();
+  const paymentStatus = searchParams.get('status');
+  
   const { toast } = useToast();
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchOrder = async () => {
+    document.title = 'Order Confirmation | Konipai';
+    
+    // Track page view with GTM
+    trackPageView(
+      'Order Confirmation', 
+      window.location.pathname
+    );
+    
+    const fetchOrderDetails = async () => {
       try {
+        setLoading(true);
+        
         if (!orderId) {
-          setError('Order ID is missing');
+          setError('Order ID not found');
           setLoading(false);
           return;
         }
-
+        
         const orderData = await pocketbase.collection('orders').getOne(orderId, {
-          expand: 'shipping_address,user',
+          expand: 'shipping_address,user'
         });
-
+        
         setOrder(orderData as unknown as Order);
-      } catch (err) {
-        console.error('Failed to fetch order:', err);
-        setError('Failed to load order details. Please try again later.');
-        toast({
-          variant: 'destructive',
-          title: 'Error',
-          description: 'Could not load order details. Please try again later.',
-        });
+        
+        // If this is a successful order and has payment_id, track the purchase
+        if (orderData.payment_status === 'paid' && orderData.payment_id) {
+          // Parse products from the order data
+          let orderProducts = [];
+          try {
+            orderProducts = typeof orderData.products === 'string'
+              ? JSON.parse(orderData.products)
+              : orderData.products;
+          } catch (e) {
+            console.error('Error parsing products from order data:', e);
+          }
+          
+          // Track the purchase event
+          trackPurchase(
+            orderProducts.map((item: OrderProduct) => ({
+              item_id: item.productId || item.product?.id || '',
+              item_name: item.product?.name || item.name || 'Product',
+              price: Number(item.product?.price || item.price || 0),
+              quantity: Number(item.quantity || 1),
+              item_variant: item.color || undefined
+            })),
+            orderData.id,
+            Number(orderData.total || 0),
+            Number(orderData.shipping_cost || 0),
+            0 // No tax
+          );
+        }
+      } catch (error) {
+        console.error('Error fetching order details:', error);
+        setError('Failed to load order details');
       } finally {
         setLoading(false);
       }
     };
-
-    fetchOrder();
-  }, [orderId, toast]);
+    
+    fetchOrderDetails();
+  }, [orderId]);
 
   if (loading) {
     return (

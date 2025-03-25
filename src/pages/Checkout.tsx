@@ -19,6 +19,18 @@ import {
   RazorpayResponse
 } from '@/lib/razorpay';
 import { trackEcommerceEvent } from '@/utils/analytics';
+import { 
+  trackBeginCheckout, 
+  trackAddShippingInfo, 
+  trackAddPaymentInfo, 
+  trackPaymentStart, 
+  trackPaymentSuccess, 
+  trackPaymentFailure,
+  trackButtonClick,
+  trackFormStart,
+  trackFormCompletion,
+  trackFormError
+} from '@/lib/analytics';
 
 interface CheckoutFormData {
   name: string;
@@ -335,6 +347,7 @@ export default function CheckoutPage() {
       
       if (!paymentId) {
         console.error('Missing payment ID in response:', response);
+        trackPaymentFailure(orderId, 0, 'Razorpay', 'Missing payment ID from Razorpay');
         throw new Error('Missing payment ID from Razorpay');
       }
 
@@ -366,6 +379,17 @@ export default function CheckoutPage() {
         
         // Update order status directly without verification
         await pocketbase.collection('orders').update(orderId, orderUpdateData);
+        
+        // Get the updated order for tracking purposes
+        const updatedOrder = await pocketbase.collection('orders').getOne(orderId);
+        
+        // Track payment success
+        trackPaymentSuccess(
+          orderId,
+          paymentId,
+          updatedOrder.total || 0,
+          'Razorpay'
+        );
 
         // Payment verified successfully
         toast({
@@ -394,6 +418,14 @@ export default function CheckoutPage() {
       } catch (updateError) {
         console.error('Failed to update order status:', updateError);
         
+        // Track payment failure
+        trackPaymentFailure(
+          orderId,
+          0,
+          'Razorpay',
+          'Failed to update order after payment'
+        );
+        
         // Show a user-friendly error but still consider payment successful
         toast({
           variant: "destructive",
@@ -406,6 +438,14 @@ export default function CheckoutPage() {
       }
     } catch (error) {
       console.error('Payment verification error:', error);
+      
+      // Track payment failure
+      trackPaymentFailure(
+        orderId,
+        0,
+        'Razorpay',
+        error instanceof Error ? error.message : 'Payment verification failed'
+      );
       
       // Show a user-friendly error
       toast({
@@ -438,6 +478,28 @@ export default function CheckoutPage() {
     };
   };
 
+  useEffect(() => {
+    document.title = 'Checkout | Konipai';
+    
+    // Start tracking the form
+    if (items && items.length > 0) {
+      trackFormStart('checkout_form', 'checkout-form');
+    }
+    
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (isSubmitting || isPaymentProcessing) {
+        event.preventDefault();
+        event.returnValue = '';
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [items, isSubmitting, isPaymentProcessing]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -445,8 +507,8 @@ export default function CheckoutPage() {
       return; // Prevent double submission
     }
 
-    // Track beginning of checkout process with Google Analytics
-    trackEcommerceEvent('begin_checkout', 
+    // Track beginning of checkout process with Google Tag Manager
+    trackBeginCheckout(
       items.map(item => ({
         item_id: item.productId,
         item_name: item.product.name,
@@ -454,23 +516,28 @@ export default function CheckoutPage() {
         quantity: item.quantity,
         item_variant: item.color || undefined
       })),
-      'INR',
       calculateFinalTotal().finalTotal
     );
+    
+    // Track the checkout button click
+    trackButtonClick('checkout_submit_button', 'Place Order', window.location.pathname);
 
     try {
       setIsSubmitting(true);
 
       if (!user?.id) {
+        trackFormError('checkout_form', 'checkout-form', 'User not logged in');
         throw new Error('Please login to complete your order');
       }
 
       if (!items || items.length === 0) {
+        trackFormError('checkout_form', 'checkout-form', 'Cart is empty');
         throw new Error('Your cart is empty');
       }
 
       // Check if Razorpay is loaded
       if (!razorpayLoaded) {
+        trackFormError('checkout_form', 'checkout-form', 'Payment gateway not available');
         throw new Error('Payment gateway is not available. Please refresh the page and try again.');
       }
 
@@ -515,6 +582,19 @@ export default function CheckoutPage() {
         }
       }
 
+      // Track shipping information added
+      trackAddShippingInfo(
+        items.map(item => ({
+          item_id: item.productId,
+          item_name: item.product.name,
+          price: Number(item.product.price) || 0,
+          quantity: item.quantity,
+          item_variant: item.color || undefined
+        })),
+        calculateFinalTotal().finalTotal,
+        'standard'
+      );
+
       // Create or update address
       let addressId;
       try {
@@ -542,6 +622,7 @@ export default function CheckoutPage() {
           addressId = newAddress.id;
         }
       } catch (error) {
+        trackFormError('checkout_form', 'checkout-form', 'Failed to save shipping address');
         console.error('Error saving address:', error);
         throw new Error('Failed to save shipping address. Please try again.');
       }
@@ -569,12 +650,16 @@ export default function CheckoutPage() {
       };
 
       const order = await pocketbase.collection('orders').create(orderData) as unknown as OrderData;
+      
+      // Track form completion
+      trackFormCompletion('checkout_form', 'checkout-form');
 
       // Proceed with payment
       await handleNextSteps(order);
 
     } catch (error) {
       console.error('Checkout error:', error);
+      trackFormError('checkout_form', 'checkout-form', error instanceof Error ? error.message : 'Unknown error');
       toast({
         variant: "destructive",
         title: "Checkout Failed",
@@ -585,6 +670,19 @@ export default function CheckoutPage() {
   };
 
   const handleNextSteps = async (order: OrderData) => {
+    // Track payment info added (Razorpay in this case)
+    trackAddPaymentInfo(
+      items.map(item => ({
+        item_id: item.productId,
+        item_name: item.product.name,
+        price: Number(item.product.price) || 0,
+        quantity: item.quantity,
+        item_variant: item.color || undefined
+      })),
+      order.total,
+      'Razorpay'
+    );
+    
     // Create Razorpay order
     const razorpayOrderResponse = await createRazorpayOrder(
       order.total, // amount in INR with coupon discount applied
@@ -593,8 +691,12 @@ export default function CheckoutPage() {
     );
 
     if (!razorpayOrderResponse || !razorpayOrderResponse.id) {
+      trackPaymentFailure(order.id, order.total, 'Razorpay', 'Failed to create payment order');
       throw new Error('Failed to create payment order. Please try again.');
     }
+    
+    // Track payment start
+    trackPaymentStart(order.id, order.total, 'Razorpay');
 
     // Open Razorpay payment form
     openRazorpayCheckout({
