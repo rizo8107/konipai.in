@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ShoppingBag, PackageOpen, AlertCircle, ArrowRight, Clock, Check, AlertTriangle, Package, MapPin } from 'lucide-react';
+import { formatCurrency } from '@/lib/utils';
 
 // Define interface for order product
 interface OrderProduct {
@@ -358,7 +359,7 @@ export default function Orders() {
                         </div>
                       </div>
                       <div className="font-medium text-sm">
-                        ₹{(item.product.price * item.quantity).toFixed(2)}
+                        {formatCurrency(item.product.price * item.quantity)}
                       </div>
                     </div>
                   ))}
@@ -384,7 +385,7 @@ export default function Orders() {
                 <Separator className="my-2" />
                 <div className="flex justify-between font-medium text-sm">
                   <span>Total</span>
-                  <span>₹{parseFloat(order.total.toString()).toFixed(2)}</span>
+                  <span>{formatCurrency(order.total)}</span>
                 </div>
               </CardContent>
               <CardFooter className="bg-muted/30 py-2">

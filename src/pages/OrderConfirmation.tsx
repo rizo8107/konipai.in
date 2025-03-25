@@ -6,6 +6,7 @@ import { Card } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/components/ui/use-toast';
 import { CheckCircle, ShoppingBag, Loader2, Package } from 'lucide-react';
+import { formatCurrency } from '@/lib/utils';
 
 // Define interface for product in order
 interface OrderProduct {
@@ -176,7 +177,7 @@ export default function OrderConfirmation() {
           <Separator className="my-2" />
           <div className="flex justify-between py-1">
             <span className="text-gray-600">Subtotal</span>
-            <span className="font-medium">₹{parseFloat(order.subtotal.toString()).toFixed(2)}</span>
+            <span className="font-medium">{formatCurrency(order.subtotal)}</span>
           </div>
           <div className="flex justify-between py-1">
             <span className="text-gray-600">Shipping</span>
@@ -185,18 +186,18 @@ export default function OrderConfirmation() {
                 ? 'Free'
                 : parseFloat(order.shipping_cost.toString()) === 0
                   ? 'Free'
-                  : `₹${parseFloat(order.shipping_cost.toString()).toFixed(2)}`}
+                  : formatCurrency(order.shipping_cost)}
             </span>
           </div>
           {order.discount_amount && (
             <div className="flex justify-between py-1">
               <span className="text-gray-600">Discount</span>
-              <span className="font-medium">-₹{parseFloat(order.discount_amount.toString()).toFixed(2)}</span>
+              <span className="font-medium">-{formatCurrency(order.discount_amount)}</span>
             </div>
           )}
           <div className="flex justify-between py-1 font-semibold">
             <span>Total</span>
-            <span>₹{parseFloat(order.total.toString()).toFixed(2)}</span>
+            <span>{formatCurrency(order.total)}</span>
           </div>
         </div>
       </Card>

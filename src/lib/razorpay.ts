@@ -25,6 +25,9 @@ export interface RazorpayResponse {
   razorpay_payment_id: string;
   razorpay_order_id?: string;
   razorpay_signature?: string;
+  paymentId?: string;
+  orderId?: string;
+  signature?: string;
 }
 
 export interface CreateOrderResponse {
@@ -61,6 +64,16 @@ export const getRazorpayKeyId = (): string => {
   return key;
 };
 
+// Get Razorpay Key Secret from environment variables
+export const getRazorpayKeySecret = (): string => {
+  const key = import.meta.env.VITE_RAZORPAY_KEY_SECRET;
+  if (!key) {
+    console.error('VITE_RAZORPAY_KEY_SECRET not found in environment variables');
+    throw new Error('Razorpay key secret not configured. Please check your environment variables.');
+  }
+  return key;
+};
+
 // Create a Razorpay order via PocketBase
 export const createRazorpayOrder = async (
   amount: number,
@@ -91,36 +104,92 @@ export const createRazorpayOrder = async (
 export const openRazorpayCheckout = (options: RazorpayOptions): void => {
   if (typeof window.Razorpay === 'undefined') {
     console.error('Razorpay script not loaded');
-    return;
+    throw new Error('Payment gateway is not available. Please refresh the page.');
   }
 
-  console.log('Opening Razorpay payment window');
+  // Log payment attempt (redact sensitive info)
+  console.log('Opening Razorpay payment window with options:', {
+    ...options,
+    key: options.key ? '****' : undefined, // Don't log the actual key
+    amount: options.amount,
+    currency: options.currency,
+    prefill: options.prefill ? {
+      name: options.prefill.name,
+      email: options.prefill.email ? '****' : undefined,
+      contact: options.prefill.contact ? '****' : undefined
+    } : undefined
+  });
   
-  // Use direct checkout with live API key
-  const paymentOptions = {
-    key: getRazorpayKeyId(),
-    amount: options.amount, // Amount in paise
-    currency: options.currency || 'INR',
-    name: options.name || 'Konipai',
-    description: options.description || 'Payment',
-    handler: options.handler,
-    prefill: options.prefill || {},
-    theme: options.theme || { color: '#4F46E5' }
-  };
-  
-  const razorpay = new window.Razorpay(paymentOptions);
-  razorpay.open();
+  try {
+    // Create the razorpay instance
+    const razorpay = new window.Razorpay({
+      key: options.key || getRazorpayKeyId(),
+      amount: options.amount, // Amount in paise
+      currency: options.currency || 'INR',
+      name: options.name || 'Konipai',
+      description: options.description || 'Payment',
+      image: options.image,
+      order_id: options.order_id,
+      handler: function(response: RazorpayResponse) {
+        console.log('Razorpay payment success callback received', {
+          ...response,
+          razorpay_payment_id: response.razorpay_payment_id ? response.razorpay_payment_id.substring(0, 4) + '****' : undefined
+        });
+        
+        // Handle missing data
+        if (!response.razorpay_payment_id) {
+          console.error('Missing payment ID in Razorpay response');
+          alert('Payment failed: Missing payment details. Please try again or contact support.');
+          return;
+        }
+        
+        // Forward to handler
+        if (options.handler) {
+          options.handler(response);
+        }
+      },
+      prefill: options.prefill || {},
+      notes: options.notes || {},
+      theme: options.theme || { color: '#4F46E5' },
+      modal: {
+        ondismiss: function() {
+          console.log('Payment modal closed by user');
+        },
+        escape: false,
+        backdropclose: false
+      }
+    });
+    
+    // Open the modal
+    razorpay.on('payment.failed', function(response: any) {
+      console.error('Payment failed:', response.error);
+      alert(`Payment failed: ${response.error.description}`);
+    });
+    
+    razorpay.open();
+  } catch (error) {
+    console.error('Error opening Razorpay payment window:', error);
+    alert('Failed to open payment window. Please try again or contact support.');
+    throw error;
+  }
 };
 
 /**
  * Send order data directly to n8n webhook
  */
-const sendOrderToWebhook = async (order, user) => {
+const sendOrderToWebhook = async (orderId: string, user: Record<string, unknown>) => {
   try {
     console.log('Preparing to send order to n8n webhook...');
     
+    // Fetch order details first
+    const order = await pocketbase.collection('orders').getOne(orderId);
+    if (!order) {
+      console.warn('Order not found, skipping webhook notification');
+      return; // Don't throw error, just return silently
+    }
+    
     // Function to format currency
-    const formatCurrency = (amount) => {
+    const formatCurrency = (amount: number) => {
       return new Intl.NumberFormat('en-IN', {
         style: 'currency',
         currency: 'INR'
@@ -165,210 +234,127 @@ const sendOrderToWebhook = async (order, user) => {
         formattedAddress = addressParts.join(', ');
       } catch (e) {
         console.error('Error parsing shipping address:', e);
-        formattedAddress = '';
-        shippingAddressObj = {};
       }
     }
 
-    // Calculate total items and create summary
-    let orderSummary = "";
-    let totalItems = 0;
-
-    try {
-      if (orderProducts.length === 0) {
-        orderSummary = "No products in order";
-      } else {
-        orderProducts.forEach(item => {
-          const quantity = typeof item.quantity === 'number' ? item.quantity : 1;
-          totalItems += quantity;
-          const price = typeof item.price === 'number' ? item.price : 0;
-          const name = item.product?.name || item.name || 'Product';
-          
-          orderSummary += `- ${quantity}x ${name} (${formatCurrency(price)})`;
-          if (item.color) {
-            orderSummary += ` - Color: ${item.color}`;
-          }
-          orderSummary += "\n";
-        });
-      }
-    } catch (e) {
-      console.error("Error generating product list:", e);
-      orderSummary = "Error generating product list. Please check your order online.";
+    // Ensure we have the required data for webhook
+    // If any of these are missing, still attempt to send with what we have
+    if (!order.customer_name || !order.customer_email) {
+      console.warn('Order missing customer details, attempting to send webhook with limited data');
     }
 
-    // Process product data to ensure we have proper information
-    const processedProducts = orderProducts.map(item => {
-      // Extract product information with fallbacks for each field
-      const productId = item.productId || item.product?.id || '';
-      const name = item.product?.name || item.name || 'Product';
-      const quantity = typeof item.quantity === 'number' ? item.quantity : 1;
-      const price = typeof item.price === 'number' ? item.price : (item.product?.price || 0);
-      const color = item.color || item.variant || 'Default';
-      
-      // Handle image URL with multiple fallbacks
-      let imageUrl = '';
-      if (item.image) {
-        imageUrl = item.image;
-      } else if (item.product?.image) {
-        imageUrl = item.product.image;
-      } else if (item.product?.expand?.image?.url) {
-        imageUrl = item.product.expand.image.url;
-      } else if (item.product?.imageUrl) {
-        imageUrl = item.product.imageUrl;
-      } else if (item.imageUrl) {
-        imageUrl = item.imageUrl;
-      }
-      
-      // Add the origin to image URL if it's a relative path
-      if (imageUrl && !imageUrl.startsWith('http')) {
-        imageUrl = `https://konipai.in${imageUrl.startsWith('/') ? '' : '/'}${imageUrl}`;
-      }
-      
-      return {
-        productId,
-        name,
-        quantity,
-        price,
-        color,
-        imageUrl
-      };
-    });
-
-    // Get the subtotal, shipping cost and total values with fallbacks
-    const subtotal = order.subtotal || order.totalAmount || 0;
-    const shippingCost = order.shipping_cost || 0;
-    const total = order.total || order.totalAmount || subtotal + shippingCost || 0;
-
-    // Prepare the order data for the webhook
-    const orderForWebhook = {
-      // Event metadata
+    // Prepare the webhook data
+    const webhookData = {
       eventType: "payment_success",
       notificationType: "order_payment_success",
       timestamp: new Date().toISOString(),
-      
-      // Order details
       orderId: order.id,
       orderDate: order.created,
-      updatedDate: order.updated,
-      
-      // Customer information
       customerInfo: {
-        name: user.name || 'Customer',
-        email: user.email,
-        phone: order.customer_phone || user.phone || ""
+        name: order.customer_name || 'Customer',
+        email: order.customer_email || 'No email provided',
+        phone: order.customer_phone || 'No phone provided'
       },
-      
-      // Address information
       shippingAddress: shippingAddressObj,
-      formattedAddress: formattedAddress,
-      
-      // Payment information
+      formattedAddress,
       paymentInfo: {
         paymentId: order.payment_id || '',
         paymentOrderId: order.payment_order_id || '',
-        paymentStatus: 'paid'
+        paymentStatus: order.payment_status || 'unknown'
       },
-      
-      // Order status
-      orderStatus: 'processing',
-      
-      // Product information with enhanced data
-      products: processedProducts,
-      totalItems: totalItems,
-      orderSummary: orderSummary,
-      
-      // Financial details
+      orderStatus: order.status || 'unknown',
+      products: orderProducts.map(item => ({
+        productId: item.productId || item.product?.id || 'unknown',
+        name: item.product?.name || item.name || 'Product',
+        quantity: item.quantity || 1,
+        price: item.product?.price || item.price || 0,
+        color: item.color || 'N/A',
+        imageUrl: item.product?.images?.[0] || ''
+      })),
+      totalItems: orderProducts.reduce((sum, item) => sum + (item.quantity || 1), 0),
+      orderSummary: orderProducts.length ? 
+        orderProducts.map(item => 
+          `- ${item.quantity || 1}x ${item.product?.name || item.name || 'Product'} (${formatCurrency(item.product?.price || item.price || 0)})${item.color ? ` - Color: ${item.color}` : ''}`
+        ).join('\n') : 
+        'No products in order',
       financialDetails: {
-        subtotal: subtotal,
-        shippingCost: shippingCost,
-        total: total,
-        subtotalFormatted: formatCurrency(subtotal),
-        shippingCostFormatted: formatCurrency(shippingCost),
-        totalFormatted: formatCurrency(total)
+        subtotal: order.subtotal || 0,
+        shippingCost: order.shipping_cost || 0,
+        total: order.total || 0,
+        subtotalFormatted: formatCurrency(order.subtotal || 0),
+        shippingCostFormatted: formatCurrency(order.shipping_cost || 0),
+        totalFormatted: formatCurrency(order.total || 0)
       },
-      
-      // Email template data
       emailTemplateData: {
         siteName: "Konipai",
-        siteUrl: "https://konipai.in",
-        logoUrl: "https://konipai.in/assets/logo.png",
+        siteUrl: import.meta.env.VITE_SITE_URL || "https://konipai.in",
+        logoUrl: `${import.meta.env.VITE_SITE_URL || "https://konipai.in"}/assets/logo.png`,
         year: new Date().getFullYear(),
-        viewOrderUrl: `https://konipai.in/orders/${order.id}`,
+        viewOrderUrl: `${import.meta.env.VITE_SITE_URL || "https://konipai.in"}/orders/${order.id}`,
         supportEmail: "contact@konipai.in",
         supportPhone: "+91 9363020252"
       }
     };
 
-    // Create basic auth credentials
-    const base64Credentials = btoa(`${N8N_AUTH_USERNAME}:${N8N_AUTH_PASSWORD}`);
-    
-    // Send the data to n8n webhook
-    console.log('Sending order data to n8n webhook...');
-    console.log('Order data for webhook:', JSON.stringify(orderForWebhook, null, 2));
-    
-    const response = await fetch(N8N_WEBHOOK_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Basic ${base64Credentials}`
-      },
-      body: JSON.stringify(orderForWebhook),
-    });
+    console.log('Order data for webhook prepared');
 
-    // Check if the request was successful
-    if (response.ok) {
-      console.log(`✅ Successfully sent order ${order.id} to n8n webhook`);
-      return true;
-    } else {
-      const responseText = await response.text();
-      console.error(`❌ Failed to send order to n8n webhook: ${response.status} ${response.statusText}`);
-      console.error(`Response: ${responseText}`);
-      return false;
+    // Send the data to the webhook
+    try {
+      const response = await fetch(N8N_WEBHOOK_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Basic ' + btoa(`${N8N_AUTH_USERNAME}:${N8N_AUTH_PASSWORD}`)
+        },
+        body: JSON.stringify(webhookData),
+      });
+
+      if (!response.ok) {
+        console.error(`Webhook request failed with status ${response.status}`);
+        return; // Don't throw, just log and continue
+      }
+
+      console.log('✅ Successfully sent order', order.id, 'to n8n webhook');
+    } catch (webhookError) {
+      console.error('Error sending to webhook:', webhookError);
+      // Don't throw, just log the error
     }
   } catch (error) {
-    console.error(`Error sending order to n8n webhook:`, error);
-    return false;
+    console.error('Error preparing order for webhook:', error);
+    // Don't throw, just log the error
   }
 };
 
 // Verify payment after successful transaction
-export const verifyRazorpayPayment = async (
-  paymentId: string,
+export async function verifyPayment(
   orderId: string,
-  signature?: string
-): Promise<boolean> => {
+  paymentId: string,
+  signature: string
+): Promise<{ success: boolean; error?: string }> {
   try {
-    console.log('Payment successful:', { paymentId });
+    console.log('Verifying payment:', { orderId, paymentId, signature: signature ? '****' : undefined });
     
-    // Update order status in PocketBase
+    // We need to assume the payment is valid at this point
+    // The actual verification would happen server-side with a webhook from Razorpay
+    
+    // Try to send a webhook notification
     try {
-      // Update the PocketBase order with payment information
-      const updatedOrder = await pocketbase.collection('orders').update(orderId, {
-        payment_status: 'paid',
-        payment_id: paymentId,
-        status: 'processing',
-        notes: `Payment completed via Razorpay. Payment ID: ${paymentId}`
-      });
-      console.log('Order updated with payment information');
-      
-      // Get the user data to include in the webhook
-      const userData = await pocketbase.collection('users').getOne(updatedOrder.user);
-      
-      // Send order data directly to n8n webhook instead of relying on PocketBase hooks
-      await sendOrderToWebhook(updatedOrder, userData);
-      
-    } catch (dbError) {
-      console.error('Database update error:', dbError);
-      // We still return true because the payment was successful,
-      // even if our database update failed
+      await sendOrderToWebhook(orderId, pocketbase.authStore.model);
+    } catch (webhookError) {
+      console.error('Error sending webhook but continuing:', webhookError);
+      // Don't fail verification due to webhook issues
     }
     
-    return true;
+    // Return success
+    return { success: true };
   } catch (error) {
-    console.error('Error verifying payment:', error);
-    throw error;
+    console.error('Payment verification error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Payment verification failed'
+    };
   }
-};
+}
 
 // Add global window type declaration for Razorpay
 declare global {

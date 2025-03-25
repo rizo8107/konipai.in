@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ShoppingBag, PackageOpen, AlertCircle, ArrowRight, Clock, Check, AlertTriangle, Package, MapPin, Phone, Mail } from 'lucide-react';
+import { formatCurrency } from '@/lib/utils';
 
 // Define interface for order product
 interface OrderProduct {
@@ -335,11 +336,11 @@ export default function OrderDetail() {
                             <div className="text-sm text-muted-foreground">
                               Qty: {item.quantity} {item.color && `• ${item.color}`}
                             </div>
-                            <div className="text-sm">₹{item.product.price.toFixed(2)} each</div>
+                            <div className="text-sm">{formatCurrency(item.product.price)} each</div>
                           </div>
                         </div>
                         <div className="font-medium">
-                          ₹{(item.product.price * item.quantity).toFixed(2)}
+                          {formatCurrency(item.product.price * item.quantity)}
                         </div>
                       </div>
                     ))}
@@ -353,15 +354,15 @@ export default function OrderDetail() {
                   <div className="space-y-2">
                     <div className="flex justify-between text-sm">
                       <span>Subtotal</span>
-                      <span>₹{(order.subtotal ? parseFloat(order.subtotal.toString()) : 0).toFixed(2)}</span>
+                      <span>{formatCurrency(order.subtotal)}</span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span>Shipping</span>
-                      <span>₹{(order.shipping_cost ? parseFloat(order.shipping_cost.toString()) : 0).toFixed(2)}</span>
+                      <span>{formatCurrency(order.shipping_cost)}</span>
                     </div>
                     <div className="flex justify-between font-medium">
                       <span>Total</span>
-                      <span>₹{(order.total ? parseFloat(order.total.toString()) : 0).toFixed(2)}</span>
+                      <span>{formatCurrency(order.total)}</span>
                     </div>
                   </div>
                 </div>

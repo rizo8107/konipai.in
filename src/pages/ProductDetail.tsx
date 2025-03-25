@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, 
@@ -13,7 +13,9 @@ import {
   Star,
   Check,
   ImageIcon,
-  Loader2
+  Loader2,
+  ShoppingCart,
+  CornerDownRight
 } from 'lucide-react';
 import { getProduct, getProducts, type Product, type ProductColor, pocketbase, Collections } from '@/lib/pocketbase';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -41,15 +43,23 @@ const ProductDetail = () => {
   const [relatedProducts, setRelatedProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedImage, setSelectedImage] = useState<string>('');
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [isWishlisted, setIsWishlisted] = useState(false);
   const [imagesPreloaded, setImagesPreloaded] = useState(false);
   
-  const { addItem } = useCart();
+  const { addItem, items } = useCart();
   const [quantity, setQuantity] = useState(1);
   const [selectedColor, setSelectedColor] = useState<ProductColor | null>(null);
   const { toast } = useToast();
   const relatedLoaded = useRef(false);
+  
+  // Check if the current product is already in cart
+  const isInCart = useMemo(() => {
+    return items.some(item => 
+      item.productId === id && 
+      (!selectedColor || item.color === selectedColor?.name)
+    );
+  }, [items, id, selectedColor]);
   
   // Force scroll to top when page loads or product ID changes
   useEffect(() => {
@@ -476,9 +486,23 @@ const ProductDetail = () => {
                 onClick={handleAddToCart}
                 disabled={!product.inStock}
               >
-                <ShoppingBag className="mr-2 h-5 w-5" />
-                Add to Cart
+                <ShoppingCart className="mr-2 h-5 w-5" />
+                {product.inStock ? 'Add to Cart' : 'Out of Stock'}
               </Button>
+              
+              {isInCart && (
+                <Button
+                  variant="secondary"
+                  size="lg"
+                  className="w-full bg-green-100 text-green-800 hover:bg-green-200 border border-green-300"
+                  asChild
+                >
+                  <Link to="/checkout">
+                    <CornerDownRight className="mr-2 h-5 w-5" />
+                    Proceed to Checkout
+                  </Link>
+                </Button>
+              )}
               
               <div className="flex gap-4">
                 <Button
@@ -684,42 +708,38 @@ const ProductDetail = () => {
       {/* Floating Add to Cart Button */}
       <div className="fixed bottom-0 left-0 w-full bg-background border-t border-gray-100 shadow-lg transform transition-transform duration-300 z-50 py-3 px-4 md:py-4">
         <div className="konipai-container">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              {/* Product thumbnail */}
-              <div className="h-12 w-12 bg-gray-100 rounded-md overflow-hidden flex-shrink-0">
-                {selectedImage ? (
-                  <ProductImage
-                    url={selectedImage}
-                    alt={product?.name || 'Product image'}
-                    className="w-full h-full object-cover"
-                    width={48}
-                    height={48}
-                    size="small"
-                    aspectRatio="square"
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center">
-                    <ImageIcon className="h-6 w-6 text-gray-400" />
-                  </div>
-                )}
-              </div>
-
-              {/* Product info */}
-              <div className="overflow-hidden">
-                <h3 className="font-medium text-sm truncate">{product.name}</h3>
-                <p className="text-primary text-sm font-medium">₹{typeof product.price === 'number' ? product.price.toFixed(2) : '0.00'}</p>
-              </div>
-            </div>
-
-            {/* Add to cart button */}
-            <Button 
-              className="px-6" 
-              onClick={handleAddToCart}
-              size="sm"
-            >
-              <ShoppingBag className="h-4 w-4 mr-2" /> Add to Cart
-            </Button>
+          <div className="flex gap-2">
+            {isInCart ? (
+              <>
+                <Button 
+                  className="flex-1" 
+                  onClick={handleAddToCart}
+                  size="lg"
+                  variant="outline"
+                >
+                  <ShoppingCart className="h-4 w-4 mr-2" /> Add Again
+                </Button>
+                <Button 
+                  className="flex-1 bg-green-600 hover:bg-green-700" 
+                  asChild
+                  size="lg"
+                >
+                  <Link to="/checkout">
+                    <CornerDownRight className="h-4 w-4 mr-2" /> Checkout
+                  </Link>
+                </Button>
+              </>
+            ) : (
+              <Button 
+                className="w-full"
+                onClick={handleAddToCart}
+                size="lg"
+                disabled={!product.inStock}
+              >
+                <ShoppingCart className="h-4 w-4 mr-2" /> 
+                {product.inStock ? 'Add to Cart' : 'Out of Stock'}
+              </Button>
+            )}
           </div>
         </div>
       </div>
