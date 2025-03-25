@@ -185,7 +185,9 @@ const ProductDetail = () => {
           item_name: productData.name,
           price: Number(productData.price) || 0,
           quantity: 1,
-          item_category: productData.category || 'Tote Bag'
+          item_category: productData.category || 'Tote Bag',
+          item_brand: 'Konipai',
+          affiliation: 'Konipai Web Store'
         });
         
         // Fetch related products
@@ -287,32 +289,32 @@ const ProductDetail = () => {
   
   const handleAddToCart = () => {
     if (!product) return;
-
-    // If product has colors, use selected color, otherwise use empty string
-    const colorValue = product.colors?.length > 0 ? selectedColor?.value || '' : '';
-    addItem(product, quantity, colorValue);
     
-    // Track add to cart with GTM
+    // Add to cart logic
+    addItem(
+      product, 
+      quantity, 
+      selectedColor?.name || ''
+    );
+    
+    // Track add to cart with enhanced properties
     trackAddToCart({
       item_id: product.id,
       item_name: product.name,
       price: Number(product.price) || 0,
       quantity: quantity,
-      item_variant: colorValue || undefined,
-      item_category: product.category || 'Tote Bag'
+      item_variant: selectedColor?.name,
+      item_category: product.category || 'Tote Bag',
+      item_brand: 'Konipai',
+      affiliation: 'Konipai Web Store'
     });
     
     // Track button click
-    trackButtonClick(
-      'add_to_cart_button',
-      'Add to Cart',
-      window.location.pathname
-    );
+    trackButtonClick('add_to_cart_button', 'Add to Cart', window.location.pathname);
     
     toast({
-      variant: "success",
       title: "Added to cart",
-      description: `${quantity} ${quantity === 1 ? 'item' : 'items'} of ${product.name} added to your cart.`,
+      description: `${quantity} ${product.name} added to your cart`,
     });
   };
 

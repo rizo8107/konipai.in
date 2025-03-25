@@ -7,7 +7,7 @@ import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/components/ui/use-toast';
 import { CheckCircle, ShoppingBag, Loader2, Package } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
-import { trackPurchase, trackPageView } from '@/lib/analytics';
+import { trackPurchase, trackPageView, trackDynamicConversion } from '@/lib/analytics';
 
 // Define interfaces for products in order
 interface OrderProduct {
@@ -22,6 +22,8 @@ interface OrderProduct {
   price?: number;
   quantity: number;
   color?: string;
+  discount?: number;
+  coupon?: string;
 }
 
 // Define interface for order
@@ -51,6 +53,7 @@ interface Order {
       email: string;
     };
   };
+  tax?: number;
 }
 
 export default function OrderConfirmation() {
@@ -88,32 +91,51 @@ export default function OrderConfirmation() {
         
         setOrder(orderData as unknown as Order);
         
-        // If this is a successful order and has payment_id, track the purchase
-        if (orderData.payment_status === 'paid' && orderData.payment_id) {
-          // Parse products from the order data
-          let orderProducts = [];
+        // Track purchase
+        if (orderData && paymentStatus === 'success') {
           try {
-            orderProducts = typeof orderData.products === 'string'
-              ? JSON.parse(orderData.products)
-              : orderData.products;
-          } catch (e) {
-            console.error('Error parsing products from order data:', e);
+            // Parse products array from order
+            const products = JSON.parse(orderData.products || '[]') as OrderProduct[];
+            
+            // Track purchase with enhanced data
+            trackPurchase(
+              products.map(item => ({
+                item_id: item.productId || '',
+                item_name: item.name || '',
+                price: Number(item.price) || 0,
+                quantity: item.quantity || 1,
+                item_variant: item.color || undefined,
+                discount: item.discount || 0,
+                coupon: orderData.coupon || undefined
+              })),
+              orderData.id,
+              Number(orderData.total) || 0,
+              Number(orderData.shipping_cost) || 0,
+              Number(orderData.tax) || 0,
+              orderData.coupon
+            );
+            
+            // Also track as dynamic conversion for more flexibility
+            trackDynamicConversion({
+              transaction_id: orderData.id,
+              value: Number(orderData.total) || 0,
+              shipping: Number(orderData.shipping_cost) || 0,
+              tax: Number(orderData.tax) || 0,
+              items: products.map(item => ({
+                item_id: item.productId || '',
+                item_name: item.name || '',
+                price: Number(item.price) || 0,
+                quantity: item.quantity || 1,
+                item_variant: item.color || undefined,
+                discount: item.discount || 0,
+                coupon: orderData.coupon
+              })),
+              coupon: orderData.coupon,
+              conversion_type: 'Purchase'
+            });
+          } catch (error) {
+            console.error('Error parsing products or tracking purchase:', error);
           }
-          
-          // Track the purchase event
-          trackPurchase(
-            orderProducts.map((item: OrderProduct) => ({
-              item_id: item.productId || item.product?.id || '',
-              item_name: item.product?.name || item.name || 'Product',
-              price: Number(item.product?.price || item.price || 0),
-              quantity: Number(item.quantity || 1),
-              item_variant: item.color || undefined
-            })),
-            orderData.id,
-            Number(orderData.total || 0),
-            Number(orderData.shipping_cost || 0),
-            0 // No tax
-          );
         }
       } catch (error) {
         console.error('Error fetching order details:', error);

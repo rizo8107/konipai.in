@@ -29,7 +29,8 @@ import {
   trackButtonClick,
   trackFormStart,
   trackFormCompletion,
-  trackFormError
+  trackFormError,
+  trackDynamicConversion
 } from '@/lib/analytics';
 
 interface CheckoutFormData {
@@ -383,13 +384,31 @@ export default function CheckoutPage() {
         // Get the updated order for tracking purposes
         const updatedOrder = await pocketbase.collection('orders').getOne(orderId);
         
-        // Track payment success
+        // Track payment success with enhanced data
         trackPaymentSuccess(
           orderId,
           paymentId,
           updatedOrder.total || 0,
           'Razorpay'
         );
+
+        // Use the new dynamic conversion tracking with additional metadata
+        trackDynamicConversion({
+          transaction_id: orderId,
+          value: updatedOrder.total || 0,
+          shipping: updatedOrder.shipping_cost || 0,
+          items: items.map(item => ({
+            item_id: item.productId,
+            item_name: item.product.name,
+            price: Number(item.product.price) || 0,
+            quantity: item.quantity,
+            item_variant: item.color || undefined,
+            discount: appliedCoupon ? (appliedCoupon.discountAmount / items.length) : 0,
+            coupon: appliedCoupon?.code
+          })),
+          coupon: appliedCoupon?.code,
+          conversion_type: 'Sale'
+        });
 
         // Payment verified successfully
         toast({
@@ -514,9 +533,11 @@ export default function CheckoutPage() {
         item_name: item.product.name,
         price: Number(item.product.price) || 0,
         quantity: item.quantity,
-        item_variant: item.color || undefined
+        item_variant: item.color || undefined,
+        affiliation: 'Konipai Web Store'
       })),
-      calculateFinalTotal().finalTotal
+      calculateFinalTotal().finalTotal,
+      appliedCoupon?.code
     );
     
     // Track the checkout button click
@@ -589,10 +610,12 @@ export default function CheckoutPage() {
           item_name: item.product.name,
           price: Number(item.product.price) || 0,
           quantity: item.quantity,
-          item_variant: item.color || undefined
+          item_variant: item.color || undefined,
+          discount: appliedCoupon ? (appliedCoupon.discountAmount / items.length) : 0
         })),
         calculateFinalTotal().finalTotal,
-        'standard'
+        'standard',
+        appliedCoupon?.code
       );
 
       // Create or update address
@@ -677,10 +700,12 @@ export default function CheckoutPage() {
         item_name: item.product.name,
         price: Number(item.product.price) || 0,
         quantity: item.quantity,
-        item_variant: item.color || undefined
+        item_variant: item.color || undefined,
+        discount: appliedCoupon ? (appliedCoupon.discountAmount / items.length) : 0
       })),
       order.total,
-      'Razorpay'
+      'Razorpay',
+      appliedCoupon?.code
     );
     
     // Create Razorpay order
