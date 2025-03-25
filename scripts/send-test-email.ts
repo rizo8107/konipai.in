@@ -3,7 +3,7 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-// Initialize the PocketBase client
+// Initialize PocketBase
 const pb = new PocketBase(process.env.VITE_POCKETBASE_URL || 'http://127.0.0.1:8090');
 
 async function sendTestEmail() {
@@ -15,64 +15,60 @@ async function sendTestEmail() {
         );
         console.log('✅ Successfully authenticated as admin');
 
-        // Use the specific email address that's reported to not receive emails
-        const emailRecipient = 'nnirmal7107@gmail.com'; 
-        console.log(`Sending test email to ${emailRecipient}...`);
-
-        // First, check if we have the test user account or create one
-        let testUser;
-        try {
-            // Try to find a user with the recipient email
-            const userSearch = await pb.collection('users').getFirstListItem(`email="${emailRecipient}"`);
-            testUser = userSearch;
-            console.log('Using existing user account for the test email');
-        } catch (e) {
-            // If user doesn't exist, create a test user
-            console.log('Creating a test user account...');
-            testUser = await pb.collection('users').create({
-                email: emailRecipient,
-                password: 'Test12345!@#', // This is just a test account
-                passwordConfirm: 'Test12345!@#',
-                name: 'Nirmal', // Use their actual name if this is a real user
-                emailVisibility: true,
-            });
-            console.log('Test user created successfully');
-        }
-
-        // Create a test order to trigger the order confirmation email
-        const testOrder = await pb.collection('orders').create({
-            user: testUser.id,
-            products: JSON.stringify([
-                {
-                    id: 'test_product_1',
-                    name: 'Test Product',
-                    price: 10000, // ₹100.00 (in paisa)
-                    quantity: 2,
-                    color: 'Red'
-                },
-                {
-                    id: 'test_product_2',
-                    name: 'Another Test Product',
-                    price: 15000, // ₹150.00 (in paisa)
-                    quantity: 1,
-                    color: 'Blue'
-                }
-            ]),
-            totalAmount: 35000, // ₹350.00 (in paisa)
-            shipping_fee: 5000, // ₹50.00 (in paisa)
-            status: 'pending',
-            payment_status: 'paid',
-            shipping_address: 'Test Address, Test City, Test State 123456, India'
+        const recipient = 'nirmal@lifedemy.in';
+        const subject = 'Test Email from Konipai Order System';
+        
+        // Create email content
+        const htmlContent = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e1e1e1; border-radius: 5px;">
+            <div style="text-align: center; margin-bottom: 20px;">
+                <img src="https://konipai.in/assets/logo.png" alt="Konipai Logo" style="max-width: 150px;">
+            </div>
+            
+            <h1 style="color: #333; text-align: center;">Test Email</h1>
+            
+            <p>Hello,</p>
+            
+            <p>This is a test email from the Konipai Order Email Notification System.</p>
+            
+            <p>If you're receiving this email, it means the email configuration for Konipai's PocketBase is working correctly.</p>
+            
+            <div style="background-color: #f9f9f9; padding: 15px; border-radius: 4px; margin: 20px 0;">
+                <h2 style="margin-top: 0; color: #444; font-size: 18px;">Email System Details</h2>
+                <p><strong>Sent at:</strong> ${new Date().toLocaleString()}</p>
+                <p><strong>Environment:</strong> ${process.env.NODE_ENV || 'development'}</p>
+            </div>
+            
+            <p>You can now expect to receive order confirmation emails whenever customers place orders.</p>
+            
+            <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #e1e1e1; color: #777; font-size: 12px;">
+                <p>This is an automated message from Konipai's order system.</p>
+                <p>&copy; ${new Date().getFullYear()} Konipai. All rights reserved.</p>
+            </div>
+        </div>
+        `;
+        
+        // Send the email
+        console.log(`Sending test email to ${recipient}...`);
+        
+        // Use PocketBase's API directly
+        const result = await pb.send('/api/_', {
+            method: 'POST',
+            body: {
+                action: 'settings.testEmail',
+                email: recipient,
+                subject: subject,
+                html: htmlContent
+            }
         });
-
-        console.log(`✅ Test order created with ID: ${testOrder.id}`);
-        console.log('✅ Order confirmation email should be sent automatically via PocketBase hooks');
-        console.log('Please check the email inbox for nnirmal7107@gmail.com for the test email');
-        console.log('Note: It may take a few minutes for the email to arrive. Also check spam/junk folders.');
-
+        
+        console.log('✅ Test email sent successfully!');
+        console.log(result);
+        
     } catch (error) {
         console.error('❌ Error sending test email:', error);
     }
 }
 
+// Execute the function
 sendTestEmail().catch(console.error); 

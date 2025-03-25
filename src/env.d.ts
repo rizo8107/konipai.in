@@ -8,6 +8,15 @@ interface ImportMetaEnv {
   readonly VITE_RAZORPAY_KEY_ID: string
   readonly VITE_SITE_LOGO: string
   readonly VITE_SITE_TITLE: string
+  
+  // SMTP Configuration for Order Emails
+  readonly SMTP_ENABLED?: string
+  readonly SMTP_HOST?: string
+  readonly SMTP_PORT?: string
+  readonly SMTP_AUTH?: string
+  readonly SMTP_USERNAME?: string
+  readonly SMTP_PASSWORD?: string
+  readonly SMTP_TLS?: string
 }
 
 interface ImportMeta {
