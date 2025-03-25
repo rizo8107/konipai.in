@@ -1,0 +1,5 @@
+Host	smtp.hostinger.com
+Port	465
+Secure	true (this enables SSL/TLS)
+User	support@konipai.in
+Password	Bharu@2399

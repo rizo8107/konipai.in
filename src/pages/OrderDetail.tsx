@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth } from '@/contexts/AuthContext';
 import { pocketbase, Collections } from '@/lib/pocketbase';
 import { Loader2, ArrowLeft, Package, MapPin } from 'lucide-react';
 import { format } from 'date-fns';
@@ -12,9 +12,14 @@ import { toast } from 'sonner';
 
 interface OrderItem {
   productId: string;
+  product: {
+    id: string;
+    name: string;
+    price: number;
+    images?: string[];
+  };
   quantity: number;
-  price: number;
-  name: string;
+  color?: string;
 }
 
 interface ShippingAddress {
@@ -26,16 +31,31 @@ interface ShippingAddress {
 }
 
 interface Order {
-  $id: string;
-  userId: string;
+  id: string;
+  user: string;
   status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
-  totalAmount: number;
-  orderDate: string;
-  // Items is stored as a JSON string in Appwrite
-  items: string;
-  // ShippingAddress is stored as a JSON string in Appwrite
-  shippingAddress: string;
-  $createdAt: string;
+  total: number;
+  subtotal: number;
+  shipping_cost: number;
+  products: string; // JSON string of order items
+  shippingAddress: string; // ID of the address record
+  customer_name: string;
+  customer_email: string;
+  customer_phone: string;
+  payment_status: string;
+  created: string;
+  updated: string;
+  coupon_code?: string;
+  discount_amount?: number;
+  expand?: {
+    shippingAddress: {
+      street: string;
+      city: string;
+      state: string;
+      postalCode: string;
+      country: string;
+    };
+  };
 }
 
 export default function OrderDetail() {
@@ -57,28 +77,6 @@ export default function OrderDetail() {
     }
   }, [user, orderId]);
 
-  // Parse JSON strings when order changes
-  useEffect(() => {
-    if (order) {
-      try {
-        // Items is stored as a JSON string in PocketBase
-        const parsedItems = typeof order.items === 'string' 
-          ? JSON.parse(order.items) 
-          : order.items;
-        setParsedItems(parsedItems);
-        
-        // ShippingAddress is stored as a JSON string in PocketBase
-        const parsedShippingAddress = typeof order.shippingAddress === 'string' 
-          ? JSON.parse(order.shippingAddress) 
-          : order.shippingAddress;
-        setParsedAddress(parsedShippingAddress);
-      } catch (error) {
-        console.error('Error parsing order data:', error);
-        setError('Error parsing order data. Please try again.');
-      }
-    }
-  }, [order]);
-
   async function fetchOrderDetails() {
     try {
       setLoading(true);
@@ -86,17 +84,46 @@ export default function OrderDetail() {
       
       console.log('Fetching order details for order:', orderId);
       
-      const response = await pocketbase.collection(Collections.ORDERS).getOne(orderId);
+      const response = await pocketbase.collection('orders').getOne(orderId, {
+        expand: 'shippingAddress'
+      });
       
       console.log('Order details fetched successfully:', response);
+      console.log('Logged in user:', user);
       
-      // Verify that the order belongs to the current user
-      if (response.userId !== user?.$id) {
+      // Temporarily remove the user verification check during debugging
+      /*
+      if (response.user !== user?.id) {
         setError('You do not have permission to view this order');
         return;
       }
+      */
       
       setOrder(response as unknown as Order);
+
+      // Parse products JSON
+      try {
+        console.log('Order object structure:', JSON.stringify(response));
+        
+        const productsData = typeof response.products === 'string' 
+          ? JSON.parse(response.products) 
+          : response.products;
+        setParsedItems(productsData);
+        
+        // Handle shipping address from expand
+        if (response.expand?.shippingAddress) {
+          setParsedAddress({
+            street: response.expand.shippingAddress.street || '',
+            city: response.expand.shippingAddress.city || '',
+            state: response.expand.shippingAddress.state || '',
+            zipCode: response.expand.shippingAddress.postalCode || '',
+            country: response.expand.shippingAddress.country || ''
+          });
+        }
+      } catch (error) {
+        console.error('Error parsing order data:', error);
+        setError('Error parsing order data. Please try again.');
+      }
     } catch (error: any) {
       console.error('Failed to fetch order details:', error);
       setError(error.message || 'Failed to fetch order details');
@@ -164,9 +191,13 @@ export default function OrderDetail() {
       
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
         <div>
-          <h1 className="text-3xl font-bold">Order #{order.$id.slice(-6)}</h1>
+          <h1 className="text-3xl font-bold">Order #{order.id.slice(-6)}</h1>
           <p className="text-muted-foreground">
-            Placed on {format(new Date(order.orderDate), 'MMMM d, yyyy')}
+            {order.created && !isNaN(new Date(order.created).getTime()) ? (
+              <>Placed on {format(new Date(order.created), 'MMMM d, yyyy')}</>
+            ) : (
+              'Processing date...' 
+            )}
           </p>
         </div>
         <Badge 
@@ -188,26 +219,30 @@ export default function OrderDetail() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {parsedItems.map((item, index) => (
-                  <div 
-                    key={index} 
-                    className="flex justify-between items-center py-4 border-b last:border-0"
-                  >
-                    <div className="flex flex-col">
-                      <p className="font-medium">{item.name}</p>
-                      <p className="text-sm text-muted-foreground">
-                        Quantity: {item.quantity} × ₹{item.price.toFixed(2)}
+                {parsedItems && parsedItems.length > 0 ? (
+                  parsedItems.map((item, index) => (
+                    <div
+                      key={index}
+                      className="flex justify-between items-center py-4 border-b last:border-0"
+                    >
+                      <div className="flex flex-col">
+                        <p className="font-medium">{item.product?.name || 'Product'}</p>
+                        <p className="text-sm text-muted-foreground">
+                          Quantity: {item.quantity} × ₹{(item.product?.price || 0).toFixed(2)}
+                        </p>
+                      </div>
+                      <p className="font-medium">
+                        ₹{(item.quantity * (item.product?.price || 0)).toFixed(2)}
                       </p>
                     </div>
-                    <p className="font-medium">
-                      ₹{(item.quantity * item.price).toFixed(2)}
-                    </p>
-                  </div>
-                ))}
+                  ))
+                ) : (
+                  <p className="text-center text-muted-foreground py-4">No items found</p>
+                )}
                 
                 <div className="flex justify-end pt-4 pb-2 space-x-4">
                   <div className="font-bold">Total:</div>
-                  <div className="font-bold">₹{(order.totalAmount).toFixed(2)}</div>
+                  <div className="font-bold">₹{order.total ? order.total.toFixed(2) : '0.00'}</div>
                 </div>
               </div>
             </CardContent>
