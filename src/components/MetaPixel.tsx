@@ -1,5 +1,4 @@
 import { useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
 
 // Define more specific types for Facebook Pixel
 declare global {
@@ -15,8 +14,6 @@ declare global {
 }
 
 export function MetaPixel() {
-  const location = useLocation();
-
   useEffect(() => {
     // Initialize Meta Pixel
     // eslint-disable-next-line @typescript-eslint/no-implied-eval
@@ -29,43 +26,86 @@ export function MetaPixel() {
       s.parentNode.insertBefore(t,s)
     `);
     
-    initFbPixel(
-      window, 
-      document, 
-      'script', 
-      'https://connect.facebook.net/en_US/fbevents.js', 
-      window.fbq, 
-      undefined, 
-      undefined
-    );
+    try {
+      initFbPixel(
+        window, 
+        document, 
+        'script', 
+        'https://connect.facebook.net/en_US/fbevents.js', 
+        window.fbq, 
+        undefined, 
+        undefined
+      );
 
-    // Initialize pixel
-    window.fbq('init', '504160516081802');
-  }, []);
-
-  // Track page views on route change
-  useEffect(() => {
-    if (window.fbq) {
+      // Initialize pixel
+      window.fbq('init', '504160516081802');
+      
+      // Track initial page view
       window.fbq('track', 'PageView');
+      
+      // Set up listeners for route changes
+      
+      // 1. Listen for popstate (browser back/forward)
+      const handlePopState = () => {
+        if (window.fbq) {
+          console.log('Meta Pixel: Tracked PageView via popstate');
+          window.fbq('track', 'PageView');
+        }
+      };
+      
+      window.addEventListener('popstate', handlePopState);
+      
+      // 2. Set up a MutationObserver to detect DOM changes (React Router updates)
+      let lastPathname = window.location.pathname;
+      
+      const observer = new MutationObserver(() => {
+        const currentPathname = window.location.pathname;
+        if (currentPathname !== lastPathname) {
+          lastPathname = currentPathname;
+          if (window.fbq) {
+            console.log('Meta Pixel: Tracked PageView via MutationObserver');
+            window.fbq('track', 'PageView');
+          }
+        }
+      });
+      
+      // Start observing the document body for DOM changes
+      observer.observe(document.body, { 
+        childList: true, 
+        subtree: true 
+      });
+      
+      // Clean up
+      return () => {
+        window.removeEventListener('popstate', handlePopState);
+        observer.disconnect();
+      };
+    } catch (error) {
+      console.error('Error initializing Meta Pixel:', error);
     }
-  }, [location]);
+  }, []);
 
   // Add noscript element
   useEffect(() => {
-    const noscript = document.createElement('noscript');
-    const img = document.createElement('img');
-    img.height = 1;
-    img.width = 1;
-    img.style.display = 'none';
-    img.src = 'https://www.facebook.com/tr?id=504160516081802&ev=PageView&noscript=1';
-    noscript.appendChild(img);
-    document.body.appendChild(noscript);
+    try {
+      const noscript = document.createElement('noscript');
+      const img = document.createElement('img');
+      img.height = 1;
+      img.width = 1;
+      img.style.display = 'none';
+      img.src = 'https://www.facebook.com/tr?id=504160516081802&ev=PageView&noscript=1';
+      noscript.appendChild(img);
+      document.body.appendChild(noscript);
 
-    return () => {
-      if (document.body.contains(noscript)) {
-        document.body.removeChild(noscript);
-      }
-    };
+      return () => {
+        if (document.body.contains(noscript)) {
+          document.body.removeChild(noscript);
+        }
+      };
+    } catch (error) {
+      console.error('Error adding noscript element:', error);
+      return undefined;
+    }
   }, []);
 
   return null;

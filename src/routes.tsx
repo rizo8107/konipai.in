@@ -9,6 +9,7 @@ import { Loader2 } from "lucide-react"
 import { trackPageView } from "@/lib/analytics"
 import useUtmParams from "@/hooks/useUtmParams"
 import { getUtmParamsForAnalytics } from "@/lib/utm"
+import { MetaPixelRouterTracker } from "./components/MetaPixelRouterTracker"
 
 // Eager load critical pages
 import Index from "./pages/Index"
@@ -88,6 +89,7 @@ function ScrollToTop() {
 export function Routes() {
   return (
     <BrowserRouter>
+      <MetaPixelRouterTracker />
       <TooltipProvider>
         <Sonner />
         <div className="flex flex-col min-h-screen">
