@@ -4,6 +4,7 @@ import { CartProvider } from "./contexts/CartContext"
 import { Toaster } from "@/components/ui/toaster"
 import { Routes } from "./routes"
 import { MetaPixel } from "./components/MetaPixel"
+import { MicrosoftClarity } from "./components/MicrosoftClarity"
 
 function App() {
   return (
@@ -11,6 +12,7 @@ function App() {
       <AuthProvider>
         <CartProvider>
           <MetaPixel />
+          <MicrosoftClarity />
           <Routes />
           <Toaster />
         </CartProvider>
