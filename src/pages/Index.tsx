@@ -12,7 +12,6 @@ import { Loader2 } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { Logo } from '@/components/Logo';
 import { ProductImage } from '@/components/ProductImage';
-import { useInView } from 'react-intersection-observer';
 import { Card } from '@/components/ui/card';
 import { trackButtonClick } from '@/lib/analytics';
 
@@ -41,26 +40,11 @@ const Index = () => {
   const [loading, setLoading] = useState(true);
   const [featuredProducts, setFeaturedProducts] = useState<Product[]>([]);
   
-  // Use intersection observer for animations
-  const [heroRef, heroInView] = useInView({
-    triggerOnce: true,
-    threshold: 0.1
-  });
-  
-  const [featuresRef, featuresInView] = useInView({
-    triggerOnce: true,
-    threshold: 0.1
-  });
-  
-  const [bestsellersRef, bestsellersInView] = useInView({
-    triggerOnce: true,
-    threshold: 0.1
-  });
-  
-  const [newArrivalsRef, newArrivalsInView] = useInView({
-    triggerOnce: true,
-    threshold: 0.1
-  });
+  // Simple refs without animation dependency
+  const heroRef = useRef<HTMLDivElement>(null);
+  const featuresRef = useRef<HTMLElement>(null);
+  const bestsellersRef = useRef<HTMLElement>(null);
+  const newArrivalsRef = useRef<HTMLElement>(null);
   
   useEffect(() => {
     const controller = new AbortController();
@@ -199,7 +183,7 @@ const Index = () => {
       {/* New Arrivals Section */}
       <section 
         ref={newArrivalsRef} 
-        className={`py-24 bg-white ${newArrivalsInView ? 'animate-fade-in' : 'opacity-0'}`}
+        className="py-24 bg-white animate-fade-in"
         style={{ animationDelay: '0.2s' }}
       >
         <div className="konipai-container">
@@ -232,7 +216,7 @@ const Index = () => {
       {/* Features Section */}
       <section 
         ref={featuresRef}
-        className={`py-20 bg-[#219898]/5 ${featuresInView ? 'animate-fade-in' : 'opacity-0'}`}
+        className="py-20 bg-[#219898]/5 animate-fade-in"
         style={{ animationDelay: '0.3s' }}
       >
         <div className="konipai-container">
@@ -267,7 +251,7 @@ const Index = () => {
       {/* Bestsellers Section */}
       <section 
         ref={bestsellersRef}
-        className={`py-24 bg-white ${bestsellersInView ? 'animate-fade-in' : 'opacity-0'}`}
+        className="py-24 bg-white animate-fade-in"
         style={{ animationDelay: '0.4s' }}
       >
         <div className="konipai-container">
