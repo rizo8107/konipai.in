@@ -141,24 +141,6 @@ function parseShippingAddress(orderData) {
  */
 async function parseShippingAddressAsync(orderData) {
     try {
-        // First check if we have an expanded shipping address
-        if (orderData.expand?.shippingAddress) {
-            const address = orderData.expand.shippingAddress;
-            
-            const addressParts = [];
-            if (address.street) addressParts.push(address.street);
-            if (address.city) addressParts.push(address.city);
-            if (address.state) addressParts.push(address.state);
-            if (address.postalCode) addressParts.push(address.postalCode);
-            if (address.country) addressParts.push(address.country);
-            
-            return { 
-                formatted: addressParts.join(', '),
-                data: address
-            };
-        }
-        
-        // Otherwise try to get the address ID
         const addressId = orderData.shipping_address || orderData.shippingAddress;
         if (!addressId) {
             return { formatted: '', data: {} };
@@ -274,10 +256,8 @@ async function processPaymentWebhook(event, orderId, paymentId, paymentStatus) {
             return false;
         }
         
-        // Get order from database with expanded shipping address
-        const order = await $app.dao().findRecordById('orders', orderId, {
-            expand: 'shippingAddress'
-        });
+        // Get order from database
+        const order = await $app.dao().findRecordById('orders', orderId);
         if (!order) {
             directLog(`Order ${orderId} not found`);
             return false;
@@ -390,11 +370,8 @@ async function sendOrderEmail(order, oldOrder, eventType) {
             
             // Parse shipping address
             let shippingAddress = null;
-            if (order.shipping_address || order.shippingAddress || order.expand?.shippingAddress) {
+            if (order.shipping_address || order.shippingAddress) {
                 shippingAddress = await parseShippingAddressAsync(order);
-                directLog(`Shipping address parsed: ${JSON.stringify(shippingAddress)}`);
-            } else {
-                directLog(`No shipping address found for order ${order.id}`);
             }
 
             // Prepare email context based on event type
@@ -611,17 +588,11 @@ $app.onRequest('POST', '/api/razorpay-webhook', (e) => {
             
             // Process the payment status update
             if (orderId && paymentStatus) {
-                directLog(`Webhook: Processing payment for order ${orderId} with status ${paymentStatus}`);
                 // Process payment asynchronously (don't block response)
                 setTimeout(async () => {
-                    const result = await processPaymentWebhook(event, orderId, paymentId, paymentStatus);
-                    directLog(`Webhook processing completed for order ${orderId}: ${result ? 'Success' : 'Failed'}`);
+                    await processPaymentWebhook(event, orderId, paymentId, paymentStatus);
                 }, 0);
-            } else {
-                directLog(`Invalid webhook data: Missing orderId or paymentStatus`);
             }
-        } else {
-            directLog(`Unhandled webhook event type: ${event}`);
         }
         
         // Return success response
