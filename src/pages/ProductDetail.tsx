@@ -24,7 +24,7 @@ import {
   ThumbsUp,
   Award
 } from 'lucide-react';
-import { getProduct, getProducts, type Product, type ProductColor, pocketbase, Collections } from '@/lib/pocketbase';
+import { getProduct, getProducts, getProductReviews, type Product, type ProductColor, pocketbase, Collections } from '@/lib/pocketbase';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useCart } from '@/contexts/CartContext';
 import { Button } from '@/components/ui/button';
@@ -62,7 +62,7 @@ const ProductDetail = () => {
   const [isWishlisted, setIsWishlisted] = useState(false);
   const [imagesPreloaded, setImagesPreloaded] = useState(false);
   
-  const { addItem, items } = useCart();
+  const { addItem, items, getItem } = useCart();
   const [quantity, setQuantity] = useState(1);
   const [selectedColor, setSelectedColor] = useState<ProductColor | null>(null);
   const { toast } = useToast();
@@ -71,6 +71,8 @@ const ProductDetail = () => {
   
   const [showSizeGuide, setShowSizeGuide] = useState(false);
   const [activeTab, setActiveTab] = useState('description');
+  
+  const [averageRating, setAverageRating] = useState(0);
   
   // Check if the current product is already in cart
   const isInCart = useMemo(() => {
@@ -201,7 +203,7 @@ const ProductDetail = () => {
   useEffect(() => {
     document.title = product?.name ? `${product.name} | Konipai` : 'Product | Konipai';
     
-    const fetchProduct = async () => {
+    const loadProduct = async () => {
       if (!id) {
         setError('Product ID is missing');
         setLoading(false);
@@ -210,39 +212,48 @@ const ProductDetail = () => {
       
       try {
         setLoading(true);
-        const productData = await getProduct(id);
-        if (!productData) {
+        const data = await getProduct(id);
+        if (!data) {
           setError('Product not found');
           return;
         }
 
-        setProduct(productData);
-        if (productData.images?.length > 0) {
-          const mainImage = productData.images[0];
+        setProduct(data);
+        if (data.images?.length > 0) {
+          const mainImage = data.images[0];
           setSelectedImage(mainImage);
         }
-        if (productData.colors?.length > 0) {
-          setSelectedColor(productData.colors[0]);
+        if (data.colors?.length > 0) {
+          setSelectedColor(data.colors[0]);
         }
         
         // Track product view with GTM
         trackProductView({
-          item_id: productData.id,
-          item_name: productData.name,
-          price: Number(productData.price) || 0,
+          item_id: data.id,
+          item_name: data.name,
+          price: Number(data.price) || 0,
           quantity: 1,
-          item_category: productData.category || 'Tote Bag',
+          item_category: data.category || 'Tote Bag',
           item_brand: 'Konipai',
           affiliation: 'Konipai Web Store'
         });
         
         // Fetch related products
-        const allProducts = await getProducts({ category: productData.category });
+        const allProducts = await getProducts({ category: data.category });
         const related = allProducts
           .filter(p => p.id !== id)
           .slice(0, 4);
         setRelatedProducts(related);
         setError(null);
+
+        // Load reviews to calculate average rating if product has reviews
+        if (data.reviews && data.reviews > 0) {
+          const reviews = await getProductReviews(id);
+          const avgRating = reviews.length > 0
+            ? reviews.reduce((acc: number, review: { rating: number }) => acc + review.rating, 0) / reviews.length
+            : 0;
+          setAverageRating(avgRating);
+        }
       } catch (err) {
         console.error('Error fetching product:', err);
         setError('Failed to load product. Please try again later.');
@@ -257,13 +268,13 @@ const ProductDetail = () => {
       }
     };
     
-    fetchProduct();
+    loadProduct();
     
     // Reset preload state when product ID changes
     setImagesPreloaded(false);
     relatedLoaded.current = false;
     
-  }, [id, navigate, toast]);
+  }, [id, navigate, toast, getItem]);
   
   // Optimize image selection handling
   const handleImageSelect = (image: string) => {
@@ -556,11 +567,25 @@ const ProductDetail = () => {
                 ₹{typeof product.price === 'number' ? product.price.toFixed(2) : '0.00'}
               </p>
               <div className="flex items-center gap-1">
-                <div className="flex items-center gap-1 text-yellow-400">
-                  {Array(5).fill(null).map((_, i) => (
-                    <Star key={i} className="fill-current h-4 w-4" />
-                  ))}
-                </div>
+                {product.reviews && product.reviews > 0 ? (
+                  <div className="flex items-center gap-1 text-yellow-400">
+                    {Array(5).fill(null).map((_, i) => (
+                      <Star 
+                        key={i} 
+                        className={cn(
+                          "h-4 w-4",
+                          i < Math.round(averageRating) ? "fill-current" : ""
+                        )} 
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1 text-gray-300">
+                    {Array(5).fill(null).map((_, i) => (
+                      <Star key={i} className="h-4 w-4" />
+                    ))}
+                  </div>
+                )}
                 <Link to="#reviews" className="text-sm text-muted-foreground hover:text-primary ml-2">
                   ({product.reviews || 0} reviews)
                 </Link>
@@ -756,7 +781,25 @@ const ProductDetail = () => {
         {product && <ProductDetails product={product} />}
         
         {/* Reviews Section */}
-        {id && <ProductReviews productId={id} initialReviewCount={product.reviews} />}
+        {id && (
+          <ProductReviews 
+            productId={id} 
+            initialReviewCount={product.reviews} 
+            onReviewAdded={async () => {
+              // Refresh product data to get updated review count
+              if (id) {
+                const updatedProduct = await getProduct(id);
+                setProduct(updatedProduct);
+                // Update average rating
+                const reviews = await getProductReviews(id);
+                const avgRating = reviews.length > 0
+                  ? reviews.reduce((acc: number, review: { rating: number }) => acc + review.rating, 0) / reviews.length
+                  : 0;
+                setAverageRating(avgRating);
+              }
+            }} 
+          />
+        )}
         
         {/* Related Products */}
         {relatedProducts.length > 0 && (

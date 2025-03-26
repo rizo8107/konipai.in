@@ -18,6 +18,7 @@ interface CartContextType {
   removeItem: (productId: string) => void;
   updateQuantity: (productId: string, quantity: number) => void;
   clearCart: () => void;
+  getItem: (productId: string, color?: string) => CartItem | undefined;
   isLoading: boolean;
   subtotal: number;
   total: number;
@@ -368,6 +369,13 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     setItems([]);
   };
 
+  const getItem = (productId: string, color?: string): CartItem | undefined => {
+    return items.find(item => 
+      item.productId === productId &&
+      (!color || item.color === color)
+    );
+  };
+
   const { subtotal, total } = calculateTotals(items);
 
   const itemCount = items.reduce(
@@ -381,6 +389,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     removeItem,
     updateQuantity,
     clearCart,
+    getItem,
     isLoading,
     subtotal,
     total,
