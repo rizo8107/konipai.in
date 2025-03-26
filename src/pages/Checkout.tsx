@@ -384,6 +384,16 @@ export default function CheckoutPage() {
         // Get the updated order for tracking purposes
         const updatedOrder = await pocketbase.collection('orders').getOne(orderId);
         
+        // Trigger payment verification to send webhook
+        try {
+          const signature = response.razorpay_signature || response.signature || '';
+          console.log('Calling verifyPayment to trigger webhook...');
+          await verifyPayment(orderId, paymentId, signature);
+        } catch (verifyError) {
+          console.error('Error sending webhook notification:', verifyError);
+          // Continue with order processing even if webhook fails
+        }
+        
         // Track payment success with enhanced data
         trackPaymentSuccess(
           orderId,
