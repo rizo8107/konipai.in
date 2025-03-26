@@ -32,6 +32,7 @@ import {
   trackFormError,
   trackDynamicConversion
 } from '@/lib/analytics';
+import { AddressAutocomplete } from '@/components/AddressAutocomplete';
 
 interface CheckoutFormData {
   name: string;
@@ -95,6 +96,7 @@ export default function CheckoutPage() {
   const [appliedCoupon, setAppliedCoupon] = useState<CouponData | null>(null);
   const [couponLoading, setCouponLoading] = useState(false);
   const [couponError, setCouponError] = useState<string | null>(null);
+  const [errors, setErrors] = useState<{ [key: string]: string | null }>({});
 
   // Load Razorpay script
   useEffect(() => {
@@ -761,6 +763,22 @@ export default function CheckoutPage() {
     // The handlePaymentSuccess function will be called when payment is completed
   };
 
+  const handleAddressSelect = (address: {
+    street: string;
+    city: string;
+    state: string;
+    postalCode: string;
+    country: string;
+  }) => {
+    setFormData(prev => ({
+      ...prev,
+      address: address.street,
+      city: address.city,
+      state: address.state,
+      zipCode: address.postalCode
+    }));
+  };
+
   if (cartLoading) {
     return (
       <div className="container max-w-2xl mx-auto py-16 px-4 text-center">
@@ -784,7 +802,7 @@ export default function CheckoutPage() {
   }
 
   return (
-    <div className="container max-w-2xl mx-auto py-8 px-4">
+    <div className="container max-w-2xl mx-auto px-4 py-8">
       <h1 className="text-2xl font-bold mb-6">Checkout</h1>
       
       <form onSubmit={handleSubmit} className="space-y-6">
@@ -820,16 +838,11 @@ export default function CheckoutPage() {
         <div className="space-y-4">
           <h2 className="text-lg font-semibold">Shipping Address</h2>
           <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="address">Street Address</Label>
-              <Input
-                id="address"
-                name="address"
-                value={formData.address}
-                onChange={handleInputChange}
-                required
-              />
-            </div>
+            <AddressAutocomplete
+              onAddressSelect={handleAddressSelect}
+              defaultValue={formData.address}
+              error={errors?.address}
+            />
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="city">City</Label>
@@ -839,7 +852,11 @@ export default function CheckoutPage() {
                   value={formData.city}
                   onChange={handleInputChange}
                   required
+                  className={errors?.city ? "border-red-500" : ""}
                 />
+                {errors?.city && (
+                  <p className="text-sm text-red-500">{errors.city}</p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="state">State</Label>
@@ -849,7 +866,11 @@ export default function CheckoutPage() {
                   value={formData.state}
                   onChange={handleInputChange}
                   required
+                  className={errors?.state ? "border-red-500" : ""}
                 />
+                {errors?.state && (
+                  <p className="text-sm text-red-500">{errors.state}</p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="zipCode">ZIP Code</Label>
@@ -859,7 +880,11 @@ export default function CheckoutPage() {
                   value={formData.zipCode}
                   onChange={handleInputChange}
                   required
+                  className={errors?.zipCode ? "border-red-500" : ""}
                 />
+                {errors?.zipCode && (
+                  <p className="text-sm text-red-500">{errors.zipCode}</p>
+                )}
               </div>
             </div>
             <div className="space-y-2">
@@ -871,7 +896,11 @@ export default function CheckoutPage() {
                 value={formData.phone}
                 onChange={handleInputChange}
                 required
+                className={errors?.phone ? "border-red-500" : ""}
               />
+              {errors?.phone && (
+                <p className="text-sm text-red-500">{errors.phone}</p>
+              )}
             </div>
           </div>
         </div>
