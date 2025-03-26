@@ -14,6 +14,7 @@ import { Logo } from '@/components/Logo';
 import { ProductImage } from '@/components/ProductImage';
 import { Card } from '@/components/ui/card';
 import { trackButtonClick } from '@/lib/analytics';
+import UtmLink from '@/components/UtmLink';
 
 const FeatureItem = ({ icon: Icon, title, description }: { icon: React.ElementType, title: string, description: string }) => (
   <div className="flex flex-col items-center text-center p-6 transition-all rounded-lg">
@@ -128,7 +129,7 @@ const Index = () => {
                     <p className="text-sm font-medium uppercase tracking-wider mb-2">Featured Collection</p>
                     <h3 className="text-2xl font-bold mb-2">{featuredProducts[0]?.name}</h3>
                     <Button asChild variant="outline" className="bg-white/20 border-white text-white backdrop-blur-sm hover:bg-white hover:text-black">
-                      <Link to={`/product/${featuredProducts[0]?.id}`}>View Product</Link>
+                      <UtmLink to={`/product/${featuredProducts[0]?.id}`}>View Product</UtmLink>
                     </Button>
                   </div>
                 </div>
@@ -168,10 +169,10 @@ const Index = () => {
                     className="gap-2 bg-[#219898] hover:bg-[#1a7a7a] text-white rounded-full px-6"
                     onClick={() => trackButtonClick('explore_collection_button', 'Explore Collection', window.location.pathname)}
                   >
-                    <Link to="/shop">
+                    <UtmLink to="/shop">
                       Explore Collection
                       <ArrowRight className="h-4 w-4" />
-                    </Link>
+                    </UtmLink>
                   </Button>
                 </div>
               </div>
@@ -203,10 +204,10 @@ const Index = () => {
                 className="rounded-full border-[#219898] text-[#219898] hover:bg-[#219898] hover:text-white px-8"
                 onClick={() => trackButtonClick('view_new_arrivals_button', 'View All New Arrivals', window.location.pathname)}
               >
-                <Link to="/new-arrivals">
+                <UtmLink to="/new-arrivals">
                   View All
                   <ArrowRight className="ml-2 h-4 w-4" />
-                </Link>
+                </UtmLink>
               </Button>
             </div>
           </div>
@@ -273,10 +274,10 @@ const Index = () => {
                 className="rounded-full border-[#219898] text-[#219898] hover:bg-[#219898] hover:text-white px-8"
                 onClick={() => trackButtonClick('view_bestsellers_button', 'View All Bestsellers', window.location.pathname)}
               >
-                <Link to="/bestsellers">
+                <UtmLink to="/bestsellers">
                   View All
                   <ArrowRight className="ml-2 h-4 w-4" />
-                </Link>
+                </UtmLink>
               </Button>
             </div>
           </div>
@@ -303,7 +304,7 @@ const Index = () => {
               className="bg-transparent border-white text-white hover:bg-white hover:text-[#219898] rounded-full px-8"
               onClick={() => trackButtonClick('shop_collection_button', 'Shop Collection', window.location.pathname)}
             >
-              <Link to="/shop">Shop Collection</Link>
+              <UtmLink to="/shop">Shop Collection</UtmLink>
             </Button>
           </div>
         </div>

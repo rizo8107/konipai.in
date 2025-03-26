@@ -6,7 +6,9 @@ import Navbar from "./components/Navbar"
 import Footer from "./components/Footer"
 import { lazy, Suspense, useEffect } from "react"
 import { Loader2 } from "lucide-react"
-import { trackPageView } from "@/utils/analytics"
+import { trackPageView } from "@/lib/analytics"
+import useUtmParams from "@/hooks/useUtmParams"
+import { getUtmParamsForAnalytics } from "@/lib/utm"
 
 // Eager load critical pages
 import Index from "./pages/Index"
@@ -63,15 +65,20 @@ function PageLoader() {
 }
 
 // Scroll restoration component to ensure pages start at the top when navigating
-// Also tracks page views for Google Analytics
+// Also tracks page views for Google Analytics and handles UTM parameters
 function ScrollToTop() {
   const { pathname } = useLocation();
+  // Initialize UTM parameter tracking
+  useUtmParams();
   
   useEffect(() => {
     // Scroll to top of page
     window.scrollTo(0, 0);
     
-    // Track page view in Google Analytics
+    // Get UTM parameters for analytics
+    const utmParams = getUtmParamsForAnalytics();
+    
+    // Track page view in Google Analytics with UTM data
     trackPageView(pathname, document.title);
   }, [pathname]);
   

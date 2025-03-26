@@ -1,4 +1,8 @@
 // Google Tag Manager analytics helper functions
+import { getUtmParamsForAnalytics } from './utm';
+
+// Import Facebook CAPI functions
+import { trackPurchaseConversion, trackAddToCartConversion, trackLeadConversion } from './capi';
 
 // Define types for analytics events
 interface AnalyticsEvent {
@@ -47,8 +51,15 @@ if (typeof window !== 'undefined') {
 // Helper function to push events to the dataLayer
 export const pushToDataLayer = (data: AnalyticsEvent): void => {
   if (typeof window !== 'undefined' && window.dataLayer) {
-    window.dataLayer.push(data);
-    console.log('Data pushed to dataLayer:', data);
+    // Add UTM parameters to all events
+    const utmParams = getUtmParamsForAnalytics();
+    const enrichedData = {
+      ...data,
+      ...utmParams
+    };
+    
+    window.dataLayer.push(enrichedData);
+    console.log('Data pushed to dataLayer:', enrichedData);
   } else {
     console.warn('DataLayer not available');
   }
@@ -124,8 +135,23 @@ export const trackProductView = (product: ProductItem): void => {
   });
 };
 
-export const trackAddToCart = (product: ProductItem): void => {
+export const trackAddToCart = async (
+  product: ProductItem,
+  userData?: {
+    email?: string;
+    phone?: string;
+    firstName?: string;
+    lastName?: string;
+    city?: string;
+    state?: string;
+    zipCode?: string;
+    country?: string;
+    externalId?: string;
+  }
+): Promise<void> => {
   clearEcommerceObject();
+  
+  // Track in Google Analytics
   pushToDataLayer({
     event: 'add_to_cart',
     ecommerce: {
@@ -135,6 +161,19 @@ export const trackAddToCart = (product: ProductItem): void => {
     },
     timestamp: new Date().toISOString()
   });
+
+  // Track in Facebook CAPI if user data is available
+  if (userData) {
+    await trackAddToCartConversion(userData, {
+      value: product.price * product.quantity,
+      currency: 'INR',
+      contentId: product.item_id,
+      contentName: product.item_name,
+      contentCategory: product.item_category,
+      quantity: product.quantity,
+      price: product.price
+    });
+  }
 };
 
 export const trackRemoveFromCart = (product: ProductItem): void => {
@@ -218,20 +257,32 @@ export const trackAddPaymentInfo = (
 };
 
 // Core conversion tracking function
-export const trackPurchase = (
+export const trackPurchase = async (
   products: ProductItem[], 
   transactionId: string, 
   value: number, 
   shipping: number = 0, 
   tax: number = 0,
   coupon?: string,
-  affiliation: string = 'Konipai Web Store'
-): void => {
+  affiliation: string = 'Konipai Web Store',
+  userData?: {
+    email?: string;
+    phone?: string;
+    firstName?: string;
+    lastName?: string;
+    city?: string;
+    state?: string;
+    zipCode?: string;
+    country?: string;
+    externalId?: string;
+  }
+): Promise<void> => {
   clearEcommerceObject();
   
   // Calculate actual revenue (value minus tax and shipping)
   const revenue = value - tax - shipping;
   
+  // Track in Google Analytics
   pushToDataLayer({
     event: 'purchase',
     ecommerce: {
@@ -242,14 +293,14 @@ export const trackPurchase = (
       shipping: shipping,
       currency: 'INR',
       coupon: coupon,
-      revenue: revenue, // This helps with accurate revenue tracking
+      revenue: revenue,
       items: products
     },
     conversion_value: value,
     timestamp: new Date().toISOString()
   });
   
-  // Also track for Google Ads conversion tracking
+  // Track in Google Ads
   pushToDataLayer({
     event: 'conversion',
     send_to: 'AW-CONVERSION_ID/CONVERSION_LABEL',
@@ -257,6 +308,23 @@ export const trackPurchase = (
     value: value,
     currency: 'INR'
   });
+
+  // Track in Facebook CAPI if user data is available
+  if (userData) {
+    await trackPurchaseConversion(userData, {
+      value: value,
+      currency: 'INR',
+      contents: products.map(product => ({
+        id: product.item_id,
+        quantity: product.quantity,
+        price: product.price
+      })),
+      contentIds: products.map(product => product.item_id),
+      contentType: 'product',
+      contentName: products.map(product => product.item_name).join(', '),
+      contentCategory: products[0]?.item_category
+    });
+  }
 };
 
 // Dynamic conversion value tracking
@@ -400,13 +468,36 @@ export const trackFormStart = (formName: string, formId: string): void => {
   });
 };
 
-export const trackFormCompletion = (formName: string, formId: string): void => {
+export const trackFormCompletion = async (
+  formName: string, 
+  formId: string,
+  userData?: {
+    email?: string;
+    phone?: string;
+    firstName?: string;
+    lastName?: string;
+    city?: string;
+    state?: string;
+    zipCode?: string;
+    country?: string;
+    externalId?: string;
+  }
+): Promise<void> => {
+  // Track in Google Analytics
   pushToDataLayer({
     event: 'form_complete',
     form_name: formName,
     form_id: formId,
     timestamp: new Date().toISOString()
   });
+
+  // Track as lead in Facebook CAPI if user data is available
+  if (userData) {
+    await trackLeadConversion(userData, {
+      contentName: formName,
+      contentCategory: 'form_submission'
+    });
+  }
 };
 
 export const trackFormError = (formName: string, formId: string, errorMessage: string): void => {
