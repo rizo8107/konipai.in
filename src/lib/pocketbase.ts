@@ -186,53 +186,79 @@ export async function signIn(email: string, password: string) {
 
 export async function signInWithGoogle() {
     try {
-        // Get the OAuth2 URL for Google with trailing slash
-        const redirectUrl = `${import.meta.env.VITE_POCKETBASE_URL}/_/oauth2/google/`;
+        // Get the OAuth2 URL for Google
+        const redirectUrl = `${import.meta.env.VITE_POCKETBASE_URL}api/oauth2-redirect`;
         console.log('Using redirect URL:', redirectUrl);
         
         const authData = await pb.collection('users').authWithOAuth2({ 
             provider: 'google',
             createData: {
                 emailVisibility: true,
+                verified: true,
+                // Set default preferences for new users
+                notifications: {
+                    marketing: true,
+                    orderUpdates: true
+                }
             },
-            redirectUrl: redirectUrl, // Explicitly set the redirect URL with trailing slash
+            redirectUrl: redirectUrl,
             queryParams: {
                 prompt: 'consent',
                 access_type: 'offline',
-                redirect_uri: redirectUrl // Also set in query params to ensure consistency
+                include_granted_scopes: 'true',
+                // Request additional scopes if needed
+                scope: 'https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile'
             }
         });
 
         // Extract user data from the response
         const { meta, record } = authData;
+        console.log('Google auth response:', { meta, record });
 
-        // Update user record with additional data from Google if needed
+        // Update user record with additional data from Google
         if (record) {
             const data: { [key: string]: any } = {};
             let hasUpdates = false;
 
+            // Update name if not set
             if (meta?.name && !record.name) {
                 data.name = meta.name;
                 hasUpdates = true;
             }
 
+            // Update avatar if not set
             if (meta?.avatarUrl && !record.avatar) {
                 data.avatarUrl = meta.avatarUrl;
                 hasUpdates = true;
             }
 
+            // Update email visibility
+            if (!record.emailVisibility) {
+                data.emailVisibility = true;
+                hasUpdates = true;
+            }
+
             // Update the record if we have new data
             if (hasUpdates) {
-                await pb.collection('users').update(record.id, data);
+                try {
+                    await pb.collection('users').update(record.id, data);
+                    console.log('Updated user record with Google data:', data);
+                } catch (updateError) {
+                    console.error('Failed to update user record:', updateError);
+                }
             }
         }
 
         return authData;
     } catch (error) {
         console.error('Google sign-in error:', error);
-        // Enhance error handling
+        // Enhanced error handling
         if (error.response?.data?.code === 400) {
             throw new Error('Invalid OAuth configuration. Please check your Google OAuth settings.');
+        } else if (error.message?.includes('popup_closed')) {
+            throw new Error('The sign-in window was closed. Please try again.');
+        } else if (error.message?.includes('redirect_uri_mismatch')) {
+            throw new Error('Authentication configuration error. Please contact support.');
         }
         throw error;
     }
