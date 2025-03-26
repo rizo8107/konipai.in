@@ -5,6 +5,16 @@ const N8N_WEBHOOK_URL = "https://backend-n8n.7za6uc.easypanel.host/webhook/e09ff
 const N8N_AUTH_USERNAME = "nirmal@lifedemy.in";
 const N8N_AUTH_PASSWORD = "Life@123";
 
+// Type definitions for shipping address
+interface ShippingAddress {
+  street: string;
+  city: string;
+  state: string;
+  postalCode: string;
+  country: string;
+  [key: string]: string; // Allow additional properties
+}
+
 // Type definitions for webhook data
 interface WebhookOrderData {
   eventType: string;
@@ -17,7 +27,7 @@ interface WebhookOrderData {
     email: string;
     phone: string;
   };
-  shippingAddress: Record<string, any>;
+  shippingAddress: ShippingAddress;
   formattedAddress: string;
   paymentInfo: {
     paymentId: string;
@@ -52,6 +62,19 @@ interface WebhookOrderData {
     supportEmail: string;
     supportPhone: string;
   };
+}
+
+// Type for custom webhook data input
+interface CustomWebhookData {
+  eventType?: string;
+  notificationType?: string;
+  timestamp?: string;
+  orderId?: string;
+  customerInfo?: Partial<WebhookOrderData['customerInfo']>;
+  shippingAddress?: Partial<ShippingAddress>;
+  paymentInfo?: Partial<WebhookOrderData['paymentInfo']>;
+  products?: Partial<WebhookOrderData['products']>[]; 
+  [key: string]: unknown;
 }
 
 /**
@@ -271,21 +294,96 @@ export async function testWebhookWithRealOrder(orderId: string) {
 /**
  * Test direct webhook call with custom data
  */
-export async function testDirectWebhook(customData: any) {
+export async function testDirectWebhook(customData: CustomWebhookData) {
   console.log('Testing direct webhook with custom data');
   try {
+    // Prepare default shipping address if not provided
+    const shippingAddress: ShippingAddress = {
+      street: customData.shippingAddress?.street || '123 Default Street',
+      city: customData.shippingAddress?.city || 'Default City',
+      state: customData.shippingAddress?.state || 'Default State',
+      postalCode: customData.shippingAddress?.postalCode || '000000',
+      country: customData.shippingAddress?.country || 'India',
+      ...customData.shippingAddress
+    };
+
+    // Create formatted address
+    const formattedAddress = [
+      shippingAddress.street,
+      shippingAddress.city,
+      shippingAddress.state,
+      shippingAddress.postalCode,
+      shippingAddress.country
+    ].filter(Boolean).join(', ');
+
     // Validate and structure the custom data
-    const webhookData = {
-      ...customData,
-      timestamp: customData.timestamp || new Date().toISOString(),
+    const webhookData: WebhookOrderData = {
       eventType: customData.eventType || "custom_event",
-      notificationType: customData.notificationType || "custom_notification"
+      notificationType: customData.notificationType || "custom_notification",
+      timestamp: customData.timestamp || new Date().toISOString(),
+      orderId: customData.orderId || `custom-order-${Date.now()}`,
+      orderDate: customData.timestamp || new Date().toISOString(),
+      
+      customerInfo: {
+        name: customData.customerInfo?.name || 'Custom Customer',
+        email: customData.customerInfo?.email || 'custom@example.com',
+        phone: customData.customerInfo?.phone || '+919876543210',
+      },
+      
+      shippingAddress,
+      formattedAddress,
+      
+      paymentInfo: {
+        paymentId: customData.paymentInfo?.paymentId || `pay-custom-${Date.now()}`,
+        paymentOrderId: customData.paymentInfo?.paymentOrderId || `order-custom-${Date.now()}`,
+        paymentStatus: customData.paymentInfo?.paymentStatus || 'custom',
+      },
+      
+      orderStatus: customData.orderStatus as string || 'custom',
+      
+      products: customData.products?.map(product => ({
+        productId: product.productId || `product-${Date.now()}`,
+        name: product.name || 'Custom Product',
+        quantity: product.quantity || 1,
+        price: product.price || 1000,
+        color: product.color || 'Custom',
+        imageUrl: product.imageUrl || 'https://konipai.in/assets/custom-product.jpg',
+      })) || [{
+        productId: 'custom-product',
+        name: 'Default Custom Product',
+        quantity: 1,
+        price: 1000,
+        color: 'Default',
+        imageUrl: 'https://konipai.in/assets/custom-product.jpg',
+      }],
+      
+      totalItems: customData.totalItems as number || 1,
+      orderSummary: customData.orderSummary as string || '- 1x Default Custom Product (₹1,000.00)',
+      
+      financialDetails: {
+        subtotal: customData.financialDetails?.subtotal || 1000,
+        shippingCost: customData.financialDetails?.shippingCost || 0,
+        total: customData.financialDetails?.total || 1000,
+        subtotalFormatted: customData.financialDetails?.subtotalFormatted || '₹1,000.00',
+        shippingCostFormatted: customData.financialDetails?.shippingCostFormatted || '₹0.00',
+        totalFormatted: customData.financialDetails?.totalFormatted || '₹1,000.00',
+      },
+      
+      emailTemplateData: {
+        siteName: "Konipai",
+        siteUrl: "https://konipai.in",
+        logoUrl: "https://konipai.in/assets/logo.png",
+        year: new Date().getFullYear(),
+        viewOrderUrl: `https://konipai.in/orders/${customData.orderId || 'custom'}`,
+        supportEmail: "contact@konipai.in",
+        supportPhone: "+91 9363020252"
+      }
     };
 
     console.log('Custom webhook data prepared:', JSON.stringify(webhookData, null, 2));
     
     // Send the data directly to the webhook
-    return await sendToWebhook(webhookData as WebhookOrderData);
+    return await sendToWebhook(webhookData);
   } catch (error) {
     console.error('Error during direct webhook test:', error);
     return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };

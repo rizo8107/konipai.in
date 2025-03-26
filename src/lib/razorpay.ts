@@ -1,4 +1,5 @@
 import { pocketbase } from './pocketbase';
+import { testDirectWebhook } from './webhookTest';
 
 // Define Razorpay-related types
 export interface RazorpayOptions {
@@ -179,7 +180,7 @@ export const openRazorpayCheckout = (options: RazorpayOptions): void => {
  */
 const sendOrderToWebhook = async (orderId: string, user: Record<string, unknown>) => {
   try {
-    console.log('Preparing to send order to n8n webhook...');
+    console.log('Preparing to send order to n8n webhook:', N8N_WEBHOOK_URL);
     
     // Fetch order details first
     const order = await pocketbase.collection('orders').getOne(orderId);
@@ -187,6 +188,8 @@ const sendOrderToWebhook = async (orderId: string, user: Record<string, unknown>
       console.warn('Order not found, skipping webhook notification');
       return; // Don't throw error, just return silently
     }
+    
+    console.log('Order fetched successfully. Processing order data for webhook...');
     
     // Function to format currency
     const formatCurrency = (amount: number) => {
@@ -296,22 +299,45 @@ const sendOrderToWebhook = async (orderId: string, user: Record<string, unknown>
       }
     };
 
-    console.log('Order data for webhook prepared');
+    console.log('Order data for webhook prepared. Sending to webhook...');
+    console.log('Webhook data:', JSON.stringify(webhookData, null, 2));
 
     // Send the data to the webhook
     try {
+      console.log('Creating fetch request to webhook URL:', N8N_WEBHOOK_URL);
+      
+      const credentialsBase64 = btoa(`${N8N_AUTH_USERNAME}:${N8N_AUTH_PASSWORD}`);
+      console.log('Using basic auth with credential username:', N8N_AUTH_USERNAME);
+      
       const response = await fetch(N8N_WEBHOOK_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Basic ' + btoa(`${N8N_AUTH_USERNAME}:${N8N_AUTH_PASSWORD}`)
+          'Authorization': 'Basic ' + credentialsBase64
         },
         body: JSON.stringify(webhookData),
       });
 
+      // Log response status
+      console.log('Webhook response status:', response.status);
+
       if (!response.ok) {
-        console.error(`Webhook request failed with status ${response.status}`);
+        // Try to read the response text for more details
+        try {
+          const responseText = await response.text();
+          console.error(`Webhook request failed with status ${response.status}:`, responseText);
+        } catch (textError) {
+          console.error(`Webhook request failed with status ${response.status} and could not read response:`, textError);
+        }
         return; // Don't throw, just log and continue
+      }
+
+      // Try to read the response for debugging
+      try {
+        const responseData = await response.json();
+        console.log('Webhook response data:', responseData);
+      } catch (jsonError) {
+        console.log('Webhook response is not JSON, but request was successful');
       }
 
       console.log('✅ Successfully sent order', order.id, 'to n8n webhook');
@@ -337,9 +363,145 @@ export async function verifyPayment(
     // We need to assume the payment is valid at this point
     // The actual verification would happen server-side with a webhook from Razorpay
     
+    // Get order details to include in the webhook
+    let orderDetails;
+    try {
+      orderDetails = await pocketbase.collection('orders').getOne(orderId);
+      console.log('Successfully fetched order details for webhook:', orderDetails.id);
+    } catch (error) {
+      console.error('Error fetching order details for webhook, but continuing:', error);
+      // Continue with the basic order details we have
+    }
+    
     // Try to send a webhook notification
     try {
-      await sendOrderToWebhook(orderId, pocketbase.authStore.model);
+      let customerName = 'Customer';
+      let customerEmail = '';
+      let customerPhone = '';
+      let shippingAddress = {};
+      let formattedAddress = '';
+      let orderProducts = [];
+      let subtotal = 0;
+      let shippingCost = 0;
+      let total = 0;
+      
+      // Extract details from the order if available
+      if (orderDetails) {
+        customerName = orderDetails.customer_name || customerName;
+        customerEmail = orderDetails.customer_email || customerEmail;
+        customerPhone = orderDetails.customer_phone || customerPhone;
+        subtotal = orderDetails.subtotal || subtotal;
+        shippingCost = orderDetails.shipping_cost || shippingCost;
+        total = orderDetails.total || total;
+        
+        // Parse products
+        try {
+          orderProducts = typeof orderDetails.products === 'string'
+            ? JSON.parse(orderDetails.products)
+            : orderDetails.products || [];
+          
+          if (!Array.isArray(orderProducts)) {
+            orderProducts = [];
+          }
+        } catch (e) {
+          console.error('Error parsing products for webhook:', e);
+        }
+        
+        // Parse shipping address
+        if (orderDetails.shipping_address) {
+          try {
+            // If shipping_address is an object reference (ID), try to fetch it
+            if (typeof orderDetails.shipping_address === 'string' && 
+                !orderDetails.shipping_address.startsWith('{')) {
+              try {
+                const addressRecord = await pocketbase.collection('addresses').getOne(orderDetails.shipping_address);
+                if (addressRecord) {
+                  shippingAddress = {
+                    street: addressRecord.street || '',
+                    city: addressRecord.city || '',
+                    state: addressRecord.state || '',
+                    postalCode: addressRecord.postalCode || '',
+                    country: addressRecord.country || 'India'
+                  };
+                  
+                  // Build formatted address
+                  const addressParts = [];
+                  if (addressRecord.street) addressParts.push(addressRecord.street);
+                  if (addressRecord.city) addressParts.push(addressRecord.city);
+                  if (addressRecord.state) addressParts.push(addressRecord.state);
+                  if (addressRecord.postalCode) addressParts.push(addressRecord.postalCode);
+                  if (addressRecord.country) addressParts.push(addressRecord.country);
+                  
+                  formattedAddress = addressParts.join(', ');
+                }
+              } catch (addressError) {
+                console.error('Error fetching address record, continuing with parsed address:', addressError);
+              }
+            }
+            
+            // If we still don't have an address or it's a JSON string, try parsing it
+            if (Object.keys(shippingAddress).length === 0) {
+              const addressData = typeof orderDetails.shipping_address === 'string'
+                ? JSON.parse(orderDetails.shipping_address)
+                : orderDetails.shipping_address;
+              
+              shippingAddress = {
+                street: addressData.street || '',
+                city: addressData.city || '',
+                state: addressData.state || '',
+                postalCode: addressData.postalCode || '',
+                country: addressData.country || 'India'
+              };
+              
+              // Build formatted address
+              const addressParts = [];
+              if (addressData.street) addressParts.push(addressData.street);
+              if (addressData.city) addressParts.push(addressData.city);
+              if (addressData.state) addressParts.push(addressData.state);
+              if (addressData.postalCode) addressParts.push(addressData.postalCode);
+              if (addressData.country) addressParts.push(addressData.country);
+              
+              formattedAddress = addressParts.join(', ');
+            }
+          } catch (e) {
+            console.error('Error parsing shipping address for webhook:', e);
+          }
+        }
+      }
+      
+      // Use the direct webhook approach
+      const webhookResult = await testDirectWebhook({
+        eventType: "payment_success",
+        notificationType: "order_payment_success",
+        orderId: orderId,
+        customerInfo: {
+          name: customerName,
+          email: customerEmail,
+          phone: customerPhone
+        },
+        shippingAddress: shippingAddress,
+        paymentInfo: {
+          paymentId: paymentId,
+          paymentOrderId: orderId,
+          paymentStatus: 'paid'
+        },
+        orderStatus: 'processing',
+        products: orderProducts.map(item => ({
+          productId: item.productId || item.product?.id || '',
+          name: item.product?.name || item.name || 'Product',
+          quantity: item.quantity || 1,
+          price: item.product?.price || item.price || 0,
+          color: item.color || '',
+          imageUrl: item.product?.images?.[0] || ''
+        })),
+        financialDetails: {
+          subtotal,
+          shippingCost,
+          total
+        }
+      });
+      
+      console.log('Webhook notification result:', webhookResult.success ? 'success' : 'failed');
     } catch (webhookError) {
       console.error('Error sending webhook but continuing:', webhookError);
       // Don't fail verification due to webhook issues
