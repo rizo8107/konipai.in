@@ -1,10 +1,11 @@
 import { createContext, useContext, useEffect, useState } from 'react';
-import { User, getCurrentUser, isAuthenticated, onAuthStateChange, signIn, signOut, signUp } from '@/lib/pocketbase';
+import { User, getCurrentUser, isAuthenticated, onAuthStateChange, signIn, signOut, signUp, signInWithGoogle } from '@/lib/pocketbase';
 
 interface AuthContextType {
     user: User | null;
     isAuthenticated: boolean;
     signIn: (email: string, password: string) => Promise<void>;
+    signInWithGoogle: () => Promise<void>;
     signUp: (email: string, password: string, name: string) => Promise<void>;
     signOut: () => void;
     loading: boolean;
@@ -51,6 +52,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         try {
             setLoading(true);
             await signIn(email, password);
+            setUser(getCurrentUser());
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleSignInWithGoogle = async () => {
+        try {
+            setLoading(true);
+            await signInWithGoogle();
             setUser(getCurrentUser());
         } finally {
             setLoading(false);
@@ -110,6 +121,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         user,
         isAuthenticated: isAuthenticated(),
         signIn: handleSignIn,
+        signInWithGoogle: handleSignInWithGoogle,
         signUp: handleSignUp,
         signOut: handleSignOut,
         loading,
