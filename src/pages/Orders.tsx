@@ -11,11 +11,21 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ShoppingBag, PackageOpen, AlertCircle, ArrowRight, Clock, Check, AlertTriangle, Package, MapPin } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 
-// Add image optimization utility
+// Add image optimization utility with format fallback
 const getOptimizedImageUrl = (collectionId: string, recordId: string, filename: string) => {
   const baseUrl = import.meta.env.VITE_POCKETBASE_URL.replace(/\/$/, '');
-  return `${baseUrl}/api/files/${collectionId}/${recordId}/${filename}?thumb=100x100&quality=80`;
+  // Try to detect image format from filename
+  const format = filename.split('.').pop()?.toLowerCase() || '';
+  const supportedFormats = ['webp', 'jpg', 'jpeg', 'png'];
+  
+  // If format is supported, use it; otherwise default to original
+  const useFormat = supportedFormats.includes(format) ? format : 'original';
+  
+  return `${baseUrl}/api/files/${collectionId}/${recordId}/${filename}${useFormat === 'original' ? '' : `?thumb=100x100&format=${useFormat}&quality=80`}`;
 };
+
+// Add placeholder image constant
+const PLACEHOLDER_IMAGE = '/placeholder.svg';
 
 // Define interface for order product
 interface OrderProduct {
@@ -336,7 +346,7 @@ export default function Orders() {
                   {products.slice(0, 2).map((item, index) => (
                     <div key={index} className="flex justify-between items-center">
                       <div className="flex items-center gap-2">
-                        {/* Optimized Product Image */}
+                        {/* Optimized Product Image with better error handling */}
                         <div className="w-10 h-10 rounded overflow-hidden bg-muted">
                           {item.product?.images && item.product.images[0] ? (
                             <img 
@@ -348,8 +358,20 @@ export default function Orders() {
                               height={40}
                               crossOrigin="anonymous"
                               onError={(e) => {
-                                console.error('Image load error:', e);
-                                e.currentTarget.src = '/placeholder-product.svg';
+                                console.error('Image load error, trying original format');
+                                const target = e.currentTarget;
+                                const originalSrc = target.src;
+                                
+                                // If not already using original format, try it
+                                if (originalSrc.includes('?thumb=')) {
+                                  const baseUrl = originalSrc.split('?')[0];
+                                  target.src = baseUrl;
+                                } else {
+                                  // If original format also fails, use placeholder
+                                  console.error('Original format failed, using placeholder');
+                                  target.src = PLACEHOLDER_IMAGE;
+                                  target.onerror = null; // Prevent infinite loop
+                                }
                               }}
                             />
                           ) : (
@@ -401,7 +423,7 @@ export default function Orders() {
                   <span>Total</span>
                   <span>{formatCurrency(order.total)}</span>
                 </div>
-              </CardContent>
+              </CardFooter>
               <CardFooter className="bg-muted/30 py-2">
                 <Button asChild variant="secondary" size="sm" className="ml-auto">
                   <Link to={`/orders/${order.id}`}>View Details</Link>
