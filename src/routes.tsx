@@ -38,6 +38,9 @@ const TermsAndConditions = lazy(() => import("./pages/TermsAndConditions"))
 const CancellationsRefunds = lazy(() => import("./pages/CancellationsRefunds"))
 const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"))
 
+// Add the webhook test page to the import
+const WebhookTest = lazy(() => import("./pages/WebhookTest"))
+
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, loading } = useAuth()
 
@@ -84,6 +87,16 @@ function ScrollToTop() {
   }, [pathname]);
   
   return null;
+}
+
+// Add the webhook test route with the other pages
+function generateRoutes() {
+  const pages = [
+    // ... existing pages ...
+    { path: "/webhook-test", component: WebhookTest },
+  ];
+  
+  // ... rest of the function ...
 }
 
 export function Routes() {
@@ -156,6 +169,7 @@ export function Routes() {
                     </PrivateRoute>
                   }
                 />
+                <Route path="/webhook-test" element={<WebhookTest />} />
                 <Route path="*" element={<NotFound />} />
               </RouterRoutes>
             </Suspense>
