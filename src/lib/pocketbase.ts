@@ -332,7 +332,17 @@ export async function getProducts(filter?: ProductFilter, signal?: AbortSignal):
 
         const records = await pb.collection(Collections.PRODUCTS).getList(1, 50, options);
 
-        return records.items.map(record => ({
+        // Get review counts for all products
+        const reviewCounts = await Promise.all(
+            records.items.map(record => 
+                pb.collection('reviews').getList(1, 1, {
+                    filter: `product = "${record.id}"`,
+                    fields: 'id'
+                })
+            )
+        );
+
+        return records.items.map((record, index) => ({
             ...record,
             $id: record.id,
             images: Array.isArray(record.images) 
@@ -343,7 +353,8 @@ export async function getProducts(filter?: ProductFilter, signal?: AbortSignal):
             care: typeof record.care === 'string' ? JSON.parse(record.care) : record.care,
             tags: typeof record.tags === 'string' ? JSON.parse(record.tags) : record.tags,
             createdAt: record.created,
-            updatedAt: record.updated
+            updatedAt: record.updated,
+            reviews: reviewCounts[index].totalItems // Set the actual review count
         })) as unknown as Product[];
     } catch (error) {
         if (error.name === 'AbortError') {
@@ -355,7 +366,15 @@ export async function getProducts(filter?: ProductFilter, signal?: AbortSignal):
 }
 
 export async function getProduct(id: string) {
+    // Get the product
     const record = await pb.collection('products').getOne<Product>(id);
+
+    // Get the review count
+    const reviewCount = await pb.collection('reviews').getList(1, 1, {
+        filter: `product = "${id}"`,
+        fields: 'id'
+    });
+
     return {
         ...record,
         $id: record.id,
@@ -364,6 +383,7 @@ export async function getProduct(id: string) {
         features: typeof record.features === 'string' ? JSON.parse(record.features) : record.features,
         care: typeof record.care === 'string' ? JSON.parse(record.care) : record.care,
         tags: typeof record.tags === 'string' ? JSON.parse(record.tags) : record.tags,
+        reviews: reviewCount.totalItems // Set the actual review count
     };
 }
 
@@ -542,17 +562,46 @@ export const createReview = async (
         formData.append('images', image);
     });
 
-    return await pocketbase.collection('reviews').create(formData);
+    // Create the review
+    const review = await pocketbase.collection('reviews').create(formData);
+
+    // Update the product's review count
+    const product = await pocketbase.collection('products').getOne(productId);
+    await pocketbase.collection('products').update(productId, {
+        reviews: (product.reviews || 0) + 1
+    });
+
+    return review;
 };
 
 // Function to get reviews for a product
-export const getProductReviews = async (productId: string): Promise<Review[]> => {
-    return await pocketbase.collection('reviews').getFullList({
-        filter: `product = "${productId}"`,
-        sort: '-created',
-        expand: 'user,comments.user'
-    });
-};
+export async function getProductReviews(productId: string): Promise<Review[]> {
+  console.log(`[PROD DEBUG] getProductReviews called for product ${productId}`);
+  console.log(`[PROD DEBUG] PocketBase URL: ${pocketbase.baseUrl}`);
+  
+  try {
+    const startTime = Date.now();
+    const options = {
+      filter: `product = "${productId}"`,
+      sort: '-created',
+      expand: 'user,comments.user',
+      $autoCancel: false,
+      requestKey: `prod_reviews_${productId}_${Date.now()}` // Unique key to prevent request cancellation
+    };
+    
+    const result = await pocketbase.collection('reviews').getFullList(options);
+    
+    const endTime = Date.now();
+    console.log(`[PROD DEBUG] Reviews request completed in ${endTime - startTime}ms, found ${result.length} reviews`);
+    
+    return result as unknown as Review[];
+  } catch (error) {
+    // Handle error safely
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error(`[PROD DEBUG] Error fetching reviews for product ${productId}:`, errorMessage);
+    return []; // Return empty array instead of throwing to prevent product display failure
+  }
+}
 
 // Function to add a comment to a review
 export const addReviewComment = async (reviewId: string, content: string): Promise<ReviewComment> => {

@@ -248,11 +248,21 @@ const ProductDetail = () => {
 
         // Load reviews to calculate average rating if product has reviews
         if (data.reviews && data.reviews > 0) {
-          const reviews = await getProductReviews(id);
-          const avgRating = reviews.length > 0
-            ? reviews.reduce((acc: number, review: { rating: number }) => acc + review.rating, 0) / reviews.length
-            : 0;
-          setAverageRating(avgRating);
+          try {
+            console.log(`[PROD DEBUG] Attempting to load ${data.reviews} reviews for product ${id}`);
+            const reviews = await getProductReviews(id);
+            console.log(`[PROD DEBUG] Successfully loaded ${reviews.length} reviews for product ${id}`);
+            const avgRating = reviews.length > 0
+              ? reviews.reduce((acc: number, review: { rating: number }) => acc + review.rating, 0) / reviews.length
+              : 0;
+            setAverageRating(avgRating);
+            console.log(`[PROD DEBUG] Set average rating to ${avgRating} from ${reviews.length} reviews`);
+          } catch (reviewError) {
+            console.error('[PROD DEBUG] Error loading product reviews:', reviewError);
+            // Don't let review loading failure prevent the product from displaying
+            // Just set average rating to 0 or use a fallback
+            setAverageRating(0);
+          }
         }
       } catch (err) {
         console.error('Error fetching product:', err);
@@ -786,16 +796,30 @@ const ProductDetail = () => {
             productId={id} 
             initialReviewCount={product.reviews} 
             onReviewAdded={async () => {
+              console.log("[PROD DEBUG] Review added callback triggered");
               // Refresh product data to get updated review count
               if (id) {
-                const updatedProduct = await getProduct(id);
-                setProduct(updatedProduct);
-                // Update average rating
-                const reviews = await getProductReviews(id);
-                const avgRating = reviews.length > 0
-                  ? reviews.reduce((acc: number, review: { rating: number }) => acc + review.rating, 0) / reviews.length
-                  : 0;
-                setAverageRating(avgRating);
+                try {
+                  const updatedProduct = await getProduct(id);
+                  console.log(`[PROD DEBUG] Updated product fetched with ${updatedProduct.reviews} reviews`);
+                  setProduct(updatedProduct);
+                  
+                  // Update average rating
+                  const reviews = await getProductReviews(id);
+                  console.log(`[PROD DEBUG] Fetched ${reviews.length} reviews for rating calculation`);
+                  
+                  if (reviews.length > 0) {
+                    const total = reviews.reduce((acc: number, review: { rating: number }) => acc + review.rating, 0);
+                    const avg = total / reviews.length;
+                    console.log(`[PROD DEBUG] Calculated rating: ${avg} (total: ${total})`);
+                    setAverageRating(avg);
+                  } else {
+                    console.log("[PROD DEBUG] No reviews to calculate average from");
+                    setAverageRating(0);
+                  }
+                } catch (err) {
+                  console.error("[PROD DEBUG] Error refreshing product after review:", err);
+                }
               }
             }} 
           />
