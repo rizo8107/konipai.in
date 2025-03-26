@@ -181,8 +181,10 @@ const sendOrderToWebhook = async (orderId: string, user: Record<string, unknown>
   try {
     console.log('Preparing to send order to n8n webhook...');
     
-    // Fetch order details first
-    const order = await pocketbase.collection('orders').getOne(orderId);
+    // Fetch order details first with expanded shipping address
+    const order = await pocketbase.collection('orders').getOne(orderId, {
+      expand: 'shippingAddress'
+    });
     if (!order) {
       console.warn('Order not found, skipping webhook notification');
       return; // Don't throw error, just return silently
@@ -216,7 +218,23 @@ const sendOrderToWebhook = async (orderId: string, user: Record<string, unknown>
     // Build a formatted shipping address
     let formattedAddress = '';
     let shippingAddressObj = {};
-    if (order.shipping_address) {
+    
+    // First try to use the expanded shipping address relationship
+    if (order.expand?.shippingAddress) {
+      const address = order.expand.shippingAddress;
+      shippingAddressObj = address;
+      
+      const addressParts = [];
+      if (address.street) addressParts.push(address.street);
+      if (address.city) addressParts.push(address.city);
+      if (address.state) addressParts.push(address.state);
+      if (address.postalCode) addressParts.push(address.postalCode);
+      if (address.country) addressParts.push(address.country);
+      
+      formattedAddress = addressParts.join(', ');
+    } 
+    // Fallback to parsing from shipping_address field if available
+    else if (order.shipping_address) {
       try {
         const address = typeof order.shipping_address === 'string'
           ? JSON.parse(order.shipping_address)
