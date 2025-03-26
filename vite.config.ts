@@ -57,6 +57,9 @@ export default defineConfig(({ mode }) => ({
             '@radix-ui/react-toggle-group',
             '@radix-ui/react-tooltip',
           ],
+          utils: [
+            'react-intersection-observer',
+          ],
         },
         // Configure code splitting
         chunkFileNames: 'assets/[name]-[hash].js',
