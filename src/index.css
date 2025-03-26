@@ -109,6 +109,10 @@
     @apply border-t border-gray-200 my-6;
   }
   
+  .text-shadow-dark {
+    text-shadow: 0 2px 4px rgba(0,0,0,0.5), 0 0 8px rgba(0,0,0,0.4);
+  }
+  
   /* Custom tab styling */
   .konipai-tabs-list {
     @apply bg-white border-b min-w-full;
