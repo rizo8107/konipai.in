@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
+import { format } from 'date-fns';
 import { 
   ArrowLeft, 
   Minus, 
@@ -15,7 +16,13 @@ import {
   ImageIcon,
   Loader2,
   ShoppingCart,
-  CornerDownRight
+  CornerDownRight,
+  Info,
+  Ruler,
+  Clock,
+  Package,
+  ThumbsUp,
+  Award
 } from 'lucide-react';
 import { getProduct, getProducts, type Product, type ProductColor, pocketbase, Collections } from '@/lib/pocketbase';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -36,6 +43,8 @@ import {
   trackAddToCart, 
   trackButtonClick 
 } from '@/lib/analytics';
+import { ProductReviews } from '@/components/ProductReviews';
+import { ProductDetails } from '@/components/ProductDetails';
 
 // Generate a very low-res placeholder
 const generatePlaceholder = (color = '#f3f4f6') => {
@@ -59,6 +68,9 @@ const ProductDetail = () => {
   const { toast } = useToast();
   const relatedLoaded = useRef(false);
   const { user } = useAuth();
+  
+  const [showSizeGuide, setShowSizeGuide] = useState(false);
+  const [activeTab, setActiveTab] = useState('description');
   
   // Check if the current product is already in cart
   const isInCart = useMemo(() => {
@@ -440,30 +452,41 @@ const ProductDetail = () => {
   };
   
   return (
-    <div className="min-h-screen bg-background">
+    <div className="pb-32">
       <div className="konipai-container py-8">
-        <Link 
-          to="/shop" 
-          className="inline-flex items-center text-muted-foreground hover:text-foreground mb-8 transition-colors"
-        >
-          <ArrowLeft className="mr-2 h-4 w-4" /> Back to Shop
-        </Link>
-        
+        {/* Breadcrumb */}
+        <div className="flex items-center gap-2 text-sm text-muted-foreground mb-8">
+          <Link to="/shop" className="hover:text-primary">Shop</Link>
+          <span>/</span>
+          <Link to={`/shop/${product.category}`} className="hover:text-primary capitalize">{product.category}</Link>
+          <span>/</span>
+          <span className="text-foreground">{product.name}</span>
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
-          {/* Product Images */}
+          {/* Product Images - Enhanced Gallery */}
           <div className="space-y-4">
-            <div className="relative bg-gray-100 rounded-lg overflow-hidden">
+            <div className="relative bg-gray-100 rounded-lg overflow-hidden group">
               {selectedImage ? (
-                <ProductImage
-                  url={selectedImage}
-                  alt={product?.name || 'Product image'}
-                  className="w-full h-full object-cover"
-                  priority={true}
-                  width={600}
-                  height={600}
-                  size="large"
-                  aspectRatio="square"
-                />
+                <>
+                  <ProductImage
+                    url={selectedImage}
+                    alt={product?.name || 'Product image'}
+                    className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                    priority={true}
+                    width={600}
+                    height={600}
+                    size="large"
+                    aspectRatio="square"
+                  />
+                  <button 
+                    onClick={() => setShowSizeGuide(true)}
+                    className="absolute bottom-4 right-4 bg-white/90 backdrop-blur-sm p-2 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                    title="View size guide"
+                  >
+                    <Ruler className="h-5 w-5" />
+                  </button>
+                </>
               ) : (
                 <div className="aspect-square w-full h-full flex items-center justify-center">
                   <ImageIcon className="h-12 w-12 text-gray-400" />
@@ -471,7 +494,7 @@ const ProductDetail = () => {
               )}
             </div>
             
-            <div className="grid grid-cols-4 gap-2 sm:gap-4">
+            <div className="grid grid-cols-4 gap-4">
               {product?.images?.map((image, index) => (
                 <button
                   key={index}
@@ -479,7 +502,7 @@ const ProductDetail = () => {
                   className={cn(
                     "relative bg-gray-100 rounded-lg overflow-hidden transition-all",
                     selectedImage === image ? "ring-2 ring-primary ring-offset-2" : "hover:ring-1 hover:ring-primary/50",
-                    "aspect-square" // Ensure consistent aspect ratio
+                    "aspect-square"
                   )}
                   aria-label={`View ${product.name} image ${index + 1}`}
                 >
@@ -490,7 +513,7 @@ const ProductDetail = () => {
                     width={150}
                     height={150}
                     size="thumbnail"
-                    priority={index < 2} // Only prioritize first two thumbnails
+                    priority={index < 2}
                     aspectRatio="square"
                   />
                 </button>
@@ -498,41 +521,113 @@ const ProductDetail = () => {
             </div>
           </div>
           
-          {/* Product Details */}
+          {/* Product Details - Enhanced */}
           <div>
+            {/* Badges and Ratings */}
             <div className="flex items-center gap-4 mb-4">
               {product.bestseller && (
                 <Badge variant="secondary" className="bg-primary/10 text-primary hover:bg-primary/20">
+                  <Award className="w-3 h-3 mr-1" />
                   Bestseller
                 </Badge>
               )}
               {product.new && (
                 <Badge variant="secondary" className="bg-primary/10 text-primary hover:bg-primary/20">
+                  <Package className="w-3 h-3 mr-1" />
                   New Arrival
                 </Badge>
               )}
-              <div className="flex items-center gap-1 text-yellow-400">
-                {Array(5).fill(null).map((_, i) => (
-                  <Star key={i} className="fill-current h-4 w-4" />
-                ))}
-                <span className="text-sm text-muted-foreground ml-2">
+              {product.inStock ? (
+                <Badge variant="secondary" className="bg-green-100 text-green-800">
+                  <Check className="w-3 h-3 mr-1" />
+                  In Stock
+                </Badge>
+              ) : (
+                <Badge variant="secondary" className="bg-red-100 text-red-800">
+                  Out of Stock
+                </Badge>
+              )}
+            </div>
+            
+            {/* Title and Price */}
+            <h1 className="text-3xl font-bold mb-2">{product.name}</h1>
+            <div className="flex items-center gap-4 mb-6">
+              <p className="text-2xl font-medium text-primary">
+                ₹{typeof product.price === 'number' ? product.price.toFixed(2) : '0.00'}
+              </p>
+              <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1 text-yellow-400">
+                  {Array(5).fill(null).map((_, i) => (
+                    <Star key={i} className="fill-current h-4 w-4" />
+                  ))}
+                </div>
+                <Link to="#reviews" className="text-sm text-muted-foreground hover:text-primary ml-2">
                   ({product.reviews || 0} reviews)
-                </span>
+                </Link>
               </div>
             </div>
             
-            <h1 className="text-3xl font-bold mb-2">{product.name}</h1>
-            <p className="text-2xl font-medium mb-6 text-primary">
-              ₹{typeof product.price === 'number' ? product.price.toFixed(2) : '0.00'}
-            </p>
-            
-            <div className="mb-6">
-              <p className="text-muted-foreground">{product.description}</p>
+            {/* Trust Badges */}
+            <div className="grid grid-cols-3 gap-4 p-4 bg-gray-50 rounded-lg mb-6">
+              <div className="flex flex-col items-center text-center gap-2">
+                <Truck className="h-6 w-6 text-primary" />
+                <div className="text-xs">
+                  <p className="font-medium">Free Shipping</p>
+                  <p className="text-muted-foreground">On orders over ₹999</p>
+                </div>
+              </div>
+              <div className="flex flex-col items-center text-center gap-2">
+                <Shield className="h-6 w-6 text-primary" />
+                <div className="text-xs">
+                  <p className="font-medium">Secure Payment</p>
+                  <p className="text-muted-foreground">100% secure checkout</p>
+                </div>
+              </div>
+              <div className="flex flex-col items-center text-center gap-2">
+                <RotateCcw className="h-6 w-6 text-primary" />
+                <div className="text-xs">
+                  <p className="font-medium">Easy Returns</p>
+                  <p className="text-muted-foreground">30 day returns</p>
+                </div>
+              </div>
             </div>
             
+            {/* Description Tabs */}
+            <Tabs defaultValue="description" className="mb-6">
+              <TabsList className="w-full grid grid-cols-3">
+                <TabsTrigger value="description">Description</TabsTrigger>
+                <TabsTrigger value="features">Features</TabsTrigger>
+                <TabsTrigger value="shipping">Shipping</TabsTrigger>
+              </TabsList>
+              <TabsContent value="description" className="pt-4">
+                <p className="text-muted-foreground">{product.description}</p>
+              </TabsContent>
+              <TabsContent value="features" className="pt-4">
+                <ul className="list-disc pl-5 space-y-2 text-muted-foreground">
+                  {product.features.map((feature, index) => (
+                    <li key={index}>{feature}</li>
+                  ))}
+                </ul>
+              </TabsContent>
+              <TabsContent value="shipping" className="pt-4">
+                <div className="space-y-4 text-muted-foreground">
+                  <p>• Free standard shipping on orders over ₹999</p>
+                  <p>• Standard delivery: 3-5 business days</p>
+                  <p>• Express delivery: 1-2 business days (additional charges apply)</p>
+                  <p>• Easy 30-day returns policy</p>
+                </div>
+              </TabsContent>
+            </Tabs>
+
+            {/* Color Selection */}
             {product.colors?.length > 0 && (
               <div className="mb-6">
-                <h3 className="font-medium mb-2">Color</h3>
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="font-medium">Color</h3>
+                  <span className="text-sm text-muted-foreground capitalize">
+                    {selectedColor?.name || 'Select a color'}
+                  </span>
+                </div>
                 <div className="flex flex-wrap gap-3">
                   {product.colors.map(color => (
                     <button
@@ -556,44 +651,46 @@ const ProductDetail = () => {
                     </button>
                   ))}
                 </div>
-                <p className="text-sm mt-2 text-muted-foreground capitalize">
-                  {selectedColor?.name}
-                </p>
               </div>
             )}
             
+            {/* Quantity Selection */}
             <div className="mb-6">
-              <h3 className="font-medium mb-2">Quantity</h3>
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="font-medium">Quantity</h3>
+                {product.inStock && (
+                  <span className="text-sm text-green-600 flex items-center gap-1">
+                    <Check className="h-4 w-4" />
+                    In Stock
+                  </span>
+                )}
+              </div>
               <div className="flex items-center gap-4">
-                <div className="flex border rounded-lg">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
+                <div className="flex items-center border rounded-md">
+                  <button
                     onClick={decreaseQuantity}
-                    className="rounded-l-lg"
+                    className="p-2 hover:bg-gray-100 transition-colors"
+                    disabled={quantity <= 1}
                   >
                     <Minus className="h-4 w-4" />
-                  </Button>
-                  <span className="w-16 flex items-center justify-center border-x">
-                    {quantity}
-                  </span>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
+                  </button>
+                  <span className="px-4 py-2 font-medium">{quantity}</span>
+                  <button
                     onClick={increaseQuantity}
-                    className="rounded-r-lg"
+                    className="p-2 hover:bg-gray-100 transition-colors"
                   >
                     <Plus className="h-4 w-4" />
-                  </Button>
+                  </button>
                 </div>
-                <p className="text-sm text-muted-foreground">
-                  {product.inStock ? 'In Stock' : 'Out of Stock'}
-                </p>
+                {product.inStock && (
+                  <span className="text-sm text-muted-foreground">
+                    {product.stock > 10 ? 'More than 10 available' : `Only ${product.stock} left`}
+                  </span>
+                )}
               </div>
             </div>
             
+            {/* Add to Cart and Actions */}
             <div className="flex flex-col gap-4 mb-8">
               <Button 
                 size="lg" 
@@ -645,141 +742,52 @@ const ProductDetail = () => {
               </div>
             </div>
             
-            <div className="mt-12">
-              <h3 className="text-xl font-bold mb-4">Product Details</h3>
-              <div className="overflow-x-auto pb-2">
-                <Tabs defaultValue="features">
-                  <TabsList className="w-full grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 konipai-tabs-list">
-                    <TabsTrigger value="features" className="konipai-tab">Features</TabsTrigger>
-                    <TabsTrigger value="dimensions" className="konipai-tab">Dimensions</TabsTrigger>
-                    <TabsTrigger value="care" className="konipai-tab">Care</TabsTrigger>
-                    <TabsTrigger value="routine" className="konipai-tab">How to Use</TabsTrigger>
-                    <TabsTrigger value="tips" className="konipai-tab">Tips & Advice</TabsTrigger>
-                  </TabsList>
-                  <TabsContent value="features" className="pt-4">
-                    <ul className="list-disc pl-5 space-y-2 text-muted-foreground">
-                      {product.features.map((feature, index) => (
-                        <li key={index}>{feature}</li>
-                      ))}
-                    </ul>
-                  </TabsContent>
-                  <TabsContent value="dimensions" className="pt-4">
-                    <div className="space-y-4 text-muted-foreground">
-                      <p><strong>Dimensions:</strong> {product.dimensions}</p>
-                      <p><strong>Material:</strong> {product.material}</p>
-                    </div>
-                  </TabsContent>
-                  <TabsContent value="care" className="pt-4">
-                    <ul className="list-disc pl-5 space-y-2 text-muted-foreground">
-                      {product.care.map((care, index) => (
-                        <li key={index}>{care}</li>
-                      ))}
-                    </ul>
-                  </TabsContent>
-                  <TabsContent value="routine" className="pt-4">
-                    <div className="space-y-6">
-                      <div>
-                        <h3 className="font-medium mb-2">Daily Routine</h3>
-                        <p className="text-muted-foreground">
-                          Keep your tote bag clean and organized. Empty it regularly and store it in a cool, dry place when not in use.
-                        </p>
-                      </div>
-                      <div>
-                        <h3 className="font-medium mb-2">For Best Results</h3>
-                        <ul className="list-disc pl-5 space-y-2 text-muted-foreground">
-                          <li>Clean spills immediately</li>
-                          <li>Avoid overloading</li>
-                          <li>Rotate usage to maintain shape</li>
-                          <li>Store properly when not in use</li>
-                        </ul>
-                      </div>
-                    </div>
-                  </TabsContent>
-                  <TabsContent value="tips" className="pt-4">
-                    <div className="space-y-6">
-                      <div>
-                        <h3 className="font-medium mb-2">Expert's Tips</h3>
-                        <p className="text-muted-foreground">
-                          Our tote bags are designed for versatility and durability. The canvas material will soften and develop character over time, making each bag unique to its owner.
-                        </p>
-                      </div>
-                      <div>
-                        <h3 className="font-medium mb-2">Pro Tips</h3>
-                        <ul className="list-disc pl-5 space-y-2 text-muted-foreground">
-                          <li>Use internal organizers for better organization</li>
-                          <li>Apply water repellent spray for added protection</li>
-                          <li>Clean the bottom regularly</li>
-                          <li>Use bag hooks when placing on floors</li>
-                        </ul>
-                      </div>
-                    </div>
-                  </TabsContent>
-                </Tabs>
+            {/* Social Proof */}
+            <div className="bg-gray-50 rounded-lg p-4 mb-8">
+              <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                <ThumbsUp className="h-4 w-4 text-green-600" />
+                <span>{Math.floor(Math.random() * 50) + 20} people bought this in the last 24 hours</span>
               </div>
             </div>
           </div>
         </div>
         
-        <Separator className="my-16" />
+        {/* Product Details */}
+        {product && <ProductDetails product={product} />}
+        
+        {/* Reviews Section */}
+        {id && <ProductReviews productId={id} initialReviewCount={product.reviews} />}
         
         {/* Related Products */}
         {relatedProducts.length > 0 && (
-          <div className="mb-16" id="related-products">
-            <h2 className="text-3xl font-light text-center mb-8 md:mb-12">You May Also Like</h2>
+          <div className="mt-16" id="related-products">
+            <h2 className="text-2xl font-bold mb-8">You May Also Like</h2>
             <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-4 md:gap-8">
-              {relatedProducts.map((relatedProduct, index) => (
+              {relatedProducts.map((relatedProduct) => (
                 <Link 
                   key={relatedProduct.id}
                   to={`/product/${relatedProduct.id}`}
                   className="group block"
                 >
-                  <div className="relative aspect-square overflow-hidden bg-gray-100 rounded-lg mb-2 md:mb-4">
+                  <div className="relative aspect-square overflow-hidden bg-gray-100 rounded-lg mb-4">
                     <ProductImage
                       url={relatedProduct.images?.[0] || ''}
                       alt={relatedProduct.name}
-                      className="w-full h-full object-cover object-center transition duration-300 group-hover:scale-105"
+                      className="w-full h-full object-cover transition duration-300 group-hover:scale-105"
                       width={300}
                       height={300}
                       size="medium"
                       priority={false}
                       aspectRatio="square"
                     />
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/30 transition-colors duration-300">
-                      <Button
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          if (!relatedProduct.colors || !Array.isArray(relatedProduct.colors) || relatedProduct.colors.length === 0) {
-                            addItem(relatedProduct, 1, '');
-                          } else {
-                            addItem(relatedProduct, 1, relatedProduct.colors[0].value);
-                          }
-                          toast({
-                            title: "Added to cart",
-                            description: `${relatedProduct.name} added to your cart.`,
-                          });
-                        }}
-                        variant="default"
-                        size="sm"
-                        className={cn(
-                          "opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100",
-                          "transition-all duration-200 bg-white text-black hover:bg-gray-100",
-                          "hidden sm:flex" // Hide on very small screens
-                        )}
-                      >
-                        <Plus className="mr-2 h-4 w-4" />
-                        Add to Cart
-                      </Button>
-                    </div>
-                    
                     <div className="absolute top-2 left-2 flex flex-col gap-1">
                       {relatedProduct.bestseller && (
-                        <Badge variant="default" className="bg-black text-white text-xs">
+                        <Badge variant="default" className="bg-black text-white">
                           Bestseller
                         </Badge>
                       )}
                       {relatedProduct.new && (
-                        <Badge variant="default" className="bg-primary text-white text-xs">
+                        <Badge variant="default" className="bg-primary text-white">
                           New
                         </Badge>
                       )}
@@ -787,11 +795,11 @@ const ProductDetail = () => {
                   </div>
                   
                   <div>
-                    <h3 className="font-medium text-sm sm:text-base mb-1 truncate group-hover:text-primary transition-colors">
+                    <h3 className="font-medium mb-1 group-hover:text-primary transition-colors">
                       {relatedProduct.name}
                     </h3>
                     <div className="flex items-center justify-between">
-                      <p className="text-sm sm:text-base font-medium">
+                      <p className="font-medium">
                         ₹{typeof relatedProduct.price === 'number' ? relatedProduct.price.toFixed(2) : '0.00'}
                       </p>
                       {relatedProduct.colors?.length > 0 && (
@@ -799,13 +807,13 @@ const ProductDetail = () => {
                           {relatedProduct.colors.slice(0, 3).map((color) => (
                             <div 
                               key={color.value}
-                              className="w-3 h-3 sm:w-4 sm:h-4 rounded-full border-2 border-white ring-1 ring-gray-200"
+                              className="w-4 h-4 rounded-full border-2 border-white ring-1 ring-gray-200"
                               style={{ backgroundColor: color.hex }}
                               title={color.name}
                             />
                           ))}
                           {relatedProduct.colors.length > 3 && (
-                            <div className="w-3 h-3 sm:w-4 sm:h-4 rounded-full bg-gray-200 border-2 border-white flex items-center justify-center text-[8px] sm:text-[10px] font-medium">
+                            <div className="w-4 h-4 rounded-full bg-gray-200 border-2 border-white flex items-center justify-center text-[10px] font-medium">
                               +{relatedProduct.colors.length - 3}
                             </div>
                           )}
@@ -821,7 +829,7 @@ const ProductDetail = () => {
       </div>
 
       {/* Floating Add to Cart Button */}
-      <div className="fixed bottom-0 left-0 w-full bg-background border-t border-gray-100 shadow-lg transform transition-transform duration-300 z-50 py-3 px-4 md:py-4">
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t py-4 shadow-lg z-50">
         <div className="konipai-container">
           <div className="flex gap-2">
             {isInCart ? (

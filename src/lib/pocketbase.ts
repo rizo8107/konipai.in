@@ -111,6 +111,24 @@ export interface Product extends RecordModel {
     reviews?: number;
     createdAt?: string;
     updatedAt?: string;
+    specifications: {
+        material: string;
+        dimensions: string;
+        weight: string;
+        capacity: string;
+        style: string;
+        pattern: string;
+        closure: string;
+        waterResistant: boolean;
+    };
+    care_instructions: {
+        cleaning: string[];
+        storage: string[];
+    };
+    usage_guidelines: {
+        recommended_use: string[];
+        pro_tips: string[];
+    };
 }
 
 export interface ProductColor {
@@ -470,4 +488,85 @@ export async function getSliderImages(signal?: AbortSignal): Promise<SliderImage
         console.error('Error fetching slider images:', error);
         return [];
     }
-} 
+}
+
+export interface Review {
+    id: string;
+    user: string;
+    product: string;
+    rating: number;
+    title: string;
+    content: string;
+    images: string[];
+    verified_purchase: boolean;
+    helpful_votes: number;
+    created: string;
+    updated: string;
+    expand?: {
+        user: User;
+        comments: ReviewComment[];
+    };
+}
+
+export interface ReviewComment {
+    id: string;
+    review: string;
+    user: string;
+    content: string;
+    created: string;
+    updated: string;
+    expand?: {
+        user: User;
+    };
+}
+
+// Function to create a review
+export const createReview = async (
+    productId: string,
+    rating: number,
+    title: string,
+    content: string,
+    images: File[],
+    verifiedPurchase: boolean = false
+): Promise<Review> => {
+    const formData = new FormData();
+    formData.append('user', pocketbase.authStore.model?.id || '');
+    formData.append('product', productId);
+    formData.append('rating', rating.toString());
+    formData.append('title', title);
+    formData.append('content', content);
+    formData.append('verified_purchase', verifiedPurchase.toString());
+    formData.append('helpful_votes', '0');
+    
+    images.forEach(image => {
+        formData.append('images', image);
+    });
+
+    return await pocketbase.collection('reviews').create(formData);
+};
+
+// Function to get reviews for a product
+export const getProductReviews = async (productId: string): Promise<Review[]> => {
+    return await pocketbase.collection('reviews').getFullList({
+        filter: `product = "${productId}"`,
+        sort: '-created',
+        expand: 'user,comments.user'
+    });
+};
+
+// Function to add a comment to a review
+export const addReviewComment = async (reviewId: string, content: string): Promise<ReviewComment> => {
+    return await pocketbase.collection('review_comments').create({
+        review: reviewId,
+        user: pocketbase.authStore.model?.id,
+        content
+    });
+};
+
+// Function to vote on a review
+export const voteReview = async (reviewId: string): Promise<Review> => {
+    const review = await pocketbase.collection('reviews').getOne(reviewId);
+    return await pocketbase.collection('reviews').update(reviewId, {
+        helpful_votes: (review.helpful_votes || 0) + 1
+    });
+}; 

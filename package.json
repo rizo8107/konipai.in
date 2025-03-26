@@ -21,7 +21,8 @@
     "configure:email": "tsx scripts/configure-pocketbase-email.ts",
     "send:test-email": "tsx scripts/send-test-email.ts",
     "optimize:images": "node scripts/optimize-images.js",
-    "send:orders-webhook": "tsx scripts/send-order-webhook.ts"
+    "send:orders-webhook": "tsx scripts/send-order-webhook.ts",
+    "update-products": "node --loader ts-node/esm scripts/updateProducts.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
