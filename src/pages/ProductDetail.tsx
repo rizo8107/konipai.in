@@ -204,21 +204,17 @@ const ProductDetail = () => {
     document.title = product?.name ? `${product.name} | Konipai` : 'Product | Konipai';
     
     const loadProduct = async () => {
-      if (!id) {
-        setError('Product ID is missing');
-        setLoading(false);
-        return;
-      }
+      console.log(`[PROD DEBUG] loadProduct called for id: ${id}`);
+      if (!id) return;
+      setLoading(true);
+      setError('');
       
       try {
-        setLoading(true);
+        console.log(`[PROD DEBUG] Calling getProduct with id: ${id}`);
         const data = await getProduct(id);
-        if (!data) {
-          setError('Product not found');
-          return;
-        }
-
+        console.log(`[PROD DEBUG] Product loaded successfully:`, data.name);
         setProduct(data);
+        
         if (data.images?.length > 0) {
           const mainImage = data.images[0];
           setSelectedImage(mainImage);
@@ -238,43 +234,50 @@ const ProductDetail = () => {
           affiliation: 'Konipai Web Store'
         });
         
-        // Fetch related products
-        const allProducts = await getProducts({ category: data.category });
-        const related = allProducts
-          .filter(p => p.id !== id)
-          .slice(0, 4);
-        setRelatedProducts(related);
-        setError(null);
-
         // Load reviews to calculate average rating if product has reviews
         if (data.reviews && data.reviews > 0) {
           try {
-            console.log(`[PROD DEBUG] Attempting to load ${data.reviews} reviews for product ${id}`);
+            console.log(`[PROD DEBUG] Loading ${data.reviews} reviews for product ${id}`);
             const reviews = await getProductReviews(id);
-            console.log(`[PROD DEBUG] Successfully loaded ${reviews.length} reviews for product ${id}`);
+            console.log(`[PROD DEBUG] Successfully loaded ${reviews.length} reviews`);
+            
             const avgRating = reviews.length > 0
               ? reviews.reduce((acc: number, review: { rating: number }) => acc + review.rating, 0) / reviews.length
               : 0;
             setAverageRating(avgRating);
-            console.log(`[PROD DEBUG] Set average rating to ${avgRating} from ${reviews.length} reviews`);
+            console.log(`[PROD DEBUG] Set average rating to ${avgRating}`);
           } catch (reviewError) {
-            console.error('[PROD DEBUG] Error loading product reviews:', reviewError);
-            // Don't let review loading failure prevent the product from displaying
-            // Just set average rating to 0 or use a fallback
+            console.error('[PROD DEBUG] Error loading reviews:', reviewError);
+            // Continue with product display even if reviews fail to load
             setAverageRating(0);
           }
         }
-      } catch (err) {
-        console.error('Error fetching product:', err);
-        setError('Failed to load product. Please try again later.');
-        toast({
-          variant: "destructive",
-          title: "Error",
-          description: "Failed to load product details. Please try again later.",
-        });
-        navigate("/shop");
-      } finally {
+        
+        // Load related products
+        try {
+          console.log(`[PROD DEBUG] Loading related products for category: ${data.category}`);
+          const related = await getProducts({
+            category: data.category,
+          });
+          const filteredRelated = related.filter((p) => p.id !== id).slice(0, 4);
+          console.log(`[PROD DEBUG] Found ${filteredRelated.length} related products`);
+          setRelatedProducts(filteredRelated);
+        } catch (relatedError) {
+          console.error('[PROD DEBUG] Error loading related products:', relatedError);
+          setRelatedProducts([]);
+        }
+        
         setLoading(false);
+      } catch (error) {
+        console.error('[PROD DEBUG] Error fetching product:', error);
+        setLoading(false);
+        setError('Failed to load product details. Please try again later.');
+        
+        // Retry once after a short delay
+        setTimeout(() => {
+          console.log('[PROD DEBUG] Retrying product load after error');
+          loadProduct();
+        }, 2000);
       }
     };
     

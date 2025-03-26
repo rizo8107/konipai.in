@@ -366,25 +366,47 @@ export async function getProducts(filter?: ProductFilter, signal?: AbortSignal):
 }
 
 export async function getProduct(id: string) {
-    // Get the product
-    const record = await pb.collection('products').getOne<Product>(id);
-
-    // Get the review count
-    const reviewCount = await pb.collection('reviews').getList(1, 1, {
-        filter: `product = "${id}"`,
-        fields: 'id'
-    });
-
-    return {
-        ...record,
-        $id: record.id,
-        images: record.images.map(image => `${record.id}/${image}`),
-        colors: typeof record.colors === 'string' ? JSON.parse(record.colors) : record.colors,
-        features: typeof record.features === 'string' ? JSON.parse(record.features) : record.features,
-        care: typeof record.care === 'string' ? JSON.parse(record.care) : record.care,
-        tags: typeof record.tags === 'string' ? JSON.parse(record.tags) : record.tags,
-        reviews: reviewCount.totalItems // Set the actual review count
-    };
+    console.log(`[PROD DEBUG] getProduct called for product ${id}`);
+    console.log(`[PROD DEBUG] PocketBase URL: ${pocketbase.baseUrl}`);
+    
+    try {
+        const startTime = Date.now();
+        const options = {
+            $autoCancel: false,
+            requestKey: `prod_getProduct_${id}_${Date.now()}` // Unique key to prevent request cancellation
+        };
+        
+        // Get the product
+        console.log(`[PROD DEBUG] Fetching product data for ${id}`);
+        const record = await pocketbase.collection('products').getOne<Product>(id, options);
+        
+        // Get the review count with auto-cancel disabled
+        console.log(`[PROD DEBUG] Fetching review count for ${id}`);
+        const reviewCount = await pocketbase.collection('reviews').getList(1, 1, {
+            filter: `product = "${id}"`,
+            fields: 'id',
+            $autoCancel: false,
+            requestKey: `prod_reviewCount_${id}_${Date.now()}`
+        });
+        
+        const endTime = Date.now();
+        console.log(`[PROD DEBUG] getProduct completed in ${endTime - startTime}ms`);
+        
+        return {
+            ...record,
+            $id: record.id,
+            images: record.images.map(image => `${record.id}/${image}`),
+            colors: typeof record.colors === 'string' ? JSON.parse(record.colors) : record.colors,
+            features: typeof record.features === 'string' ? JSON.parse(record.features) : record.features,
+            care: typeof record.care === 'string' ? JSON.parse(record.care) : record.care,
+            tags: typeof record.tags === 'string' ? JSON.parse(record.tags) : record.tags,
+            reviews: reviewCount.totalItems // Set the actual review count
+        };
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error(`[PROD DEBUG] Error fetching product ${id}:`, errorMessage);
+        throw error; // Re-throw to allow proper error handling in UI
+    }
 }
 
 // Address functions
