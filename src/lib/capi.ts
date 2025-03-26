@@ -1,7 +1,7 @@
 import { getUtmParamsForAnalytics } from './utm';
 
 const CAPI_VERSION = 'v17.0';
-const PIXEL_ID = ''; // TODO: Add your Facebook Pixel ID
+const PIXEL_ID = '504160516081802'; // Meta Pixel ID
 const ACCESS_TOKEN = 'EAAS7f3ZCpw5UBO9iFeBY1t34n4zElc2IL5T9ZCcPpiWG83p6ZC4jJBekPYZA5w9qLpwUhGju8t5zZBog9h0ZBj2KUtQjyZBmGd5yZBJld36sCkDUz5msSIxOhtvZBmDV4FxJFkYDNzuf1WboMA7YVSZCAd6Dxg0kv1lZAQC6m94s9V4ddlJ2NhH6qiIivi1TQ3bZC4ZCpyAZDZD';
 const API_ENDPOINT = `https://graph.facebook.com/${CAPI_VERSION}/${PIXEL_ID}/events`;
 

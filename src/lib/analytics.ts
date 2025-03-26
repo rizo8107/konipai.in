@@ -4,6 +4,16 @@ import { getUtmParamsForAnalytics } from './utm';
 // Import Facebook CAPI functions
 import { trackPurchaseConversion, trackAddToCartConversion, trackLeadConversion } from './capi';
 
+// Import Facebook Pixel tracking
+import {
+  trackPixelEvent,
+  trackPurchase as trackPixelPurchase,
+  trackAddToCart as trackPixelAddToCart,
+  trackViewContent as trackPixelViewContent,
+  trackInitiateCheckout as trackPixelInitiateCheckout,
+  pixelEvents
+} from './pixel';
+
 // Define types for analytics events
 interface AnalyticsEvent {
   event: string;
@@ -133,6 +143,18 @@ export const trackProductView = (product: ProductItem): void => {
     },
     timestamp: new Date().toISOString()
   });
+
+  // Track in Facebook Pixel
+  trackPixelViewContent(
+    product.item_id,
+    'product',
+    product.item_name,
+    product.price,
+    'INR',
+    {
+      content_category: product.item_category
+    }
+  );
 };
 
 export const trackAddToCart = async (
@@ -161,6 +183,18 @@ export const trackAddToCart = async (
     },
     timestamp: new Date().toISOString()
   });
+
+  // Track in Facebook Pixel
+  trackPixelAddToCart(
+    product.price * product.quantity,
+    'INR', 
+    [product.item_id],
+    product.item_name,
+    {
+      content_category: product.item_category,
+      quantity: product.quantity
+    }
+  );
 
   // Track in Facebook CAPI if user data is available
   if (userData) {
@@ -202,18 +236,26 @@ export const trackCartView = (products: ProductItem[], value: number): void => {
   });
 };
 
-export const trackBeginCheckout = (products: ProductItem[], value: number, coupon?: string): void => {
+export const trackBeginCheckout = (products: ProductItem[], value: number): void => {
   clearEcommerceObject();
+  
   pushToDataLayer({
     event: 'begin_checkout',
     ecommerce: {
       currency: 'INR',
       value: value,
-      coupon: coupon,
       items: products
     },
     timestamp: new Date().toISOString()
   });
+
+  // Track in Facebook Pixel
+  trackPixelInitiateCheckout(
+    value,
+    'INR',
+    products.map(product => product.item_id),
+    products.reduce((sum, product) => sum + product.quantity, 0)
+  );
 };
 
 export const trackAddShippingInfo = (
@@ -308,6 +350,22 @@ export const trackPurchase = async (
     value: value,
     currency: 'INR'
   });
+
+  // Track in Facebook Pixel
+  trackPixelPurchase(
+    value,
+    'INR',
+    products.map(product => product.item_id),
+    products.map(product => product.item_name).join(', '),
+    products.reduce((sum, product) => sum + product.quantity, 0),
+    {
+      content_type: 'product',
+      transaction_id: transactionId,
+      tax: tax,
+      shipping: shipping,
+      coupon: coupon
+    }
+  );
 
   // Track in Facebook CAPI if user data is available
   if (userData) {
@@ -489,6 +547,12 @@ export const trackFormCompletion = async (
     form_name: formName,
     form_id: formId,
     timestamp: new Date().toISOString()
+  });
+
+  // Track in Facebook Pixel
+  trackPixelEvent(pixelEvents.LEAD, {
+    content_name: formName,
+    content_category: 'form_submission'
   });
 
   // Track as lead in Facebook CAPI if user data is available
