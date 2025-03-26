@@ -300,7 +300,7 @@ export function OrderInvoice({ order, products }: OrderInvoiceProps) {
               <p>Vignarajapuram 1st Cross Street</p>
               <p>Chennai, Tamil Nadu 600073</p>
               <p>India</p>
-              <p>GSTIN: 29ABCDE1234F1Z5</p>
+            
             </div>
           </div>
           
