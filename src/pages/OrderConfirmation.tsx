@@ -56,6 +56,7 @@ interface Order {
     };
   };
   tax?: number;
+  shipping_address_text?: string;
 }
 
 export default function OrderConfirmation() {
@@ -88,10 +89,37 @@ export default function OrderConfirmation() {
           return;
         }
         
+        console.log(`Fetching order details for order ID: ${orderId}`);
+        
         const orderData = await pocketbase.collection('orders').getOne(orderId, {
-          expand: 'shipping_address,user'
+          expand: 'user'
         });
         
+        console.log('Fetched order data:', {
+          id: orderData.id,
+          status: orderData.status,
+          payment_status: orderData.payment_status,
+          has_shipping_address_text: !!orderData.shipping_address_text
+        });
+        
+        // Parse shipping address from text field
+        let parsedShippingAddress = null;
+        
+        if (orderData.shipping_address_text) {
+          try {
+            console.log('Parsing shipping address from text field');
+            parsedShippingAddress = JSON.parse(orderData.shipping_address_text);
+            console.log('Successfully parsed shipping address:', parsedShippingAddress);
+            
+            // Add the shipping address to the expanded data
+            orderData.expand = orderData.expand || {};
+            orderData.expand.shipping_address = parsedShippingAddress;
+          } catch (addressError) {
+            console.error('Failed to parse shipping address:', addressError);
+          }
+        }
+        
+        // Set the order in state
         setOrder(orderData as unknown as Order);
         
         // Track purchase

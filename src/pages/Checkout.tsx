@@ -619,36 +619,31 @@ export default function CheckoutPage() {
       );
 
       // Create or update address
-      let addressId;
+      let addressData;
       try {
-        const addressData = {
+        addressData = {
           street: formData.address,
           city: formData.city,
           state: formData.state,
           postalCode: formData.zipCode,
-          country: 'India',
-          user: user.id
+          country: 'India'
         };
 
-        // Try to find existing address
-        const existingAddresses = await pocketbase.collection('addresses').getList(1, 1, {
-          filter: `user = "${user.id}"`
-        });
-
-        if (existingAddresses.items.length > 0) {
-          // Update existing address
-          addressId = existingAddresses.items[0].id;
-          await pocketbase.collection('addresses').update(addressId, addressData);
-        } else {
-          // Create new address
-          const newAddress = await pocketbase.collection('addresses').create(addressData);
-          addressId = newAddress.id;
-        }
+        console.log('Preparing shipping address data:', addressData);
       } catch (error) {
-        trackFormError('checkout_form', 'checkout-form', 'Failed to save shipping address');
-        console.error('Error saving address:', error);
-        throw new Error('Failed to save shipping address. Please try again.');
+        trackFormError('checkout_form', 'checkout-form', 'Failed to prepare shipping address');
+        console.error('Error preparing address:', error);
+        throw new Error('Failed to prepare shipping address. Please try again.');
       }
+
+      // Verify that we have valid address data
+      if (!addressData || !addressData.street || !addressData.city || !addressData.state || !addressData.postalCode) {
+        console.error('Invalid shipping address data');
+        trackFormError('checkout_form', 'checkout-form', 'Invalid address data');
+        throw new Error('Please fill in all required address fields.');
+      }
+
+      console.log(`Using shipping address data for order creation`);
 
       // Create order in PocketBase
       const orderData = {
@@ -656,7 +651,7 @@ export default function CheckoutPage() {
         customer_name: formData.name,
         customer_email: formData.email,
         customer_phone: validatedPhone,
-        shipping_address: addressId,
+        shipping_address_text: JSON.stringify(addressData), // Store as JSON string
         products: items.map(item => ({
           productId: item.productId,
           product: item.product,
@@ -672,7 +667,13 @@ export default function CheckoutPage() {
         discount_amount: appliedCoupon?.discountAmount || 0
       };
 
+      console.log('Creating order with data:', {
+        ...orderData,
+        products: `[${items.length} items]`, // Don't log the entire products array
+      });
+
       const order = await pocketbase.collection('orders').create(orderData) as unknown as OrderData;
+      console.log('Order created successfully with ID:', order.id);
       
       // Track form completion
       trackFormCompletion('checkout_form', 'checkout-form');

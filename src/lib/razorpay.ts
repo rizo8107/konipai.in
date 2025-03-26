@@ -408,64 +408,45 @@ export async function verifyPayment(
         }
         
         // Parse shipping address
-        if (orderDetails.shipping_address) {
+        if (orderDetails.shipping_address_text) {
           try {
-            // If shipping_address is an object reference (ID), try to fetch it
-            if (typeof orderDetails.shipping_address === 'string' && 
-                !orderDetails.shipping_address.startsWith('{')) {
-              try {
-                const addressRecord = await pocketbase.collection('addresses').getOne(orderDetails.shipping_address);
-                if (addressRecord) {
-                  shippingAddress = {
-                    street: addressRecord.street || '',
-                    city: addressRecord.city || '',
-                    state: addressRecord.state || '',
-                    postalCode: addressRecord.postalCode || '',
-                    country: addressRecord.country || 'India'
-                  };
-                  
-                  // Build formatted address
-                  const addressParts = [];
-                  if (addressRecord.street) addressParts.push(addressRecord.street);
-                  if (addressRecord.city) addressParts.push(addressRecord.city);
-                  if (addressRecord.state) addressParts.push(addressRecord.state);
-                  if (addressRecord.postalCode) addressParts.push(addressRecord.postalCode);
-                  if (addressRecord.country) addressParts.push(addressRecord.country);
-                  
-                  formattedAddress = addressParts.join(', ');
-                }
-              } catch (addressError) {
-                console.error('Error fetching address record, continuing with parsed address:', addressError);
-              }
-            }
+            console.log(`Processing shipping address text: ${orderDetails.shipping_address_text.substring(0, 50)}...`);
             
-            // If we still don't have an address or it's a JSON string, try parsing it
-            if (Object.keys(shippingAddress).length === 0) {
-              const addressData = typeof orderDetails.shipping_address === 'string'
-                ? JSON.parse(orderDetails.shipping_address)
-                : orderDetails.shipping_address;
+            try {
+              const parsedAddress = JSON.parse(orderDetails.shipping_address_text);
+              console.log('Successfully parsed shipping address from text field');
               
               shippingAddress = {
-                street: addressData.street || '',
-                city: addressData.city || '',
-                state: addressData.state || '',
-                postalCode: addressData.postalCode || '',
-                country: addressData.country || 'India'
+                street: parsedAddress.street || '',
+                city: parsedAddress.city || '',
+                state: parsedAddress.state || '',
+                postalCode: parsedAddress.postalCode || '',
+                country: parsedAddress.country || 'India'
               };
               
               // Build formatted address
               const addressParts = [];
-              if (addressData.street) addressParts.push(addressData.street);
-              if (addressData.city) addressParts.push(addressData.city);
-              if (addressData.state) addressParts.push(addressData.state);
-              if (addressData.postalCode) addressParts.push(addressData.postalCode);
-              if (addressData.country) addressParts.push(addressData.country);
+              if (parsedAddress.street) addressParts.push(parsedAddress.street);
+              if (parsedAddress.city) addressParts.push(parsedAddress.city);
+              if (parsedAddress.state) addressParts.push(parsedAddress.state);
+              if (parsedAddress.postalCode) addressParts.push(parsedAddress.postalCode);
+              if (parsedAddress.country) addressParts.push(parsedAddress.country);
               
               formattedAddress = addressParts.join(', ');
+              console.log('Formatted address from text field:', formattedAddress);
+            } catch (parseError) {
+              console.error('Error parsing address JSON from text field:', parseError);
+            }
+            
+            // If we still don't have an address, log a warning
+            if (Object.keys(shippingAddress).length === 0) {
+              console.warn('Unable to parse shipping address from text field');
             }
           } catch (e) {
-            console.error('Error parsing shipping address for webhook:', e);
+            console.error('Error processing shipping address text:', e);
           }
+        } else {
+          console.warn('No shipping_address_text field found in order');
         }
       }
       
