@@ -60,9 +60,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const handleSignUp = async (email: string, password: string, name: string) => {
         try {
             setLoading(true);
-            await signUp(email, password, name);
+            console.log('Starting signup process for:', email);
+            
+            // Create the user
+            const userData = {
+                email,
+                password,
+                passwordConfirm: password,
+                name,
+                emailVisibility: true
+            };
+            
+            const user = await signUp(email, password, name);
+            console.log('User created successfully:', user.id);
+            
+            // Authenticate the user
             await signIn(email, password);
+            console.log('User authenticated after signup');
+            
+            // Update the user state
             setUser(getCurrentUser());
+        } catch (error: any) {
+            console.error('Signup error:', error);
+            
+            // Extract error message from PocketBase response
+            let errorMessage = 'Failed to create account. Please try again.';
+            if (error.response?.data) {
+                const messages = [];
+                for (const field in error.response.data) {
+                    messages.push(`${field}: ${error.response.data[field].message}`);
+                }
+                errorMessage = messages.join(', ');
+            }
+            
+            throw new Error(errorMessage);
         } finally {
             setLoading(false);
         }

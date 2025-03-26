@@ -79,76 +79,110 @@ const ProductDetail = () => {
       // Create a function to preload all product images
       const preloadProductImages = async () => {
         try {
-          // Preload main image at higher quality
-          const mainImage = product.images[0];
-          
-          // Create a high-priority link for the main image
-          const link = document.createElement('link');
-          link.rel = 'preload';
-          link.as = 'image';
-          link.href = getPocketBaseImageUrl(mainImage, Collections.PRODUCTS, "large", "webp");
-          link.type = 'image/webp';
-          link.setAttribute('fetchpriority', 'high');
-          document.head.appendChild(link);
-          
-          // Preload all other product images
-          if (product.images.length > 1) {
-            // First create thumbnail versions for quick display
-            preloadImages(product.images.slice(1), Collections.PRODUCTS, "thumbnail");
-            
-            // Then load medium quality versions slightly delayed
+          // Immediately show thumbnail quality for all images
+          product.images.forEach(image => {
+            const img = new Image();
+            img.src = getPocketBaseImageUrl(image, Collections.PRODUCTS, "thumbnail", "webp");
+            img.loading = 'eager'; // Load thumbnails immediately
+          });
+
+          // Preload main image at medium quality immediately
+          if (product.images[0]) {
+            const mainImage = product.images[0];
+            const mediumQualityLink = document.createElement('link');
+            mediumQualityLink.rel = 'preload';
+            mediumQualityLink.as = 'image';
+            mediumQualityLink.href = getPocketBaseImageUrl(mainImage, Collections.PRODUCTS, "medium", "webp");
+            mediumQualityLink.type = 'image/webp';
+            mediumQualityLink.setAttribute('fetchpriority', 'high');
+            document.head.appendChild(mediumQualityLink);
+
+            // Then load high quality version slightly delayed
             setTimeout(() => {
-              preloadImages(product.images.slice(1), Collections.PRODUCTS, "medium");
+              const highQualityLink = document.createElement('link');
+              highQualityLink.rel = 'preload';
+              highQualityLink.as = 'image';
+              highQualityLink.href = getPocketBaseImageUrl(mainImage, Collections.PRODUCTS, "large", "webp");
+              highQualityLink.type = 'image/webp';
+              document.head.appendChild(highQualityLink);
             }, 1000);
           }
-          
-          // Mark as preloaded to avoid duplicate preloads
+
+          // Load medium quality versions of other images when idle
+          if (product.images.length > 1) {
+            if ('requestIdleCallback' in window) {
+              requestIdleCallback(() => {
+                product.images.slice(1).forEach(image => {
+                  const img = new Image();
+                  img.src = getPocketBaseImageUrl(image, Collections.PRODUCTS, "medium", "webp");
+                  img.loading = 'lazy';
+                });
+              });
+            } else {
+              // Fallback for browsers that don't support requestIdleCallback
+              setTimeout(() => {
+                product.images.slice(1).forEach(image => {
+                  const img = new Image();
+                  img.src = getPocketBaseImageUrl(image, Collections.PRODUCTS, "medium", "webp");
+                  img.loading = 'lazy';
+                });
+              }, 2000);
+            }
+          }
+
           setImagesPreloaded(true);
         } catch (error) {
           console.error('Error preloading images:', error);
         }
       };
-      
+
       preloadProductImages();
     }
   }, [product, imagesPreloaded]);
   
-  // Preload related product images when user is likely to view them
+  // Optimize related products image loading
   useEffect(() => {
     if (relatedProducts.length > 0 && !relatedLoaded.current) {
-      // Use intersection observer to detect when user scrolls near related products
       const observer = new IntersectionObserver(
         (entries) => {
           entries.forEach(entry => {
             if (entry.isIntersecting && !relatedLoaded.current) {
-              // Preload first image of each related product
-              const relatedImages = relatedProducts
-                .map(p => p.images?.[0])
-                .filter(Boolean) as string[];
-              
-              if (relatedImages.length > 0) {
-                // Preload with lower priority and small size
-                preloadImages(relatedImages, Collections.PRODUCTS, "small");
-                relatedLoaded.current = true;
+              // First load thumbnails immediately
+              relatedProducts.forEach(product => {
+                if (product.images?.[0]) {
+                  const img = new Image();
+                  img.src = getPocketBaseImageUrl(product.images[0], Collections.PRODUCTS, "thumbnail", "webp");
+                  img.loading = 'lazy';
+                }
+              });
+
+              // Then load better quality when idle
+              if ('requestIdleCallback' in window) {
+                requestIdleCallback(() => {
+                  relatedProducts.forEach(product => {
+                    if (product.images?.[0]) {
+                      const img = new Image();
+                      img.src = getPocketBaseImageUrl(product.images[0], Collections.PRODUCTS, "medium", "webp");
+                      img.loading = 'lazy';
+                    }
+                  });
+                });
               }
-              
-              // Once loaded, disconnect observer
+
+              relatedLoaded.current = true;
               observer.disconnect();
             }
           });
         },
-        { rootMargin: '500px' } // Start loading when 500px from viewport
+        { rootMargin: '500px' }
       );
-      
-      // Observe the related products section if it exists
+
       const relatedSection = document.querySelector('#related-products');
       if (relatedSection) {
         observer.observe(relatedSection);
       }
-      
-      return () => {
-        observer.disconnect();
-      };
+
+      return () => observer.disconnect();
     }
   }, [relatedProducts]);
   
@@ -219,18 +253,30 @@ const ProductDetail = () => {
     
   }, [id, navigate, toast]);
   
-  // Function to change selected image with preloading
+  // Optimize image selection handling
   const handleImageSelect = (image: string) => {
+    // First set the thumbnail version immediately
     setSelectedImage(image);
     
-    // Preload a higher quality version when selected
+    // Then preload and switch to higher quality versions
     const preloadHighRes = () => {
-      const link = document.createElement('link');
-      link.rel = 'preload';
-      link.as = 'image';
-      link.href = getPocketBaseImageUrl(image, Collections.PRODUCTS, "large", "webp");
-      link.type = 'image/webp';
-      document.head.appendChild(link);
+      // First load medium quality
+      const mediumQualityLink = document.createElement('link');
+      mediumQualityLink.rel = 'preload';
+      mediumQualityLink.as = 'image';
+      mediumQualityLink.href = getPocketBaseImageUrl(image, Collections.PRODUCTS, "medium", "webp");
+      mediumQualityLink.type = 'image/webp';
+      document.head.appendChild(mediumQualityLink);
+
+      // Then load high quality slightly delayed
+      setTimeout(() => {
+        const highQualityLink = document.createElement('link');
+        highQualityLink.rel = 'preload';
+        highQualityLink.as = 'image';
+        highQualityLink.href = getPocketBaseImageUrl(image, Collections.PRODUCTS, "large", "webp");
+        highQualityLink.type = 'image/webp';
+        document.head.appendChild(highQualityLink);
+      }, 500);
     };
     
     preloadHighRes();

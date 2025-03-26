@@ -12,27 +12,66 @@ export default function SignupPage() {
   const [password, setPassword] = useState("")
   const [name, setName] = useState("")
   const [loading, setLoading] = useState(false)
+  const [errors, setErrors] = useState<{[key: string]: string}>({})
   const { signUp } = useAuth()
   const navigate = useNavigate()
   const { toast } = useToast()
 
+  const validateForm = () => {
+    const newErrors: {[key: string]: string} = {};
+    
+    if (!name.trim()) {
+      newErrors.name = "Name is required";
+    }
+    
+    if (!email.trim()) {
+      newErrors.email = "Email is required";
+    } else if (!/\S+@\S+\.\S+/.test(email)) {
+      newErrors.email = "Please enter a valid email address";
+    }
+    
+    if (!password) {
+      newErrors.password = "Password is required";
+    } else if (password.length < 8) {
+      newErrors.password = "Password must be at least 8 characters long";
+    }
+    
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    
+    if (!validateForm()) {
+      return;
+    }
+    
     setLoading(true)
 
     try {
-      await signUp(email, password, name)
+      await signUp(email.trim(), password, name.trim())
       toast({
         title: "Success",
         description: "Your account has been created successfully.",
       })
       navigate("/")
-    } catch (error) {
+    } catch (error: any) {
+      console.error('Signup error:', error);
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Failed to create account. Please try again.",
+        description: error.message || "Failed to create account. Please try again.",
       })
+      
+      // Handle specific field errors from PocketBase
+      if (error.response?.data) {
+        const fieldErrors: {[key: string]: string} = {};
+        for (const field in error.response.data) {
+          fieldErrors[field] = error.response.data[field].message;
+        }
+        setErrors(fieldErrors);
+      }
     } finally {
       setLoading(false)
     }
@@ -47,7 +86,7 @@ export default function SignupPage() {
             Create an account
           </h1>
           <p className="text-sm text-muted-foreground">
-            Enter your email below to create your account
+            Enter your details below to create your account
           </p>
         </div>
         <form onSubmit={handleSubmit}>
@@ -63,8 +102,15 @@ export default function SignupPage() {
                 autoCorrect="off"
                 disabled={loading}
                 value={name}
-                onChange={(e) => setName(e.target.value)}
+                onChange={(e) => {
+                  setName(e.target.value);
+                  setErrors(prev => ({ ...prev, name: '' }));
+                }}
+                className={errors.name ? "border-red-500" : ""}
               />
+              {errors.name && (
+                <p className="text-sm text-red-500">{errors.name}</p>
+              )}
             </div>
             <div className="grid gap-2">
               <Label htmlFor="email">Email</Label>
@@ -77,8 +123,15 @@ export default function SignupPage() {
                 autoCorrect="off"
                 disabled={loading}
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  setErrors(prev => ({ ...prev, email: '' }));
+                }}
+                className={errors.email ? "border-red-500" : ""}
               />
+              {errors.email && (
+                <p className="text-sm text-red-500">{errors.email}</p>
+              )}
             </div>
             <div className="grid gap-2">
               <Label htmlFor="password">Password</Label>
@@ -88,8 +141,15 @@ export default function SignupPage() {
                 autoComplete="new-password"
                 disabled={loading}
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  setErrors(prev => ({ ...prev, password: '' }));
+                }}
+                className={errors.password ? "border-red-500" : ""}
               />
+              {errors.password && (
+                <p className="text-sm text-red-500">{errors.password}</p>
+              )}
             </div>
             <Button disabled={loading}>
               {loading && (

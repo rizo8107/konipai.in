@@ -11,6 +11,12 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ShoppingBag, PackageOpen, AlertCircle, ArrowRight, Clock, Check, AlertTriangle, Package, MapPin } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 
+// Add image optimization utility
+const getOptimizedImageUrl = (collectionId: string, recordId: string, filename: string) => {
+  const baseUrl = import.meta.env.VITE_POCKETBASE_URL.replace(/\/$/, '');
+  return `${baseUrl}/api/files/${collectionId}/${recordId}/${filename}?thumb=100x100&quality=80`;
+};
+
 // Define interface for order product
 interface OrderProduct {
   productId: string;
@@ -330,14 +336,16 @@ export default function Orders() {
                   {products.slice(0, 2).map((item, index) => (
                     <div key={index} className="flex justify-between items-center">
                       <div className="flex items-center gap-2">
-                        {/* Product Image - Direct from Backend */}
+                        {/* Optimized Product Image */}
                         <div className="w-10 h-10 rounded overflow-hidden bg-muted">
                           {item.product?.images && item.product.images[0] ? (
                             <img 
-                              src={`${import.meta.env.VITE_POCKETBASE_URL.replace(/\/$/, '')}/api/files/pbc_4092854851/${item.product.id}/${item.product.images[0].split('/').pop()}`} 
+                              src={getOptimizedImageUrl('pbc_4092854851', item.product.id, item.product.images[0].split('/').pop() || '')}
                               alt={item.product.name || 'Product'} 
                               className="w-full h-full object-cover"
-                              loading="eager"
+                              loading="lazy"
+                              width={40}
+                              height={40}
                               crossOrigin="anonymous"
                               onError={(e) => {
                                 console.error('Image load error:', e);
@@ -345,7 +353,6 @@ export default function Orders() {
                               }}
                             />
                           ) : (
-                            // Placeholder for products without images
                             <div className="w-full h-full flex items-center justify-center bg-muted">
                               <Package className="h-5 w-5 text-muted-foreground" />
                             </div>
