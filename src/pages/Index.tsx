@@ -110,26 +110,6 @@ const Index = () => {
       {/* Hero Section */}
       <div ref={heroRef} className="relative">
         <Hero />
-        <div className="absolute inset-0 z-10 flex items-end pointer-events-none">
-          <div className="konipai-container py-12 mb-6 animate-fade-in relative z-20">
-            <div className="max-w-xl bg-black/15 backdrop-blur-sm p-6 rounded-lg">
-              <h1 className="text-4xl md:text-6xl font-bold text-white mb-4 drop-shadow-lg text-shadow-dark">
-                Minimal. <span className="text-[#219898]">Sustainable</span>. Beautiful.
-              </h1>
-              <p className="text-white text-xl mb-6 drop-shadow-lg text-shadow-dark">
-                Stylish tote bags crafted for the conscious minimalist.
-              </p>
-              <Button 
-                asChild 
-                size="lg" 
-                className="bg-white text-black hover:bg-[#219898] hover:text-white transition-colors rounded-full px-8 py-6 text-lg pointer-events-auto"
-                onClick={handleShopNowClick}
-              >
-                <Link to="/shop">Shop Now</Link>
-              </Button>
-            </div>
-          </div>
-        </div>
       </div>
 
       {/* Featured Categories */}
