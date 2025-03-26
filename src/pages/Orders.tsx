@@ -369,6 +369,13 @@ export default function Orders() {
                     </div>
                   )}
                 </div>
+              </CardContent>
+              <CardFooter className="bg-muted/30 flex justify-between">
+                <div className="text-sm text-muted-foreground">
+                  {order.payment_id && (
+                    <p>Payment ID: {order.payment_id}</p>
+                  )}
+                </div>
                 
                 {/* Shipping Address */}
                 {order.expand?.shippingAddress && (
