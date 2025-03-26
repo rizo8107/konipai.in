@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from 'react';
-import { Link } from 'react-router-dom';
 import { ArrowRight, ShieldCheck, Truck, Leaf, Heart, Package, ShoppingBag, PlusCircle } from 'lucide-react';
 import Hero from '@/components/Hero';
 import ProductGrid from '@/components/ProductGrid';
@@ -257,13 +256,11 @@ const Index = () => {
       >
         <div className="konipai-container">
           <div className="text-center max-w-3xl mx-auto mb-12">
-            <Badge className="mb-4 py-1.5 px-3 bg-[#219898]/10 text-[#219898] hover:bg-[#219898]/20">Customer Favorites</Badge>
-            <h2 className="text-4xl font-bold mb-4">Our Bestsellers</h2>
+            <h2 className="text-4xl font-bold mb-4">Bestsellers</h2>
             <p className="text-gray-600">
-              Discover why these bags are loved by our community. Each bestseller is a testament to our commitment to quality and style.
+              Our most popular bags selected by our customers.
             </p>
           </div>
-          
           <div className="relative">
             <ProductGrid products={bestsellers.slice(0, 4)} loading={loading} />
             <div className="mt-10 text-center">
@@ -280,32 +277,6 @@ const Index = () => {
                 </UtmLink>
               </Button>
             </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Banner Section */}
-      <section className="py-20 bg-[#219898] text-white relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-1/3 h-full opacity-10">
-          <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
-            <path fill="currentColor" d="M42.8,-71.9C55.9,-64.7,67.1,-53.6,74.2,-40.1C81.3,-26.6,84.5,-10.8,82.8,4.1C81.2,19,74.7,33,65.9,45.1C57,57.2,45.8,67.3,32.8,73.1C19.9,78.9,5.1,80.3,-9.3,78.5C-23.6,76.7,-37.4,71.6,-48.1,62.8C-58.8,54,-66.3,41.5,-70.4,28.1C-74.5,14.7,-75.1,0.4,-73.4,-13.8C-71.7,-27.9,-67.7,-42,-58.9,-52.4C-50.1,-62.8,-36.5,-69.5,-22.8,-75.1C-9.1,-80.7,4.6,-85.3,18.1,-83.2C31.6,-81.1,29.8,-79.2,42.8,-71.9Z" transform="translate(100 100)" />
-          </svg>
-        </div>
-        <div className="konipai-container relative z-10">
-          <div className="max-w-2xl mx-auto text-center">
-            <h2 className="text-4xl font-bold mb-6">Join the Sustainable Fashion Movement</h2>
-            <p className="text-white/80 text-lg mb-8">
-              Experience the perfect blend of style, functionality, and sustainability with our premium tote bags.
-            </p>
-            <Button 
-              asChild 
-              size="lg" 
-              variant="outline"
-              className="bg-transparent border-white text-white hover:bg-white hover:text-[#219898] rounded-full px-8"
-              onClick={() => trackButtonClick('shop_collection_button', 'Shop Collection', window.location.pathname)}
-            >
-              <UtmLink to="/shop">Shop Collection</UtmLink>
-            </Button>
           </div>
         </div>
       </section>

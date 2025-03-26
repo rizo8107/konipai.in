@@ -368,7 +368,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     setItems([]);
   };
 
-  const { subtotal, shipping, total } = calculateTotals(items);
+  const { subtotal, total } = calculateTotals(items);
 
   const itemCount = items.reduce(
     (sum, item) => sum + (Number(item.quantity) || 0),

@@ -1,13 +1,12 @@
 import { useState, ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { ShoppingBag, X, Minus, Plus, Loader2, Trash2 } from 'lucide-react';
+import { ShoppingBag, Minus, Plus, Loader2, Trash2 } from 'lucide-react';
 import { useCart } from '@/contexts/CartContext';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetDescription } from '@/components/ui/sheet';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ProductImage } from '@/components/ProductImage';
-import { cn } from '@/lib/utils';
 
 interface CartProps {
   children?: ReactNode;
@@ -75,8 +74,8 @@ export function Cart({ children }: CartProps) {
                 Add items to your cart to see them here
               </p>
             </div>
-            <Button asChild variant="default" onClick={() => setIsOpen(false)}>
-              <Link to="/shop">Continue Shopping</Link>
+            <Button asChild>
+              <Link to="/shop" onClick={() => setIsOpen(false)}>Continue Shopping</Link>
             </Button>
           </div>
         ) : (
@@ -165,13 +164,8 @@ export function Cart({ children }: CartProps) {
                   <span>₹{(total || 0).toFixed(2)}</span>
                 </div>
               </div>
-              <Button 
-                asChild 
-                className="w-full" 
-                onClick={handleCheckout}
-                disabled={items.length === 0}
-              >
-                <Link to="/checkout">
+              <Button asChild className="w-full" disabled={items.length === 0}>
+                <Link to="/checkout" onClick={handleCheckout}>
                   Proceed to Checkout (₹{(total || 0).toFixed(2)})
                 </Link>
               </Button>

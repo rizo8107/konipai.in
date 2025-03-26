@@ -11,7 +11,6 @@ const CartDrawer = () => {
     removeItem, 
     updateQuantity, 
     subtotal,
-    total,
     isCartOpen,
     setIsCartOpen
   } = useCart();

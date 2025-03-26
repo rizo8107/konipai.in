@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
 import { ArrowLeft, ArrowRight, Loader2 } from 'lucide-react';
-import { Link } from 'react-router-dom';
 import { getSliderImages, SliderImage, Collections } from '@/lib/pocketbase';
 import { getPocketBaseImageUrl, preloadImages } from '@/utils/imageOptimizer';
 
@@ -199,86 +198,90 @@ const Hero = () => {
                      style={{ opacity: largeImageUrl ? 0 : 0.5 }}>
                   <img 
                     src={smallImageUrl}
-                    alt=""
-                    className="h-full w-full object-cover object-center filter blur-sm scale-105"
-                    aria-hidden="true"
+                    alt={slide.title || 'Slider image'}
+                    className="w-full h-full object-cover"
                     loading="eager"
                   />
                 </div>
               )}
               
-              {/* Main high-quality image */}
-              <picture>
-                <source
-                  srcSet={largeImageUrl}
-                  media="(min-width: 640px)"
-                  type="image/webp"
-                />
-                <source
-                  srcSet={smallImageUrl}
-                  media="(max-width: 639px)"
-                  type="image/webp"
-                />
-                <img 
-                  src={largeImageUrl}
-                  alt={slide.alt || `Slide ${index + 1}`}
-                  className="h-full w-full object-cover object-center transition-opacity duration-500"
-                  loading={isCurrentImage ? "eager" : "lazy"}
-                  fetchPriority={isCurrentImage ? "high" : "auto"}
-                  decoding={isCurrentImage ? "sync" : "async"}
-                  onLoad={(e) => {
-                    // Hide the placeholder when the main image loads
-                    if (e.currentTarget.parentElement?.previousElementSibling) {
-                      const placeholder = e.currentTarget.parentElement.previousElementSibling as HTMLElement;
-                      if (placeholder) {
-                        placeholder.style.opacity = "0";
-                      }
-                    }
-                  }}
-                />
-              </picture>
+              {/* High quality image that loads after */}
+              <img 
+                src={largeImageUrl}
+                alt={slide.title || 'Slider image'}
+                className="w-full h-full object-cover"
+                loading={isCurrentImage ? "eager" : "lazy"}
+                onLoad={(e) => {
+                  // Once the high quality image loads, fade out the blurry one
+                  const target = e.target as HTMLImageElement;
+                  target.parentElement?.previousElementSibling?.classList.add('opacity-0');
+                }}
+              />
+              
+              {/* Optional overlay for dark images */}
+              {slide.needsOverlay && (
+                <div className="absolute inset-0 bg-black/10" />
+              )}
+              
+              {/* Content */}
+              {slide.title && (
+                <div className="absolute inset-0 flex items-center justify-center text-center p-4">
+                  <div className="max-w-4xl space-y-4">
+                    <h2 className="text-2xl md:text-4xl lg:text-5xl font-bold text-white drop-shadow-lg">
+                      {slide.title}
+                    </h2>
+                    {slide.subtitle && (
+                      <p className="text-lg md:text-xl text-white/90 drop-shadow">
+                        {slide.subtitle}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           );
         })}
       </div>
       
       {/* Navigation Arrows */}
-      <div className="absolute inset-0 flex items-center justify-between p-4 z-30 pointer-events-none">
-        <button 
-          onClick={goToPrevSlide}
-          className="bg-white/20 backdrop-blur-sm hover:bg-white/30 p-3 rounded-full text-white transition-all duration-300 pointer-events-auto"
-          aria-label="Previous slide"
-        >
-          <ArrowLeft className="h-5 w-5 md:h-6 md:w-6" />
-        </button>
-        <button 
-          onClick={goToNextSlide}
-          className="bg-white/20 backdrop-blur-sm hover:bg-white/30 p-3 rounded-full text-white transition-all duration-300 pointer-events-auto"
-          aria-label="Next slide"
-        >
-          <ArrowRight className="h-5 w-5 md:h-6 md:w-6" />
-        </button>
-      </div>
-      
-      {/* Slider Navigation Dots */}
-      <div className="absolute bottom-12 left-0 right-0 z-30 flex items-center justify-center gap-2">
-        {sliderImages.map((_, index) => (
+      {sliderImages.length > 1 && (
+        <>
           <button
-            key={index}
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              goToSlide(index);
-            }}
-            className={`w-2 h-2 md:w-3 md:h-3 rounded-full transition-all duration-300 ${
-              currentImageIndex === index ? 'bg-white w-6 md:w-10' : 'bg-white/50'
-            } hover:bg-white`}
-            aria-label={`Go to slide ${index + 1}`}
-          />
-        ))}
-      </div>
+            onClick={goToPrevSlide}
+            className="absolute left-4 top-1/2 -translate-y-1/2 bg-black/20 hover:bg-black/40 text-white p-2 rounded-full transition-colors"
+            aria-label="Previous slide"
+          >
+            <ArrowLeft className="h-6 w-6" />
+          </button>
+          <button
+            onClick={goToNextSlide}
+            className="absolute right-4 top-1/2 -translate-y-1/2 bg-black/20 hover:bg-black/40 text-white p-2 rounded-full transition-colors"
+            aria-label="Next slide"
+          >
+            <ArrowRight className="h-6 w-6" />
+          </button>
+        </>
+      )}
+      
+      {/* Dots */}
+      {sliderImages.length > 1 && (
+        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
+          {sliderImages.map((_, index) => (
+            <button
+              key={index}
+              onClick={() => goToSlide(index)}
+              className={`w-2 h-2 rounded-full transition-all ${
+                currentImageIndex === index
+                  ? 'bg-white scale-125'
+                  : 'bg-white/50 hover:bg-white/75'
+              }`}
+              aria-label={`Go to slide ${index + 1}`}
+            />
+          ))}
+        </div>
+      )}
     </section>
   );
-};
+}
 
 export default Hero;
