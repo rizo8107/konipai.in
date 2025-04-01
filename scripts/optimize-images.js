@@ -2,7 +2,7 @@
  * Image optimization script
  * 
  * This script optimizes images in the public directory by:
- * 1. Converting images to WebP format
+ * 1. Converting images to WebP and AVIF formats for modern browsers
  * 2. Creating optimized versions of JPEG and PNG images
  * 3. Adding width/height attributes to match original dimensions
  * 
@@ -57,6 +57,15 @@ async function optimizeHeroImage() {
   }
   
   try {
+    // Extract dimensions for proper aspect ratio
+    const metadata = await sharp(heroSourcePath).metadata();
+    
+    // Create AVIF version - best compression
+    await sharp(heroSourcePath)
+      .resize(1200, 600, { fit: 'cover' })
+      .avif({ quality: 70 })
+      .toFile(`${heroDestPath}.avif`);
+    
     // Create WebP version
     await sharp(heroSourcePath)
       .resize(1200, 600, { fit: 'cover' })
@@ -66,7 +75,7 @@ async function optimizeHeroImage() {
     // Create JPG version as fallback
     await sharp(heroSourcePath)
       .resize(1200, 600, { fit: 'cover' })
-      .jpeg({ quality: 85, progressive: true })
+      .jpeg({ quality: 85, progressive: true, mozjpeg: true })
       .toFile(`${heroDestPath}.jpg`);
       
     console.log('Hero image optimized successfully');
@@ -103,21 +112,90 @@ async function processDirectory(directory) {
 async function optimizeImage(filePath) {
   const fileInfo = path.parse(filePath);
   const outputWebP = path.join(fileInfo.dir, `${fileInfo.name}.webp`);
+  const outputAvif = path.join(fileInfo.dir, `${fileInfo.name}.avif`);
   
   console.log(`Optimizing: ${filePath}`);
   
   try {
-    // Get image metadata
+    // Get image metadata for dimensions
     const metadata = await sharp(filePath).metadata();
     
-    // Create WebP version
+    // Create AVIF version (best compression but not universal support)
+    await sharp(filePath)
+      .avif({ quality: 70 })
+      .toFile(outputAvif);
+    
+    // Create WebP version (good compression and good support)
     await sharp(filePath)
       .webp({ quality: 80 })
       .toFile(outputWebP);
       
     console.log(`Created WebP: ${outputWebP}`);
+    console.log(`Created AVIF: ${outputAvif}`);
+    
+    // If it's a large image (>1MB), also create optimized versions in original format
+    const fileSize = fs.statSync(filePath).size;
+    if (fileSize > 1024 * 1024) {
+      const outputOptimized = path.join(fileInfo.dir, `${fileInfo.name}.optimized${fileInfo.ext}`);
+      
+      // Resize and optimize large images
+      await sharp(filePath)
+        .resize(1200, null, { fit: 'inside', withoutEnlargement: true })
+        .toFormat(fileInfo.ext.replace('.', ''), { quality: 85 })
+        .toFile(outputOptimized);
+      
+      // Replace original with optimized version
+      fs.renameSync(outputOptimized, filePath);
+      console.log(`Optimized original: ${filePath}`);
+    }
   } catch (error) {
     console.error(`Error optimizing image ${filePath}:`, error);
+  }
+}
+
+async function optimizeOgImage() {
+  const inputFile = path.join(__dirname, '../public/og-image.png');
+  const outputFileWebp = path.join(__dirname, '../public/og-image.webp');
+  const outputFileAvif = path.join(__dirname, '../public/og-image.avif');
+  const outputFileJpg = path.join(__dirname, '../public/og-image.jpg');
+  
+  try {
+    // Create AVIF version (best compression)
+    await sharp(inputFile)
+      .resize(1200, 630)
+      .avif({ quality: 70 })
+      .toFile(outputFileAvif);
+    
+    console.log('Created AVIF version of og-image');
+    
+    // Create WebP version
+    await sharp(inputFile)
+      .resize(1200, 630)
+      .webp({ quality: 85 })
+      .toFile(outputFileWebp);
+    
+    console.log('Created WebP version of og-image');
+    
+    // Create JPG version as fallback
+    await sharp(inputFile)
+      .resize(1200, 630)
+      .jpeg({ quality: 85, progressive: true, mozjpeg: true })
+      .toFile(outputFileJpg);
+    
+    console.log('Created JPG version of og-image');
+    
+    // Get file sizes
+    const pngSize = fs.statSync(inputFile).size;
+    const avifSize = fs.statSync(outputFileAvif).size;
+    const webpSize = fs.statSync(outputFileWebp).size;
+    const jpgSize = fs.statSync(outputFileJpg).size;
+    
+    console.log(`Original PNG: ${Math.round(pngSize / 1024)}KB`);
+    console.log(`Optimized AVIF: ${Math.round(avifSize / 1024)}KB (${Math.round((avifSize / pngSize) * 100)}%)`);
+    console.log(`Optimized WebP: ${Math.round(webpSize / 1024)}KB (${Math.round((webpSize / pngSize) * 100)}%)`);
+    console.log(`Optimized JPG: ${Math.round(jpgSize / 1024)}KB (${Math.round((jpgSize / pngSize) * 100)}%)`);
+  } catch (err) {
+    console.error('Error optimizing images:', err);
   }
 }
 
@@ -131,6 +209,9 @@ async function main() {
     for (const directory of DIRECTORIES) {
       await processDirectory(directory);
     }
+    
+    // Run the optimization
+    await optimizeOgImage();
     
     console.log('Image optimization complete!');
   } catch (error) {

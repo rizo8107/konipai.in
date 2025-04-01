@@ -35,7 +35,7 @@ const imageDimensionCache = new Map<string, ImageDimensions>();
  * @param url - The partial URL (recordId/filename format)
  * @param collection - The PocketBase collection name
  * @param size - The desired image size preset
- * @param format - The desired image format (webp is recommended)
+ * @param format - The desired image format (avif is recommended for best compression)
  * @param baseUrl - The base URL for the PocketBase instance
  * @returns The full image URL with optimization parameters
  */
@@ -43,7 +43,7 @@ export function getPocketBaseImageUrl(
   url: string,
   collection: string,
   size: ImageSize = "medium",
-  format: ImageFormat = "webp",
+  format: ImageFormat = "avif",
   baseUrl: string = 'https://backend-pocketbase.7za6uc.easypanel.host'
 ): string {
   // Create a cache key that includes size and format
@@ -78,7 +78,7 @@ export function getPocketBaseImageUrl(
       params.append('quality', sizeConfig.quality.toString());
       
       // Add cache control hints to maximize caching
-      const cacheVersion = '1'; // Increment this when image processing changes
+      const cacheVersion = '2'; // Increment this when image processing changes
       params.append('v', `${cacheVersion}-${size}-${format}`);
       
       if (params.toString()) {
@@ -120,7 +120,7 @@ export function getResponsiveImageSources(url: string, collection: string) {
       media: "(min-width: 1025px)",
       type: "image/avif"
     },
-    // WebP sources for modern browsers (preferred format)
+    // WebP sources for browsers that don't support AVIF
     {
       srcSet: getPocketBaseImageUrl(url, collection, "small", "webp"),
       media: "(max-width: 640px)",
@@ -136,7 +136,7 @@ export function getResponsiveImageSources(url: string, collection: string) {
       media: "(min-width: 1025px)",
       type: "image/webp"
     },
-    // Fallback JPEG sources for browsers that don't support WebP
+    // Fallback JPEG sources for older browsers
     {
       srcSet: getPocketBaseImageUrl(url, collection, "small", "jpeg"),
       media: "(max-width: 640px)",
@@ -168,9 +168,12 @@ export function preloadImages(
   size: ImageSize = "small",
   highPriority = false
 ): void {
+  // Skip if running in SSR context
+  if (typeof window === 'undefined') return;
+  
   // Use a queue to prevent too many simultaneous requests
   const queue = [...urls];
-  const maxParallelPreloads = 4;
+  const maxParallelPreloads = 3; // Reduced from 4 to decrease initial network contention
   let activePreloads = 0;
   
   const processQueue = () => {
@@ -188,21 +191,13 @@ export function preloadImages(
     }
     
     activePreloads++;
+    
+    // For better browser support, use WebP as the default preload format
+    // AVIF support is still not universal
     const imageUrl = getPocketBaseImageUrl(url, collection, size, "webp");
     
     if (imageUrl) {
-      const img = new Image();
-      
-      // Listen for load and error events to continue the queue
-      const continueQueue = () => {
-        activePreloads--;
-        processQueue();
-      };
-      
-      img.onload = continueQueue;
-      img.onerror = continueQueue;
-      
-      // For critical above-the-fold images, add a preload link
+      // For high priority, create a preload link for the browser to discover it
       if (highPriority) {
         const link = document.createElement('link');
         link.rel = 'preload';
@@ -213,9 +208,27 @@ export function preloadImages(
         document.head.appendChild(link);
       }
       
-      // Start loading the image
-      img.src = imageUrl;
-      preloadedImages.add(cacheKey);
+      // Use requestIdleCallback for non-critical images
+      if (!highPriority && 'requestIdleCallback' in window) {
+        requestIdleCallback(() => {
+          const img = new Image();
+          img.onload = img.onerror = () => {
+            activePreloads--;
+            processQueue();
+          };
+          img.src = imageUrl;
+          preloadedImages.add(cacheKey);
+        });
+      } else {
+        // Fallback or high priority images
+        const img = new Image();
+        img.onload = img.onerror = () => {
+          activePreloads--;
+          processQueue();
+        };
+        img.src = imageUrl;
+        preloadedImages.add(cacheKey);
+      }
     } else {
       activePreloads--;
       processQueue();
@@ -234,13 +247,18 @@ export function preloadImages(
  * @param collection - The PocketBase collection name
  */
 export function preloadCriticalImages(productIds: string[], collection: string): void {
-  // Create a preload link for each critical image - limit to first 4 to avoid too many requests
-  const criticalIds = productIds.slice(0, 4);
+  // Skip if running in SSR context
+  if (typeof window === 'undefined') return;
+  
+  // Create a preload link for each critical image - limit to first 2 to reduce initial load
+  const criticalIds = productIds.slice(0, 2);
   
   criticalIds.forEach((id, index) => {
     const link = document.createElement('link');
     link.rel = 'preload';
     link.as = 'image';
+    
+    // Use webp for broader browser support
     link.href = getPocketBaseImageUrl(id, collection, "medium", "webp");
     link.type = 'image/webp';
     
@@ -251,6 +269,22 @@ export function preloadCriticalImages(productIds: string[], collection: string):
     
     document.head.appendChild(link);
   });
+  
+  // Queue the rest for lazy loading if needed
+  if (productIds.length > 2) {
+    const nonCritical = productIds.slice(2);
+    // Use requestIdleCallback to load these during browser idle time
+    if ('requestIdleCallback' in window) {
+      requestIdleCallback(() => {
+        preloadImages(nonCritical, collection, 'small', false);
+      });
+    } else {
+      // Fallback with setTimeout
+      setTimeout(() => {
+        preloadImages(nonCritical, collection, 'small', false);
+      }, 1000);
+    }
+  }
 }
 
 /**

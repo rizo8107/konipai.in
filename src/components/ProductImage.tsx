@@ -16,6 +16,13 @@ interface ProductImageProps {
     aspectRatio?: "square" | "portrait" | "landscape"; // Added aspect ratio option
 }
 
+// Default dimensions based on aspect ratio to prevent layout shifts
+const defaultDimensions = {
+    square: { width: 400, height: 400 },
+    portrait: { width: 400, height: 533 },
+    landscape: { width: 400, height: 300 },
+};
+
 export const ProductImage = memo(function ProductImage({ 
     url, 
     alt, 
@@ -40,6 +47,12 @@ export const ProductImage = memo(function ProductImage({
         square: "aspect-square",
         portrait: "aspect-[3/4]",
         landscape: "aspect-[4/3]",
+    };
+
+    // Calculate dimensions - use provided dimensions or defaults based on aspect ratio
+    const imageDimensions = {
+        width: width || defaultDimensions[aspectRatio].width,
+        height: height || defaultDimensions[aspectRatio].height,
     };
 
     useEffect(() => {
@@ -124,7 +137,7 @@ export const ProductImage = memo(function ProductImage({
         return (
             <div 
                 className={cn("bg-muted flex items-center justify-center", aspectRatioClasses[aspectRatio], className)}
-                style={{ width: width ? `${width}px` : undefined, height: height ? `${height}px` : undefined }}
+                style={{ width: imageDimensions.width ? `${imageDimensions.width}px` : undefined, height: imageDimensions.height ? `${imageDimensions.height}px` : undefined }}
                 aria-label="Image not available"
             >
                 <ImageIcon className="h-6 w-6 text-muted-foreground" aria-hidden="true" />
@@ -135,8 +148,8 @@ export const ProductImage = memo(function ProductImage({
     // Use picture element for responsive images
     if (useResponsive && sources.length > 0) {
         return (
-            <div className={cn("relative overflow-hidden w-full", aspectRatioClasses[aspectRatio])} 
-                style={{ maxWidth: width ? `${width}px` : undefined }}>
+            <div className={cn("relative overflow-hidden", aspectRatioClasses[aspectRatio])} 
+                style={{ width: imageDimensions.width ? `${imageDimensions.width}px` : undefined, height: 'auto' }}>
                 {/* Blur-up thumbnail */}
                 {isLoading && thumbnailUrl && (
                     <div className="absolute inset-0 z-0">
@@ -145,6 +158,8 @@ export const ProductImage = memo(function ProductImage({
                             alt=""
                             className={cn("w-full h-full object-cover blur-xl scale-110", className)}
                             aria-hidden="true"
+                            width={imageDimensions.width}
+                            height={imageDimensions.height}
                         />
                     </div>
                 )}
@@ -175,10 +190,11 @@ export const ProductImage = memo(function ProductImage({
                             className
                         )}
                         loading={priority ? "eager" : "lazy"}
-                        width={width}
-                        height={height}
+                        width={imageDimensions.width}
+                        height={imageDimensions.height}
                         decoding={priority ? "sync" : "async"}
                         onLoad={handleImageLoad}
+                        fetchPriority={priority ? "high" : "auto"}
                     />
                 </picture>
             </div>
@@ -187,8 +203,8 @@ export const ProductImage = memo(function ProductImage({
 
     // Fallback to regular img tag
     return (
-        <div className={cn("relative overflow-hidden w-full", aspectRatioClasses[aspectRatio])}
-            style={{ maxWidth: width ? `${width}px` : undefined }}>
+        <div className={cn("relative overflow-hidden", aspectRatioClasses[aspectRatio])}
+            style={{ width: imageDimensions.width ? `${imageDimensions.width}px` : undefined, height: 'auto' }}>
             {/* Blur-up thumbnail */}
             {isLoading && thumbnailUrl && (
                 <div className="absolute inset-0 z-0">
@@ -197,6 +213,8 @@ export const ProductImage = memo(function ProductImage({
                         alt=""
                         className={cn("w-full h-full object-cover blur-xl scale-110", className)}
                         aria-hidden="true"
+                        width={imageDimensions.width}
+                        height={imageDimensions.height}
                     />
                 </div>
             )}
@@ -217,10 +235,11 @@ export const ProductImage = memo(function ProductImage({
                     className
                 )}
                 loading={priority ? "eager" : "lazy"}
-                width={width}
-                height={height}
+                width={imageDimensions.width}
+                height={imageDimensions.height}
                 decoding={priority ? "sync" : "async"}
                 onLoad={handleImageLoad}
+                fetchPriority={priority ? "high" : "auto"}
             />
         </div>
     );
