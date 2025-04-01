@@ -9,7 +9,7 @@ export interface RazorpayOptions {
   name: string;
   description: string;
   image?: string;
-  order_id?: string;
+  order_id: string;
   handler: (response: RazorpayResponse) => void;
   prefill?: {
     name?: string;
@@ -24,7 +24,7 @@ export interface RazorpayOptions {
 
 export interface RazorpayResponse {
   razorpay_payment_id: string;
-  razorpay_order_id?: string;
+  razorpay_order_id: string;
   razorpay_signature?: string;
   paymentId?: string;
   orderId?: string;
@@ -82,18 +82,48 @@ export const createRazorpayOrder = async (
   receipt: string
 ): Promise<CreateOrderResponse> => {
   try {
-    console.log('Creating Razorpay order');
+    console.log('Creating Razorpay order with params:', { amount, currency, receipt });
     
-    // Generate a unique ID for this transaction
-    const uniqueId = `order_${Date.now()}`;
+    // Make an API call to Razorpay's orders API
+    const response = await fetch('https://api.razorpay.com/v1/orders', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Basic ' + btoa(`${getRazorpayKeyId()}:${getRazorpayKeySecret()}`)
+      },
+      body: JSON.stringify({
+        amount: Math.round(amount * 100), // Convert to paise and ensure it's an integer
+        currency,
+        receipt,
+        notes: {
+          order_id: receipt
+        }
+      })
+    });
     
-    // Return order data for direct payment flow
+    console.log('Razorpay API response status:', response.status);
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      let errorData;
+      try {
+        errorData = JSON.parse(errorText);
+      } catch (e) {
+        errorData = { error: { description: errorText } };
+      }
+      console.error('Razorpay order creation failed:', errorData);
+      throw new Error(`Failed to create Razorpay order: ${errorData.error?.description || 'Unknown error'}`);
+    }
+    
+    const orderData = await response.json();
+    console.log('Razorpay order created successfully:', orderData);
+    
     return {
-      id: uniqueId,
-      amount: amount * 100, // Convert to paise
-      currency,
-      receipt,
-      status: 'created'
+      id: orderData.id,
+      amount: orderData.amount,
+      currency: orderData.currency,
+      receipt: orderData.receipt,
+      status: orderData.status
     };
   } catch (error) {
     console.error('Error creating Razorpay order:', error);
@@ -352,149 +382,71 @@ const sendOrderToWebhook = async (orderId: string, user: Record<string, unknown>
 };
 
 // Verify payment after successful transaction
-export async function verifyPayment(
+export const verifyPayment = async (
   orderId: string,
   paymentId: string,
-  signature: string
-): Promise<{ success: boolean; error?: string }> {
+  signature: string,
+  razorpayOrderId: string
+): Promise<{ success: boolean; error?: string }> => {
   try {
-    console.log('Verifying payment:', { orderId, paymentId, signature: signature ? '****' : undefined });
-    
-    // We need to assume the payment is valid at this point
-    // The actual verification would happen server-side with a webhook from Razorpay
-    
-    // Get order details to include in the webhook
-    let orderDetails;
-    try {
-      orderDetails = await pocketbase.collection('orders').getOne(orderId);
-      console.log('Successfully fetched order details for webhook:', orderDetails.id);
-    } catch (error) {
-      console.error('Error fetching order details for webhook, but continuing:', error);
-      // Continue with the basic order details we have
+    console.log('Verifying payment', { 
+      orderId: orderId,
+      paymentId: paymentId.substring(0, 4) + '****', // Log only first 4 chars for security
+      signature: signature ? 'present' : 'missing',
+      razorpayOrderId: razorpayOrderId ? razorpayOrderId.substring(0, 4) + '****' : 'missing'
+    });
+
+    if (!paymentId || !signature || !razorpayOrderId) {
+      console.error('Missing required parameters for payment verification');
+      return { 
+        success: false, 
+        error: 'Missing required payment verification parameters' 
+      };
     }
-    
-    // Try to send a webhook notification
+
+    // For security, we should verify the payment on the server side
+    // Here we'll make a call to our PocketBase backend to verify the payment
     try {
-      let customerName = 'Customer';
-      let customerEmail = '';
-      let customerPhone = '';
-      let shippingAddress = {};
-      let formattedAddress = '';
-      let orderProducts = [];
-      let subtotal = 0;
-      let shippingCost = 0;
-      let total = 0;
-      
-      // Extract details from the order if available
-      if (orderDetails) {
-        customerName = orderDetails.customer_name || customerName;
-        customerEmail = orderDetails.customer_email || customerEmail;
-        customerPhone = orderDetails.customer_phone || customerPhone;
-        subtotal = orderDetails.subtotal || subtotal;
-        shippingCost = orderDetails.shipping_cost || shippingCost;
-        total = orderDetails.total || total;
-        
-        // Parse products
-        try {
-          orderProducts = typeof orderDetails.products === 'string'
-            ? JSON.parse(orderDetails.products)
-            : orderDetails.products || [];
-          
-          if (!Array.isArray(orderProducts)) {
-            orderProducts = [];
-          }
-        } catch (e) {
-          console.error('Error parsing products for webhook:', e);
-        }
-        
-        // Parse shipping address
-        if (orderDetails.shipping_address_text) {
-          try {
-            console.log(`Processing shipping address text: ${orderDetails.shipping_address_text.substring(0, 50)}...`);
-            
-            try {
-              const parsedAddress = JSON.parse(orderDetails.shipping_address_text);
-              console.log('Successfully parsed shipping address from text field');
-              
-              shippingAddress = {
-                street: parsedAddress.street || '',
-                city: parsedAddress.city || '',
-                state: parsedAddress.state || '',
-                postalCode: parsedAddress.postalCode || '',
-                country: parsedAddress.country || 'India'
-              };
-              
-              // Build formatted address
-              const addressParts = [];
-              if (parsedAddress.street) addressParts.push(parsedAddress.street);
-              if (parsedAddress.city) addressParts.push(parsedAddress.city);
-              if (parsedAddress.state) addressParts.push(parsedAddress.state);
-              if (parsedAddress.postalCode) addressParts.push(parsedAddress.postalCode);
-              if (parsedAddress.country) addressParts.push(parsedAddress.country);
-              
-              formattedAddress = addressParts.join(', ');
-              console.log('Formatted address from text field:', formattedAddress);
-            } catch (parseError) {
-              console.error('Error parsing address JSON from text field:', parseError);
-            }
-            
-            // If we still don't have an address, log a warning
-            if (Object.keys(shippingAddress).length === 0) {
-              console.warn('Unable to parse shipping address from text field');
-            }
-          } catch (e) {
-            console.error('Error processing shipping address text:', e);
-          }
-        } else {
-          console.warn('No shipping_address_text field found in order');
-        }
-      }
-      
-      // Use the direct webhook approach
-      const webhookResult = await testDirectWebhook({
-        eventType: "payment_success",
-        notificationType: "order_payment_success",
-        orderId: orderId,
-        customerInfo: {
-          name: customerName,
-          email: customerEmail,
-          phone: customerPhone
-        },
-        shippingAddress: shippingAddress,
-        paymentInfo: {
-          paymentId: paymentId,
-          paymentOrderId: orderId,
-          paymentStatus: 'paid'
-        },
-        orderStatus: 'processing',
-        products: orderProducts.map(item => ({
-          productId: item.productId || item.product?.id || '',
-          name: item.product?.name || item.name || 'Product',
-          quantity: item.quantity || 1,
-          price: item.product?.price || item.price || 0,
-          color: item.color || '',
-          imageUrl: item.product?.images?.[0] || ''
-        })),
-        financialDetails: {
-          subtotal,
-          shippingCost,
-          total
+      const verificationResult = await pocketbase.send('/api/verify-razorpay-payment', {
+        method: 'POST',
+        body: {
+          razorpay_payment_id: paymentId,
+          razorpay_order_id: razorpayOrderId,
+          razorpay_signature: signature,
+          order_id: orderId
         }
       });
       
-      console.log('Webhook notification result:', webhookResult.success ? 'success' : 'failed');
-    } catch (webhookError) {
-      console.error('Error sending webhook but continuing:', webhookError);
-      // Don't fail verification due to webhook issues
+      console.log('Payment verification result:', verificationResult);
+      
+      if (verificationResult && verificationResult.success) {
+        return { success: true };
+      } else {
+        return { 
+          success: false, 
+          error: verificationResult.error || 'Payment verification failed' 
+        };
+      }
+    } catch (error) {
+      console.error('Error verifying payment with server:', error);
+      
+      // For development/demo purposes, we'll simulate a successful verification
+      // In production, this should be removed and proper server-side verification should be used
+      if (import.meta.env.DEV || import.meta.env.VITE_DEMO_MODE === 'true') {
+        console.warn('DEV/DEMO MODE: Simulating successful payment verification');
+        return { success: true };
+      }
+      
+      return { 
+        success: false, 
+        error: 'Server error during payment verification' 
+      };
     }
-    
-    // Return success
-    return { success: true };
   } catch (error) {
-    console.error('Payment verification error:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Payment verification failed'
+    console.error('Error in verifyPayment:', error);
+    return { 
+      success: false, 
+      error: 'Unknown error during payment verification' 
     };
   }
 }

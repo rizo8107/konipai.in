@@ -156,7 +156,7 @@ export default function CheckoutPage() {
         }
       } catch (error) {
         // Only log error if it's not a 404 (no address found)
-        if (error.status !== 404) {
+        if (typeof error === 'object' && error !== null && 'status' in error && error.status !== 404) {
           console.warn('Failed to load saved address:', error);
         }
       }
@@ -263,13 +263,15 @@ export default function CheckoutPage() {
           const result = await validateCouponInFrontend(couponCode.trim(), subtotal);
           
           if (result.valid) {
-            setAppliedCoupon({
-              couponId: result.coupon.id,
-              code: result.coupon.code,
-              type: result.coupon.type,
-              amount: result.coupon.amount,
-              discountAmount: result.discountAmount
-            });
+            if (result.coupon) {
+              setAppliedCoupon({
+                couponId: result.coupon.id || '',
+                code: result.coupon.code || '',
+                type: result.coupon.type as 'percentage' | 'fixed_amount',
+                amount: result.coupon.amount || 0,
+                discountAmount: result.discountAmount
+              });
+            }
             setCouponError(null);
             toast({
               title: "Coupon Applied",
@@ -301,13 +303,15 @@ export default function CheckoutPage() {
         const result = await validateCouponInFrontend(couponCode.trim(), subtotal);
         
         if (result.valid) {
-          setAppliedCoupon({
-            couponId: result.coupon.id,
-            code: result.coupon.code,
-            type: result.coupon.type,
-            amount: result.coupon.amount,
-            discountAmount: result.discountAmount
-          });
+          if (result.coupon) {
+            setAppliedCoupon({
+              couponId: result.coupon.id || '',
+              code: result.coupon.code || '',
+              type: result.coupon.type as 'percentage' | 'fixed_amount',
+              amount: result.coupon.amount || 0,
+              discountAmount: result.discountAmount
+            });
+          }
           setCouponError(null);
           toast({
             title: "Coupon Applied",
@@ -318,15 +322,25 @@ export default function CheckoutPage() {
           setAppliedCoupon(null);
         }
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Error applying coupon:', error);
-      setCouponError('Failed to apply coupon. Please try again.');
+      
+      // Type guard for error message
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      
+      toast({
+        variant: "destructive",
+        title: "Coupon Error",
+        description: errorMessage,
+      });
+      
+      setCouponError(errorMessage);
       setAppliedCoupon(null);
     } finally {
       setCouponLoading(false);
     }
   };
-  
+
   // Function to remove applied coupon
   const removeCoupon = () => {
     setAppliedCoupon(null);
@@ -335,138 +349,114 @@ export default function CheckoutPage() {
   };
 
   const handlePaymentSuccess = async (response: RazorpayResponse, orderId: string) => {
+    console.log('Payment success callback received', {
+      orderId,
+      responseKeys: Object.keys(response)
+    });
+    
+    setIsPaymentProcessing(true);
+    
     try {
-      setIsPaymentProcessing(true);
-      toast({
-        title: "Processing payment...",
-        description: "Please wait while we verify your payment.",
-      });
-
-      console.log('Payment success, raw response:', response);
-      
       // The response might be coming directly from Razorpay as an object with different structure
-      // Extract payment details from response, handling both possible formats
+      // Extract payment ID
       const paymentId = response.razorpay_payment_id || response.paymentId;
       
       if (!paymentId) {
-        console.error('Missing payment ID in response:', response);
         trackPaymentFailure(orderId, 0, 'Razorpay', 'Missing payment ID from Razorpay');
         throw new Error('Missing payment ID from Razorpay');
       }
-
-      // First try to update the order record
-      try {
-        // Prepare minimal data for update to avoid conflicts
-        const orderUpdateData: {
-          payment_status: string;
-          status: string;
-          payment_id: string;
-          payment_signature?: string;
-          payment_order_id?: string;
-        } = {
-          payment_status: 'paid',
-          status: 'processing',
-          payment_id: paymentId
-        };
-
-        // Only add optional fields if they exist
-        if (response.razorpay_signature || response.signature) {
-          orderUpdateData.payment_signature = response.razorpay_signature || response.signature;
-        }
-        
-        if (response.razorpay_order_id || response.orderId) {
-          orderUpdateData.payment_order_id = response.razorpay_order_id || response.orderId;
-        }
-
-        console.log('Updating order with data:', orderUpdateData);
-        
-        // Update order status directly without verification
-        await pocketbase.collection('orders').update(orderId, orderUpdateData);
-        
-        // Get the updated order for tracking purposes
-        const updatedOrder = await pocketbase.collection('orders').getOne(orderId);
-        
-        // Trigger payment verification to send webhook
-        try {
-          const signature = response.razorpay_signature || response.signature || '';
-          console.log('Calling verifyPayment to trigger webhook...');
-          await verifyPayment(orderId, paymentId, signature);
-        } catch (verifyError) {
-          console.error('Error sending webhook notification:', verifyError);
-          // Continue with order processing even if webhook fails
-        }
-        
-        // Track payment success with enhanced data
-        trackPaymentSuccess(
-          orderId,
-          paymentId,
-          updatedOrder.total || 0,
-          'Razorpay'
-        );
-
-        // Use the new dynamic conversion tracking with additional metadata
-        trackDynamicConversion({
-          transaction_id: orderId,
-          value: updatedOrder.total || 0,
-          shipping: updatedOrder.shipping_cost || 0,
-          items: items.map(item => ({
-            item_id: item.productId,
-            item_name: item.product.name,
-            price: Number(item.product.price) || 0,
-            quantity: item.quantity,
-            item_variant: item.color || undefined,
-            discount: appliedCoupon ? (appliedCoupon.discountAmount / items.length) : 0,
-            coupon: appliedCoupon?.code
-          })),
-          coupon: appliedCoupon?.code,
-          conversion_type: 'Sale'
-        });
-
-        // Payment verified successfully
-        toast({
-          title: "Payment Successful",
-          description: "Your order has been placed successfully!",
-        });
-
-        // Track purchase event
-        trackEcommerceEvent('purchase', 
-          items.map(item => ({
-            item_id: item.productId,
-            item_name: item.product.name,
-            price: Number(item.product.price) || 0,
-            quantity: item.quantity,
-            item_variant: item.color || undefined
-          })),
-          'INR',
-          calculateFinalTotal().finalTotal
-        );
-
-        // Clear cart
-        clearCart();
-        
-        // Redirect to order confirmation page
-        navigate(`/order-confirmation/${orderId}`);
-      } catch (updateError) {
-        console.error('Failed to update order status:', updateError);
-        
-        // Track payment failure
-        trackPaymentFailure(
-          orderId,
-          0,
-          'Razorpay',
-          'Failed to update order after payment'
-        );
-        
-        // Show a user-friendly error but still consider payment successful
-        toast({
-          variant: "destructive",
-          title: "Order Update Failed",
-          description: "Payment was successful, but we couldn't update your order. Please contact support.",
-        });
-        
-        // Still redirect to confirmation with payment pending status
-        navigate(`/order-confirmation/${orderId}?status=payment_pending`);
+      
+      // Get the Razorpay order ID
+      const razorpayOrderId = response.razorpay_order_id || response.orderId;
+      
+      if (!razorpayOrderId) {
+        trackPaymentFailure(orderId, 0, 'Razorpay', 'Missing Razorpay order ID');
+        throw new Error('Missing Razorpay order ID');
       }
+      
+      // Get the signature
+      const signature = response.razorpay_signature || response.signature;
+      
+      if (!signature) {
+        trackPaymentFailure(orderId, 0, 'Razorpay', 'Missing signature from Razorpay');
+        throw new Error('Missing signature from Razorpay');
+      }
+      
+      // Verify the payment with Razorpay
+      const verificationResult = await verifyPayment(
+        orderId,
+        paymentId,
+        signature,
+        razorpayOrderId
+      );
+      
+      if (!verificationResult.success) {
+        trackPaymentFailure(orderId, 0, 'Razorpay', verificationResult.error || 'Payment verification failed');
+        throw new Error(verificationResult.error || 'Payment verification failed');
+      }
+      
+      // Update order status directly without verification
+      await pocketbase.collection('orders').update(orderId, {
+        payment_status: 'paid',
+        status: 'processing',
+        payment_id: paymentId,
+        payment_signature: signature,
+        payment_order_id: razorpayOrderId
+      });
+      
+      // Get the updated order for tracking purposes
+      const updatedOrder = await pocketbase.collection('orders').getOne(orderId);
+      
+      // Track payment success with enhanced data
+      trackPaymentSuccess(
+        orderId,
+        paymentId,
+        updatedOrder.total || 0,
+        'Razorpay'
+      );
+
+      // Use the new dynamic conversion tracking with additional metadata
+      trackDynamicConversion({
+        transaction_id: orderId,
+        value: updatedOrder.total || 0,
+        shipping: updatedOrder.shipping_cost || 0,
+        items: items.map(item => ({
+          item_id: item.productId,
+          item_name: item.product.name,
+          price: Number(item.product.price) || 0,
+          quantity: item.quantity,
+          item_variant: item.color || undefined,
+          discount: appliedCoupon ? (appliedCoupon.discountAmount / items.length) : 0,
+          coupon: appliedCoupon?.code
+        })),
+        coupon: appliedCoupon?.code,
+        conversion_type: 'Sale'
+      });
+
+      // Payment verified successfully
+      toast({
+        title: "Payment Successful",
+        description: "Your order has been placed successfully!",
+      });
+
+      // Track purchase event
+      trackEcommerceEvent('purchase', 
+        items.map(item => ({
+          item_id: item.productId,
+          item_name: item.product.name,
+          price: Number(item.product.price) || 0,
+          quantity: item.quantity,
+          item_variant: item.color || undefined
+        })),
+        'INR',
+        calculateFinalTotal().finalTotal
+      );
+
+      // Clear cart
+      clearCart();
+      
+      // Redirect to order confirmation page
+      navigate(`/order-confirmation/${orderId}`);
     } catch (error) {
       console.error('Payment verification error:', error);
       
@@ -490,6 +480,19 @@ export default function CheckoutPage() {
     } finally {
       setIsPaymentProcessing(false);
     }
+  };
+
+  const handlePaymentError = (error: unknown) => {
+    console.error('Payment error:', error);
+    
+    // Type guard for error message
+    const errorMessage = error instanceof Error ? error.message : 'Unknown payment error';
+    
+    toast({
+      variant: "destructive",
+      title: "Payment Failed",
+      description: errorMessage,
+    });
   };
 
   const calculateFinalTotal = () => {
@@ -531,10 +534,10 @@ export default function CheckoutPage() {
     };
   }, [items, isSubmitting, isPaymentProcessing]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     
-    if (isSubmitting || isPaymentProcessing) {
+    if (isSubmitting) {
       return; // Prevent double submission
     }
 
@@ -548,8 +551,7 @@ export default function CheckoutPage() {
         item_variant: item.color || undefined,
         affiliation: 'Konipai Web Store'
       })),
-      calculateFinalTotal().finalTotal,
-      appliedCoupon?.code
+      calculateFinalTotal().finalTotal
     );
     
     // Track the checkout button click
@@ -713,12 +715,10 @@ export default function CheckoutPage() {
         item_name: item.product.name,
         price: Number(item.product.price) || 0,
         quantity: item.quantity,
-        item_variant: item.color || undefined,
-        discount: appliedCoupon ? (appliedCoupon.discountAmount / items.length) : 0
+        item_variant: item.color || undefined
       })),
-      order.total,
-      'Razorpay',
-      appliedCoupon?.code
+      'INR',
+      Number(order.total) || 0
     );
     
     // Create Razorpay order
@@ -744,6 +744,7 @@ export default function CheckoutPage() {
       name: 'Konipai',
       description: `Order #${order.id}`,
       image: import.meta.env.VITE_SITE_LOGO || 'https://konipai.in/assets/logo.png',
+      order_id: razorpayOrderResponse.id, // Use the order ID from Razorpay Orders API
       handler: (response) => handlePaymentSuccess(response, order.id),
       prefill: {
         name: formData.name,
@@ -946,7 +947,47 @@ export default function CheckoutPage() {
               name="couponCode"
               type="text"
               value={couponCode}
-              onChange={(e) => setCouponCode(e.target.value)}
+              onChange={(e) => {
+                const couponCode = e.target.value.trim();
+                if (!couponCode) {
+                  setCouponError('Please enter a coupon code');
+                  return;
+                }
+                setCouponLoading(true);
+                validateCouponInFrontend(couponCode, subtotal).then(result => {
+                  if (result.valid) {
+                    if (result.coupon) {
+                      setAppliedCoupon({
+                        couponId: result.coupon.id || '',
+                        code: result.coupon.code || '',
+                        type: result.coupon.type as 'percentage' | 'fixed_amount',
+                        amount: result.coupon.amount || 0,
+                        discountAmount: result.discountAmount
+                      });
+                    }
+                    setCouponError(null);
+                    toast({
+                      title: "Coupon Applied",
+                      description: result.message,
+                    });
+                  } else {
+                    setCouponError(result.message);
+                    setAppliedCoupon(null);
+                  }
+                }).catch((error: unknown) => {
+                  console.error('Error applying coupon:', error);
+                  const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+                  toast({
+                    variant: "destructive",
+                    title: "Coupon Error",
+                    description: errorMessage,
+                  });
+                  setCouponError(errorMessage);
+                  setAppliedCoupon(null);
+                }).finally(() => {
+                  setCouponLoading(false);
+                });
+              }}
               placeholder="Enter coupon code"
             />
             {couponLoading ? (
