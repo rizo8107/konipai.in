@@ -166,7 +166,7 @@ routerAdd('POST', '/api/razorpay/verify-payment', (c) => {
 
 // Capture a payment after authorization
 routerAdd('POST', '/api/razorpay/capture-payment', (c) => {
-    console.log("🔄 Capture payment endpoint called");
+    console.log(" Capture payment endpoint called");
     
     // Add CORS headers to ensure the endpoint works properly
     const origin = c.request().header("Origin") || "";
@@ -194,7 +194,7 @@ routerAdd('POST', '/api/razorpay/capture-payment', (c) => {
     // Authorize the request - user must be authenticated
     const authRecord = $apis.requestInfo(c).authRecord;
     if (!authRecord) {
-        console.error('⚠️ Capture payment call failed: User not authenticated');
+        console.error(' Capture payment call failed: User not authenticated');
         return c.json(403, { 'message': 'Unauthorized' });
     }
 
@@ -202,22 +202,22 @@ routerAdd('POST', '/api/razorpay/capture-payment', (c) => {
     let bodyObj;
     try {
         bodyObj = $apis.requestInfo(c).data;
-        console.log('📥 Capture payment request received:', JSON.stringify(bodyObj));
+        console.log(' Capture payment request received:', JSON.stringify(bodyObj));
     } catch (e) {
-        console.error('⚠️ Capture payment call failed: Invalid request data', e);
+        console.error(' Capture payment call failed: Invalid request data', e);
         return c.json(400, { 'message': 'Invalid request data' });
     }
 
     // Validate required fields
     if (!bodyObj.payment_id || !bodyObj.amount) {
-        console.error('⚠️ Capture payment call failed: Missing required fields', bodyObj);
+        console.error(' Capture payment call failed: Missing required fields', bodyObj);
         return c.json(400, { 'message': 'Missing required fields: payment_id and amount are required' });
     }
 
     // Make API request to Razorpay to capture the payment
     try {
         const auth = Buffer.from(`${RAZORPAY_KEY_ID}:${RAZORPAY_KEY_SECRET}`).toString('base64');
-        console.log(`🔄 Attempting to capture payment ${bodyObj.payment_id} for amount ${bodyObj.amount}`);
+        console.log(` Attempting to capture payment ${bodyObj.payment_id} for amount ${bodyObj.amount}`);
         
         const response = $http.send({
             url: `https://api.razorpay.com/v1/payments/${bodyObj.payment_id}/capture`,
@@ -233,7 +233,7 @@ routerAdd('POST', '/api/razorpay/capture-payment', (c) => {
         });
 
         if (response.statusCode >= 400) {
-            console.error('❌ Razorpay capture API error:', response.statusCode, response.raw);
+            console.error(' Razorpay capture API error:', response.statusCode, response.raw);
             return c.json(response.statusCode, { 
                 'message': 'Failed to capture payment',
                 'details': response.raw,
@@ -243,12 +243,12 @@ routerAdd('POST', '/api/razorpay/capture-payment', (c) => {
 
         // Parse the response
         const captureData = JSON.parse(response.raw);
-        console.log('✅ Payment captured successfully:', captureData.id, captureData.status);
+        console.log(' Payment captured successfully:', captureData.id, captureData.status);
         
         // Update the payment status in the database if needed
         try {
             // Update the status in razorpay_orders table
-            console.log('🔄 Updating payment status in database to captured');
+            console.log(' Updating payment status in database to captured');
             $app.dao().db()
                 .newQuery('UPDATE razorpay_orders SET payment_status = ?, updated = ? WHERE payment_id = ?')
                 .execute(
@@ -264,16 +264,16 @@ routerAdd('POST', '/api/razorpay/capture-payment', (c) => {
                     if (record) {
                         record.set('payment_status', 'captured');
                         $app.dao().saveRecord(record);
-                        console.log('✅ Order payment status updated to captured:', bodyObj.order_id);
+                        console.log(' Order payment status updated to captured:', bodyObj.order_id);
                     } else {
-                        console.warn('⚠️ Order not found for status update:', bodyObj.order_id);
+                        console.warn(' Order not found for status update:', bodyObj.order_id);
                     }
                 } catch (orderError) {
-                    console.error('❌ Error updating order status after capture:', orderError);
+                    console.error(' Error updating order status after capture:', orderError);
                 }
             }
         } catch (dbError) {
-            console.error('❌ Database error during payment capture status update:', dbError);
+            console.error(' Database error during payment capture status update:', dbError);
             // Continue even if db update fails
         }
 
@@ -283,7 +283,7 @@ routerAdd('POST', '/api/razorpay/capture-payment', (c) => {
             data: captureData
         });
     } catch (error) {
-        console.error('❌ Error capturing Razorpay payment:', error);
+        console.error(' Error capturing Razorpay payment:', error);
         return c.json(500, { 
             'message': 'Internal server error during payment capture',
             'error': String(error)
@@ -294,27 +294,62 @@ routerAdd('POST', '/api/razorpay/capture-payment', (c) => {
 // Create necessary tables for the first run
 onBootstrap(() => {
     // Create a table to store Razorpay orders if it doesn't exist
-    const tableExists = $app.dao().db()
-        .newQuery("SELECT name FROM sqlite_master WHERE type='table' AND name='razorpay_orders'")
-        .execute();
-
-    if (!tableExists.length) {
-        $app.dao().db().newQuery(`
-            CREATE TABLE razorpay_orders (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                order_id TEXT NOT NULL,
-                user_id TEXT NOT NULL,
-                amount INTEGER NOT NULL,
-                currency TEXT NOT NULL,
-                receipt TEXT NOT NULL,
-                status TEXT NOT NULL,
-                payment_id TEXT,
-                payment_status TEXT DEFAULT 'pending',
-                created TEXT NOT NULL,
-                updated TEXT
-            )
-        `).execute();
-        
-        console.log('Created razorpay_orders table');
+    try {
+        const collections = $app.dao().findCollectionsByNameOrId("razorpay_orders");
+        if (collections.length === 0) {
+            const collection = new Collection({
+                name: "razorpay_orders",
+                type: "base",
+                schema: [
+                    {
+                        name: "order_id",
+                        type: "text",
+                        required: true
+                    },
+                    {
+                        name: "amount",
+                        type: "number",
+                        required: true
+                    },
+                    {
+                        name: "currency",
+                        type: "text",
+                        required: true
+                    },
+                    {
+                        name: "status",
+                        type: "text",
+                        required: true
+                    }
+                ]
+            });
+            $app.dao().saveCollection(collection);
+        }
+    } catch (e) {
+        console.error("Error creating razorpay_orders collection:", e);
     }
-}); 
+});
+
+// Simple test route to verify hooks are loading
+routerAdd('GET', '/api/razorpay-test', (c) => {
+    // Add CORS headers to ensure the endpoint works properly
+    const origin = c.request().header("Origin") || "";
+    const allowedOrigins = [
+        "http://localhost:8080",
+        "https://konipai.in",
+        "https://www.konipai.in"
+    ];
+    
+    // Set appropriate CORS headers based on origin
+    if (allowedOrigins.includes(origin)) {
+        c.header("Access-Control-Allow-Origin", origin);
+    } else {
+        c.header("Access-Control-Allow-Origin", allowedOrigins[0]);
+    }
+    
+    return c.json(200, { 
+        message: 'Razorpay hooks loaded successfully ',
+        timestamp: new Date().toISOString(),
+        version: '1.0.1'
+    });
+});
