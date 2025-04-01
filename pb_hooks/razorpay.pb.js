@@ -167,7 +167,20 @@ routerAdd('POST', '/api/razorpay/verify-payment', (c) => {
 // Capture a payment after authorization
 routerAdd('POST', '/api/razorpay/capture-payment', (c) => {
     // Add CORS headers to ensure the endpoint works properly
-    c.header("Access-Control-Allow-Origin", "http://localhost:8080");
+    const origin = c.request().header("Origin") || "";
+    const allowedOrigins = [
+        "http://localhost:8080",
+        "https://konipai.in",
+        "https://www.konipai.in"
+    ];
+    
+    // Set appropriate CORS headers based on origin
+    if (allowedOrigins.includes(origin)) {
+        c.header("Access-Control-Allow-Origin", origin);
+    } else {
+        c.header("Access-Control-Allow-Origin", allowedOrigins[0]);
+    }
+    
     c.header("Access-Control-Allow-Methods", "POST, OPTIONS");
     c.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
     
