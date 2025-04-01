@@ -166,6 +166,8 @@ routerAdd('POST', '/api/razorpay/verify-payment', (c) => {
 
 // Capture a payment after authorization
 routerAdd('POST', '/api/razorpay/capture-payment', (c) => {
+    console.log("🔄 Capture payment endpoint called");
+    
     // Add CORS headers to ensure the endpoint works properly
     const origin = c.request().header("Origin") || "";
     const allowedOrigins = [
