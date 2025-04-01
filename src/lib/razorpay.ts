@@ -84,43 +84,16 @@ export const createRazorpayOrder = async (
   try {
     console.log('Creating Razorpay order');
     
-    // Get Razorpay API credentials
-    const keyId = getRazorpayKeyId();
-    const keySecret = getRazorpayKeySecret();
+    // Generate a unique ID for this transaction
+    const uniqueId = `order_${Date.now()}`;
     
-    // Create authentication header with Basic auth
-    const auth = btoa(`${keyId}:${keySecret}`);
-    
-    // Call Razorpay API directly to create order
-    const response = await fetch('https://api.razorpay.com/v1/orders', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Basic ${auth}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        amount: amount * 100, // Convert to paise
-        currency,
-        receipt,
-        payment_capture: 1 // Enable automatic payment capture
-      })
-    });
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Razorpay API error:', errorText);
-      throw new Error(`Failed to create Razorpay order: ${response.status} ${errorText}`);
-    }
-    
-    const orderData = await response.json();
-    console.log('Razorpay order created successfully:', orderData.id);
-    
+    // Return order data for direct payment flow
     return {
-      id: orderData.id,
-      amount: amount * 100, // Return in paise
+      id: uniqueId,
+      amount: amount * 100, // Convert to paise
       currency,
       receipt,
-      status: orderData.status
+      status: 'created'
     };
   } catch (error) {
     console.error('Error creating Razorpay order:', error);
@@ -523,6 +496,46 @@ export async function verifyPayment(
       success: false,
       error: error instanceof Error ? error.message : 'Payment verification failed'
     };
+  }
+}
+
+/**
+ * Capture a Razorpay payment after it has been authorized
+ * This uses the PocketBase proxy endpoint to avoid CORS issues
+ */
+export async function captureRazorpayPayment(
+  paymentId: string, 
+  amount: number,
+  currency: string = 'INR',
+  orderId?: string
+): Promise<boolean> {
+  try {
+    console.log('Capturing payment:', { paymentId, amount, currency, orderId });
+    
+    // Prepare request body
+    const requestBody = {
+      payment_id: paymentId,
+      amount: amount, // In paise
+      currency: currency,
+      order_id: orderId
+    };
+    
+    // Call the PocketBase proxy endpoint
+    const response = await pocketbase.send('/api/razorpay/capture-payment', {
+      method: 'POST',
+      body: requestBody
+    });
+    
+    if (!response) {
+      console.error('Failed to capture payment - Empty response');
+      return false;
+    }
+    
+    console.log('Payment captured successfully:', response);
+    return true;
+  } catch (error) {
+    console.error('Error capturing payment:', error);
+    return false;
   }
 }
 

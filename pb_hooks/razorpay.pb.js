@@ -43,7 +43,6 @@ routerAdd('POST', '/api/razorpay/create-order', (c) => {
                 amount: bodyObj.amount,
                 currency: bodyObj.currency,
                 receipt: bodyObj.receipt,
-                payment_capture: 1, // Add automatic payment capture
                 notes: {
                     user_id: authRecord.id
                 }
@@ -163,6 +162,89 @@ routerAdd('POST', '/api/razorpay/verify-payment', (c) => {
         orderId: bodyObj.razorpay_order_id,
         paymentId: bodyObj.razorpay_payment_id
     });
+});
+
+// Capture a payment after authorization
+routerAdd('POST', '/api/razorpay/capture-payment', (c) => {
+    // Authorize the request - user must be authenticated
+    const authRecord = $apis.requestInfo(c).authRecord;
+    if (!authRecord) {
+        return c.json(403, { 'message': 'Unauthorized' });
+    }
+
+    // Parse the request body
+    let bodyObj;
+    try {
+        bodyObj = $apis.requestInfo(c).data;
+    } catch (e) {
+        return c.json(400, { 'message': 'Invalid request data' });
+    }
+
+    // Validate required fields
+    if (!bodyObj.payment_id || !bodyObj.amount) {
+        return c.json(400, { 'message': 'Missing required fields: payment_id and amount are required' });
+    }
+
+    // Make API request to Razorpay to capture the payment
+    try {
+        const auth = Buffer.from(`${RAZORPAY_KEY_ID}:${RAZORPAY_KEY_SECRET}`).toString('base64');
+        const response = $http.send({
+            url: `https://api.razorpay.com/v1/payments/${bodyObj.payment_id}/capture`,
+            method: 'POST',
+            body: JSON.stringify({
+                amount: bodyObj.amount,
+                currency: bodyObj.currency || 'INR'
+            }),
+            headers: {
+                'Authorization': `Basic ${auth}`,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        if (response.statusCode >= 400) {
+            console.error('Razorpay capture API error:', response.raw);
+            return c.json(response.statusCode, { 
+                'message': 'Failed to capture payment',
+                'details': response.raw
+            });
+        }
+
+        // Parse the response
+        const captureData = JSON.parse(response.raw);
+        
+        // Update the payment status in the database if needed
+        try {
+            // Update the status in razorpay_orders table
+            $app.dao().db()
+                .newQuery('UPDATE razorpay_orders SET payment_status = ?, updated = ? WHERE payment_id = ?')
+                .execute(
+                    'captured',
+                    new Date().toISOString(),
+                    bodyObj.payment_id
+                );
+                
+            // If order_id is provided, update the orders collection
+            if (bodyObj.order_id) {
+                try {
+                    const record = $app.dao().findRecordById('orders', bodyObj.order_id);
+                    if (record) {
+                        record.set('payment_status', 'captured');
+                        $app.dao().saveRecord(record);
+                    }
+                } catch (orderError) {
+                    console.error('Error updating order status after capture:', orderError);
+                }
+            }
+        } catch (dbError) {
+            console.error('Database error during payment capture status update:', dbError);
+            // Continue even if db update fails
+        }
+
+        return c.json(200, captureData);
+    } catch (error) {
+        console.error('Error capturing Razorpay payment:', error);
+        return c.json(500, { 'message': 'Internal server error during payment capture' });
+    }
 });
 
 // Create necessary tables for the first run

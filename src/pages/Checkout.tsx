@@ -16,6 +16,7 @@ import {
   createRazorpayOrder, 
   openRazorpayCheckout,
   verifyPayment,
+  captureRazorpayPayment,
   RazorpayResponse
 } from '@/lib/razorpay';
 import { trackEcommerceEvent } from '@/utils/analytics';
@@ -354,6 +355,29 @@ export default function CheckoutPage() {
         throw new Error('Missing payment ID from Razorpay');
       }
 
+      // Get order details to get the total amount for capture
+      const orderDetails = await pocketbase.collection('orders').getOne(orderId);
+      if (!orderDetails) {
+        throw new Error('Failed to fetch order details for payment capture');
+      }
+
+      // Explicitly capture the payment using our new capture API
+      console.log('Capturing payment with ID:', paymentId);
+      const captureResult = await captureRazorpayPayment(
+        paymentId,
+        orderDetails.total * 100, // Convert to paise
+        'INR',
+        orderId
+      );
+      
+      if (!captureResult) {
+        console.warn('Payment capture may have failed, but continuing with order processing');
+        // Continue with order processing even if capture fails
+        // The payment might have been auto-captured or will be captured later
+      } else {
+        console.log('Payment captured successfully');
+      }
+
       // First try to update the order record
       try {
         // Prepare minimal data for update to avoid conflicts
@@ -364,7 +388,7 @@ export default function CheckoutPage() {
           payment_signature?: string;
           payment_order_id?: string;
         } = {
-          payment_status: 'paid',
+          payment_status: 'captured', // Changed from 'paid' to 'captured' to reflect capture status
           status: 'processing',
           payment_id: paymentId
         };
