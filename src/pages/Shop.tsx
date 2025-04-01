@@ -16,6 +16,7 @@ import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { preloadImages } from '@/utils/imageOptimizer';
 import { Collections } from '@/lib/pocketbase';
+import { pocketbase } from '@/lib/pocketbase';
 
 export default function Shop() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -59,11 +60,54 @@ export default function Shop() {
     const fetchProducts = async () => {
       try {
         setLoading(true);
-        const data = await getProducts(undefined, controller.signal);
-        setProducts(data);
+        console.log("Fetching products for Shop page...");
         
-        // Preload first 8 images for better initial load performance
-        if (data.length > 0) {
+        // First try to use the main getProducts function
+        let data = await getProducts(undefined, controller.signal);
+        
+        // If no products were returned, use a fallback approach
+        if (!data || data.length === 0) {
+          console.log("No products returned, trying direct PocketBase approach");
+          try {
+            // Direct approach to PocketBase as a fallback
+            const records = await pocketbase.collection(Collections.PRODUCTS).getList(1, 100, {
+              $autoCancel: false,
+              requestKey: `shop_products_fallback_${Date.now()}`
+            });
+            
+            console.log(`Fallback method returned ${records.items.length} products`);
+            
+            // Transform the data to match our Product interface
+            data = records.items.map(record => ({
+              ...record,
+              $id: record.id,
+              images: Array.isArray(record.images) 
+                ? record.images.map((image: string) => `${record.id}/${image}`)
+                : [],
+              colors: typeof record.colors === 'string' ? JSON.parse(record.colors) : record.colors,
+              features: typeof record.features === 'string' ? JSON.parse(record.features) : record.features,
+              care: typeof record.care === 'string' ? JSON.parse(record.care) : record.care,
+              tags: typeof record.tags === 'string' ? JSON.parse(record.tags) : record.tags,
+              createdAt: record.created,
+              updatedAt: record.updated,
+              reviews: 0
+            })) as unknown as Product[];
+          } catch (fallbackError) {
+            console.error("Fallback product fetch also failed:", fallbackError);
+            // If both approaches fail, show an error toast
+            toast({
+              variant: 'destructive',
+              title: 'Error',
+              description: 'Failed to load products. Please try again later.',
+            });
+          }
+        }
+        
+        if (data && data.length > 0) {
+          console.log(`Successfully loaded ${data.length} products for Shop page`);
+          setProducts(data);
+          
+          // Preload first 8 images for better initial load performance
           const criticalImages = data.slice(0, 8)
             .map(product => product.images?.[0])
             .filter(Boolean) as string[];

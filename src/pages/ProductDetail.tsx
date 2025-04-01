@@ -211,7 +211,62 @@ const ProductDetail = () => {
       
       try {
         console.log(`[PROD DEBUG] Calling getProduct with id: ${id}`);
-        const data = await getProduct(id);
+        let data;
+        
+        try {
+          // First try the main getProduct function
+          data = await getProduct(id);
+        } catch (mainError) {
+          console.error(`[PROD DEBUG] Main getProduct failed:`, mainError);
+          
+          // If the main method fails, try a direct approach as fallback
+          console.log(`[PROD DEBUG] Trying fallback direct product fetch for ${id}`);
+          try {
+            const record = await pocketbase.collection('products').getOne(id, {
+              $autoCancel: false,
+              requestKey: `prod_fallback_${id}_${Date.now()}`
+            });
+            
+            // Transform to match our Product interface
+            data = {
+              ...record,
+              $id: record.id,
+              name: record.name || 'Unknown Product',
+              description: record.description || '',
+              price: record.price || 0,
+              dimensions: record.dimensions || '',
+              material: record.material || '',
+              category: record.category || '',
+              bestseller: record.bestseller || false,
+              new: record.new || false,
+              inStock: record.inStock || false,
+              images: Array.isArray(record.images) 
+                ? record.images.map((image: string) => `${record.id}/${image}`)
+                : [],
+              colors: typeof record.colors === 'string' ? JSON.parse(record.colors) : (record.colors || []),
+              features: typeof record.features === 'string' ? JSON.parse(record.features) : (record.features || []),
+              care: typeof record.care === 'string' ? JSON.parse(record.care) : (record.care || []),
+              tags: typeof record.tags === 'string' ? JSON.parse(record.tags) : (record.tags || []),
+              specifications: record.specifications || {
+                material: record.material || '',
+                dimensions: record.dimensions || '',
+                weight: '',
+                capacity: '',
+                style: '',
+                pattern: '',
+                closure: '',
+                waterResistant: false
+              },
+              reviews: 0 // Default to 0 reviews
+            } as Product;
+            
+            console.log(`[PROD DEBUG] Fallback product fetch successful for ${id}`);
+          } catch (fallbackError) {
+            console.error(`[PROD DEBUG] Fallback product fetch also failed:`, fallbackError);
+            throw fallbackError; // Re-throw to be caught by the outer catch
+          }
+        }
+        
         console.log(`[PROD DEBUG] Product loaded successfully:`, data.name);
         setProduct(data);
         
@@ -253,41 +308,42 @@ const ProductDetail = () => {
           }
         }
         
-        // Load related products
-        try {
-          console.log(`[PROD DEBUG] Loading related products for category: ${data.category}`);
-          const related = await getProducts({
-            category: data.category,
-          });
-          const filteredRelated = related.filter((p) => p.id !== id).slice(0, 4);
-          console.log(`[PROD DEBUG] Found ${filteredRelated.length} related products`);
-          setRelatedProducts(filteredRelated);
-        } catch (relatedError) {
-          console.error('[PROD DEBUG] Error loading related products:', relatedError);
-          setRelatedProducts([]);
+        // After loading the product, try to load related products
+        if (!relatedLoaded.current) {
+          try {
+            console.log(`[PROD DEBUG] Loading related products for ${data.category}`);
+            const relatedData = await getProducts({ category: data.category });
+            
+            // Filter out the current product and limit to 4 products
+            const filteredRelated = relatedData
+              .filter(p => p.id !== id)
+              .slice(0, 4);
+              
+            console.log(`[PROD DEBUG] Found ${filteredRelated.length} related products`);
+            setRelatedProducts(filteredRelated);
+            relatedLoaded.current = true;
+          } catch (relatedError) {
+            console.error('[PROD DEBUG] Error loading related products:', relatedError);
+            // Continue even if related products fail to load
+            setRelatedProducts([]);
+          }
         }
-        
-        setLoading(false);
       } catch (error) {
-        console.error('[PROD DEBUG] Error fetching product:', error);
+        console.error('[PROD DEBUG] Error loading product:', error);
+        setError('Failed to load product. Please try refreshing the page.');
+        setProduct(null);
+      } finally {
         setLoading(false);
-        setError('Failed to load product details. Please try again later.');
-        
-        // Retry once after a short delay
-        setTimeout(() => {
-          console.log('[PROD DEBUG] Retrying product load after error');
-          loadProduct();
-        }, 2000);
       }
     };
     
     loadProduct();
     
-    // Reset preload state when product ID changes
-    setImagesPreloaded(false);
-    relatedLoaded.current = false;
-    
-  }, [id, navigate, toast, getItem]);
+    // Start preloading images after main product is loaded
+    return () => {
+      relatedLoaded.current = false;
+    };
+  }, [id]);
   
   // Optimize image selection handling
   const handleImageSelect = (image: string) => {

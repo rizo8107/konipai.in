@@ -266,7 +266,8 @@ export async function getProducts(filter?: ProductFilter, signal?: AbortSignal):
         const filterString = filterRules.length > 0 ? filterRules.join(' && ') : '';
         
         const options: ListOptions = {
-            $autoCancel: false
+            $autoCancel: false,
+            requestKey: `products_${Date.now()}` // Add unique request key to prevent cancellation
         };
 
         if (signal) {
@@ -277,19 +278,12 @@ export async function getProducts(filter?: ProductFilter, signal?: AbortSignal):
             options.filter = filterString;
         }
 
-        const records = await pb.collection(Collections.PRODUCTS).getList(1, 50, options);
+        console.log('Fetching products with options:', options);
+        const records = await pb.collection(Collections.PRODUCTS).getList(1, 100, options);
+        console.log(`Successfully fetched ${records.items.length} products`);
 
-        // Get review counts for all products
-        const reviewCounts = await Promise.all(
-            records.items.map(record => 
-                pb.collection('reviews').getList(1, 1, {
-                    filter: `product = "${record.id}"`,
-                    fields: 'id'
-                })
-            )
-        );
-
-        return records.items.map((record, index) => ({
+        // Process products even if reviews fail
+        let processedProducts = records.items.map(record => ({
             ...record,
             $id: record.id,
             images: Array.isArray(record.images) 
@@ -301,13 +295,39 @@ export async function getProducts(filter?: ProductFilter, signal?: AbortSignal):
             tags: typeof record.tags === 'string' ? JSON.parse(record.tags) : record.tags,
             createdAt: record.created,
             updatedAt: record.updated,
-            reviews: reviewCounts[index].totalItems // Set the actual review count
+            reviews: 0 // Default to 0 reviews initially
         })) as unknown as Product[];
+
+        // Try to get review counts, but don't block product display if this fails
+        try {
+            const reviewCounts = await Promise.all(
+                records.items.map(record => 
+                    pb.collection('reviews').getList(1, 1, {
+                        filter: `product = "${record.id}"`,
+                        fields: 'id',
+                        $autoCancel: false,
+                        requestKey: `reviews_count_${record.id}_${Date.now()}`
+                    })
+                )
+            );
+            
+            // Update products with review counts
+            processedProducts = processedProducts.map((product, index) => ({
+                ...product,
+                reviews: reviewCounts[index].totalItems
+            }));
+        } catch (reviewError) {
+            console.warn('Failed to fetch review counts:', reviewError);
+            // Continue with products that have default review count of 0
+        }
+
+        return processedProducts;
     } catch (error) {
         if (error.name === 'AbortError') {
             throw error;
         }
         console.error('Error fetching products:', error);
+        // Return empty array instead of throwing to prevent UI from breaking
         return [];
     }
 }

@@ -203,28 +203,62 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
           user: user.id,
         };
 
+        // Add unique request key to prevent request cancellation issues
+        const requestOptions = {
+          $autoCancel: false,
+          requestKey: `syncCart_${Date.now()}`
+        };
+
         // First check if the user has a cart - use the catch method to handle 404 cleanly
         const userCart = await pocketbase
           .collection('carts')
-          .getFirstListItem(`user="${user.id}"`)
+          .getFirstListItem(`user="${user.id}"`, requestOptions)
           .catch(() => null);
 
         if (!userCart) {
-          // No cart exists, create a new one
-          try {
-            await pocketbase.collection('carts').create(cartData);
-            console.log('Created new cart for user');
-          } catch (createError) {
-            console.warn('Unable to create cart:', createError);
-          }
+          // No cart exists, create a new one with retry logic
+          let retryCount = 0;
+          const maxRetries = 3;
+          
+          const createCartWithRetry = async () => {
+            try {
+              await pocketbase.collection('carts').create(cartData, requestOptions);
+              console.log('Created new cart for user');
+            } catch (createError) {
+              console.warn(`Unable to create cart (attempt ${retryCount + 1}/${maxRetries}):`, createError);
+              
+              if (retryCount < maxRetries - 1) {
+                retryCount++;
+                // Wait a bit before retrying (exponential backoff)
+                await new Promise(resolve => setTimeout(resolve, 500 * Math.pow(2, retryCount)));
+                return createCartWithRetry();
+              }
+            }
+          };
+          
+          await createCartWithRetry();
         } else if (userCart.id) {
-          // Cart exists, update it
-          try {
-            await pocketbase.collection('carts').update(userCart.id, cartData);
-            console.log('Updated existing cart');
-          } catch (updateError) {
-            console.warn('Unable to update cart:', updateError);
-          }
+          // Cart exists, update it with retry logic
+          let retryCount = 0;
+          const maxRetries = 3;
+          
+          const updateCartWithRetry = async () => {
+            try {
+              await pocketbase.collection('carts').update(userCart.id, cartData, requestOptions);
+              console.log('Updated existing cart');
+            } catch (updateError) {
+              console.warn(`Unable to update cart (attempt ${retryCount + 1}/${maxRetries}):`, updateError);
+              
+              if (retryCount < maxRetries - 1) {
+                retryCount++;
+                // Wait a bit before retrying (exponential backoff)
+                await new Promise(resolve => setTimeout(resolve, 500 * Math.pow(2, retryCount)));
+                return updateCartWithRetry();
+              }
+            }
+          };
+          
+          await updateCartWithRetry();
         }
       } catch (error) {
         console.warn('Error syncing cart with server:', error);
