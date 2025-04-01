@@ -376,6 +376,7 @@ export const ProductReviews = ({ productId, initialReviewCount = 0, onReviewAdde
                     type="button"
                     onClick={() => setRating(i + 1)}
                     className="focus:outline-none"
+                    aria-label={`Rate ${i + 1} out of 5 stars`}
                   >
                     <Star 
                       className={cn(
@@ -414,19 +415,22 @@ export const ProductReviews = ({ productId, initialReviewCount = 0, onReviewAdde
                       type="button"
                       onClick={() => removeImage(index)}
                       className="absolute -top-2 -right-2 bg-white rounded-full p-1 shadow-md"
+                      aria-label={`Remove image ${index + 1}`}
                     >
                       <X className="h-4 w-4" />
                     </button>
                   </div>
                 ))}
                 {selectedImages.length < 5 && (
-                  <label className="w-20 h-20 flex items-center justify-center border-2 border-dashed rounded-lg cursor-pointer hover:border-primary transition-colors">
+                  <label htmlFor="review-images" className="w-20 h-20 flex items-center justify-center border-2 border-dashed rounded-lg cursor-pointer hover:border-primary transition-colors">
                     <input
+                      id="review-images"
                       type="file"
                       accept="image/*"
                       onChange={handleImageSelect}
                       className="hidden"
                       multiple
+                      aria-label="Upload product images"
                     />
                     <Camera className="h-8 w-8 text-muted-foreground" />
                   </label>
