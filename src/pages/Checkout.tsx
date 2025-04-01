@@ -356,26 +356,34 @@ export default function CheckoutPage() {
       }
 
       // Get order details to get the total amount for capture
-      const orderDetails = await pocketbase.collection('orders').getOne(orderId);
-      if (!orderDetails) {
-        throw new Error('Failed to fetch order details for payment capture');
-      }
+      try {
+        const orderDetails = await pocketbase.collection('orders').getOne(orderId);
+        if (!orderDetails) {
+          throw new Error('Failed to fetch order details for payment capture');
+        }
 
-      // Explicitly capture the payment using our new capture API
-      console.log('Capturing payment with ID:', paymentId);
-      const captureResult = await captureRazorpayPayment(
-        paymentId,
-        orderDetails.total * 100, // Convert to paise
-        'INR',
-        orderId
-      );
-      
-      if (!captureResult) {
-        console.warn('Payment capture may have failed, but continuing with order processing');
+        console.log('Attempting to capture payment immediately:', { 
+          paymentId, 
+          amount: orderDetails.total * 100,
+          orderId 
+        });
+        
+        // CRITICAL: Capture the payment as soon as possible
+        const captureResult = await captureRazorpayPayment(
+          paymentId,
+          orderDetails.total * 100, // Convert to paise
+          'INR',
+          orderId
+        );
+
+        if (!captureResult) {
+          console.warn('⚠️ Payment capture failed! Will continue with order processing, but payment may remain authorized only');
+        } else {
+          console.log('✅ Payment captured successfully!');
+        }
+      } catch (captureError) {
+        console.error('Error during payment capture attempt:', captureError);
         // Continue with order processing even if capture fails
-        // The payment might have been auto-captured or will be captured later
-      } else {
-        console.log('Payment captured successfully');
       }
 
       // First try to update the order record

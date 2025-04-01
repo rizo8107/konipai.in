@@ -509,34 +509,73 @@ export async function captureRazorpayPayment(
   currency: string = 'INR',
   orderId?: string
 ): Promise<boolean> {
-  try {
-    console.log('Capturing payment:', { paymentId, amount, currency, orderId });
-    
-    // Prepare request body
-    const requestBody = {
-      payment_id: paymentId,
-      amount: amount, // In paise
-      currency: currency,
-      order_id: orderId
-    };
-    
-    // Call the PocketBase proxy endpoint
-    const response = await pocketbase.send('/api/razorpay/capture-payment', {
-      method: 'POST',
-      body: requestBody
-    });
-    
-    if (!response) {
-      console.error('Failed to capture payment - Empty response');
-      return false;
+  const MAX_RETRIES = 2;
+  let retryCount = 0;
+  
+  while (retryCount <= MAX_RETRIES) {
+    try {
+      console.log(`🔄 Capturing payment attempt ${retryCount+1}/${MAX_RETRIES+1}:`, { 
+        paymentId, 
+        amount, 
+        currency, 
+        orderId 
+      });
+      
+      // Prepare request body
+      const requestBody = {
+        payment_id: paymentId,
+        amount: amount, // In paise
+        currency: currency,
+        order_id: orderId
+      };
+      
+      // Call the PocketBase proxy endpoint
+      const response = await pocketbase.send('/api/razorpay/capture-payment', {
+        method: 'POST',
+        body: requestBody
+      });
+      
+      if (!response) {
+        console.error('❌ Failed to capture payment - Empty response');
+        retryCount++;
+        if (retryCount <= MAX_RETRIES) {
+          console.log(`⏱️ Retrying in ${retryCount * 1000}ms...`);
+          await new Promise(resolve => setTimeout(resolve, retryCount * 1000));
+          continue;
+        }
+        return false;
+      }
+      
+      // Validate the response to ensure capture was successful
+      if (response.success === true || 
+         (response.data && response.data.status === 'captured')) {
+        console.log('✅ Payment captured successfully:', response);
+        return true;
+      } else if (response.data && response.data.status === 'authorized') {
+        // Payment is still only authorized
+        console.warn('⚠️ Payment remains in authorized state after capture attempt');
+        retryCount++;
+        if (retryCount <= MAX_RETRIES) {
+          console.log(`⏱️ Retrying in ${retryCount * 1500}ms...`);
+          await new Promise(resolve => setTimeout(resolve, retryCount * 1500));
+          continue;
+        }
+      } else {
+        console.error('❌ Payment capture failed with response:', response);
+        return false;
+      }
+    } catch (error) {
+      console.error('❌ Error capturing payment:', error);
+      retryCount++;
+      if (retryCount <= MAX_RETRIES) {
+        console.log(`⏱️ Retrying after error in ${retryCount * 1000}ms...`);
+        await new Promise(resolve => setTimeout(resolve, retryCount * 1000));
+        continue;
+      }
     }
-    
-    console.log('Payment captured successfully:', response);
-    return true;
-  } catch (error) {
-    console.error('Error capturing payment:', error);
-    return false;
   }
+  
+  return false;
 }
 
 // Add global window type declaration for Razorpay
