@@ -27,6 +27,21 @@ export function LazyProductReviews(props: {
   );
 }
 
+// Define product interface structure
+interface ProductDetailsProps {
+  product: {
+    id: string;
+    name: string;
+    description: string;
+    price: number;
+    images?: string[];
+    specifications?: Record<string, string | boolean>;
+    features?: string[];
+    care?: string[];
+    [key: string]: unknown;
+  };
+}
+
 // Lazy loaded ProductDetails component
 const LazyProductDetailsComponent = lazy(() => 
   import('@/components/ProductDetails').then(module => ({
@@ -34,7 +49,7 @@ const LazyProductDetailsComponent = lazy(() =>
   }))
 );
 
-export function LazyProductDetails(props: { product: any }) {
+export function LazyProductDetails(props: ProductDetailsProps) {
   return (
     <Suspense fallback={<LoadingIndicator />}>
       <LazyProductDetailsComponent {...props} />
