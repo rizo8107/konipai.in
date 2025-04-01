@@ -17,6 +17,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { preloadImages } from '@/utils/imageOptimizer';
 import { Collections } from '@/lib/pocketbase';
 import { pocketbase } from '@/lib/pocketbase';
+import { Breadcrumbs, BreadcrumbItem } from '@/components/Breadcrumbs';
 
 export default function Shop() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -241,6 +242,18 @@ export default function Shop() {
     );
   }
 
+  // Generate breadcrumb items
+  const breadcrumbItems = [
+    { label: 'Shop' }
+  ];
+  
+  // Add category if filtered
+  if (category && category !== 'all') {
+    breadcrumbItems.push({
+      label: category.charAt(0).toUpperCase() + category.slice(1),
+    });
+  }
+
   return (
     <div className="min-h-screen bg-background">
       {/* Hero Section */}
@@ -269,6 +282,13 @@ export default function Shop() {
       </div>
 
       <div className="konipai-container py-10">
+        {/* Breadcrumbs */}
+        <Breadcrumbs 
+          items={breadcrumbItems} 
+          className="mb-6"
+          isLoading={loading}
+        />
+        
         <div className="space-y-8">
           {/* Search and Filters */}
           <div className="flex items-center justify-between gap-4 flex-wrap">

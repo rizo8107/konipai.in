@@ -21,9 +21,10 @@ import { Label } from '@/components/ui/label';
 interface ProductReviewsProps {
   productId: string;
   initialReviewCount?: number;
+  onReviewAdded?: () => Promise<void>;
 }
 
-export const ProductReviews = ({ productId, initialReviewCount = 0 }: ProductReviewsProps) => {
+export const ProductReviews = ({ productId, initialReviewCount = 0, onReviewAdded }: ProductReviewsProps) => {
   const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
   const [showReviewForm, setShowReviewForm] = useState(false);
@@ -114,6 +115,11 @@ export const ProductReviews = ({ productId, initialReviewCount = 0 }: ProductRev
       
       // Reload reviews
       await loadReviews();
+      
+      // Call the callback if provided
+      if (onReviewAdded) {
+        await onReviewAdded();
+      }
       
       toast({
         title: "Review Submitted",

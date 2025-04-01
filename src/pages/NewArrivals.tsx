@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { getProducts } from '@/lib/pocketbase';
 import ProductGrid from '@/components/ProductGrid';
 import { Product } from '@/types/product';
+import { Breadcrumbs } from '@/components/Breadcrumbs';
 
 const NewArrivals = () => {
   const [newArrivals, setNewArrivals] = useState<Product[]>([]);
@@ -43,14 +44,28 @@ const NewArrivals = () => {
   }
   
   return (
-    <div className="konipai-container py-8">
-      <h1 className="text-3xl font-bold mb-8 text-center">New Arrivals</h1>
-      <p className="text-center max-w-2xl mx-auto mb-10">
-        Explore our latest tote bag designs, hot off the production line. 
-        Be the first to carry these fresh styles.
-      </p>
-      
-      <ProductGrid products={newArrivals} loading={loading} />
+    <div className="konipai-container py-12">
+      {/* Breadcrumbs */}
+      <Breadcrumbs
+        items={[
+          { label: 'Shop', href: '/shop' },
+          { label: 'New Arrivals' }
+        ]}
+        className="mb-6"
+      />
+
+      <div className="space-y-8">
+        <div className="text-center max-w-3xl mx-auto mb-12">
+          <h1 className="text-4xl font-bold mb-4">New Arrivals</h1>
+          <p className="text-gray-600">Discover our latest products, fresh from our workshop.</p>
+        </div>
+
+        {loading ? (
+          <ProductGrid loading={true} products={[]} />
+        ) : (
+          <ProductGrid products={newArrivals} loading={false} />
+        )}
+      </div>
     </div>
   );
 };

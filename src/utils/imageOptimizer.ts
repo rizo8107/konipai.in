@@ -6,7 +6,7 @@ const preloadedImages = new Set<string>();
 
 // Default size optimizations for different screen sizes
 export type ImageSize = "thumbnail" | "small" | "medium" | "large" | "original";
-export type ImageFormat = "webp" | "jpeg" | "png" | "original";
+export type ImageFormat = "avif" | "webp" | "jpeg" | "png" | "original";
 
 interface ImageSizeConfig {
   width: number;
@@ -104,6 +104,22 @@ export function getPocketBaseImageUrl(
  */
 export function getResponsiveImageSources(url: string, collection: string) {
   return [
+    // AVIF sources for browsers with best support (smallest file size)
+    {
+      srcSet: getPocketBaseImageUrl(url, collection, "small", "avif"),
+      media: "(max-width: 640px)",
+      type: "image/avif"
+    },
+    {
+      srcSet: getPocketBaseImageUrl(url, collection, "medium", "avif"),
+      media: "(max-width: 1024px)",
+      type: "image/avif"
+    },
+    {
+      srcSet: getPocketBaseImageUrl(url, collection, "large", "avif"),
+      media: "(min-width: 1025px)",
+      type: "image/avif"
+    },
     // WebP sources for modern browsers (preferred format)
     {
       srcSet: getPocketBaseImageUrl(url, collection, "small", "webp"),

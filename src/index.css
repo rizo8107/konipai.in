@@ -128,3 +128,20 @@
     @apply data-[state=active]:bg-white data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=inactive]:bg-[#f4f4f5] rounded-none px-2 sm:px-4 py-2 font-medium text-xs sm:text-sm md:text-base overflow-hidden text-ellipsis whitespace-nowrap;
   }
 }
+
+/* Hide scrollbar but maintain functionality for breadcrumbs */
+.scrollbar-hide {
+  /* For IE, Edge and Firefox */
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  /* For Webkit browsers */
+  display: none;
+}
+
+/* Add minimum heights to prevent layout shifts */
+.min-height-container {
+  min-height: 32px; /* Standard minimum height */
+}

@@ -39,6 +39,8 @@ export function Logo({ className, variant = 'default' }: LogoProps) {
         onLoad={() => setLoaded(true)}
         loading="eager"
         fetchPriority="high"
+        width="32"
+        height="32"
       />
     </div>
   );

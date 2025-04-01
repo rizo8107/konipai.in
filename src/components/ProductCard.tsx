@@ -36,6 +36,8 @@ const ProductCard = ({ product }: ProductCardProps) => {
           url={product.images?.[0] || ''}
           alt={product.name}
           className="w-full h-full object-cover object-center"
+          width={400}
+          height={400}
         />
         
         <div className="absolute top-3 left-3 flex flex-wrap gap-2">
