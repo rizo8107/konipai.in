@@ -43,6 +43,7 @@ routerAdd('POST', '/api/razorpay/create-order', (c) => {
                 amount: bodyObj.amount,
                 currency: bodyObj.currency,
                 receipt: bodyObj.receipt,
+                payment_capture: 1, // Add automatic payment capture
                 notes: {
                     user_id: authRecord.id
                 }

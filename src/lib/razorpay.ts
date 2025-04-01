@@ -84,16 +84,43 @@ export const createRazorpayOrder = async (
   try {
     console.log('Creating Razorpay order');
     
-    // Generate a unique ID for this transaction
-    const uniqueId = `order_${Date.now()}`;
+    // Get Razorpay API credentials
+    const keyId = getRazorpayKeyId();
+    const keySecret = getRazorpayKeySecret();
     
-    // Return order data for direct payment flow
+    // Create authentication header with Basic auth
+    const auth = btoa(`${keyId}:${keySecret}`);
+    
+    // Call Razorpay API directly to create order
+    const response = await fetch('https://api.razorpay.com/v1/orders', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Basic ${auth}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        amount: amount * 100, // Convert to paise
+        currency,
+        receipt,
+        payment_capture: 1 // Enable automatic payment capture
+      })
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Razorpay API error:', errorText);
+      throw new Error(`Failed to create Razorpay order: ${response.status} ${errorText}`);
+    }
+    
+    const orderData = await response.json();
+    console.log('Razorpay order created successfully:', orderData.id);
+    
     return {
-      id: uniqueId,
-      amount: amount * 100, // Convert to paise
+      id: orderData.id,
+      amount: amount * 100, // Return in paise
       currency,
       receipt,
-      status: 'created'
+      status: orderData.status
     };
   } catch (error) {
     console.error('Error creating Razorpay order:', error);
