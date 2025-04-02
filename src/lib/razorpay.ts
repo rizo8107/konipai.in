@@ -10,6 +10,7 @@ export interface RazorpayOptions {
   description: string;
   image?: string;
   order_id?: string;
+  capture?: boolean;
   handler: (response: RazorpayResponse) => void;
   prefill?: {
     name?: string;
@@ -20,6 +21,11 @@ export interface RazorpayOptions {
   theme?: {
     color?: string;
   };
+  modal?: {
+    ondismiss?: () => void;
+    escape?: boolean;
+    backdropclose?: boolean;
+  };
 }
 
 export interface RazorpayResponse {
@@ -29,6 +35,10 @@ export interface RazorpayResponse {
   paymentId?: string;
   orderId?: string;
   signature?: string;
+  error?: {
+    code: string;
+    description: string;
+  };
 }
 
 export interface CreateOrderResponse {
@@ -37,6 +47,7 @@ export interface CreateOrderResponse {
   currency: string;
   receipt: string;
   status: string;
+  payment_capture: number;
 }
 
 // WebHook configuration for n8n
@@ -82,18 +93,19 @@ export const createRazorpayOrder = async (
   receipt: string
 ): Promise<CreateOrderResponse> => {
   try {
-    console.log('Creating Razorpay order');
+    console.log('Creating Razorpay order with auto-capture enabled');
     
     // Generate a unique ID for this transaction
     const uniqueId = `order_${Date.now()}`;
     
-    // Return order data for direct payment flow
+    // Return order data with payment_capture=1 for auto-capture
     return {
       id: uniqueId,
       amount: amount * 100, // Convert to paise
       currency,
       receipt,
-      status: 'created'
+      status: 'created',
+      payment_capture: 1 // Hard coded to 1 for auto-capture
     };
   } catch (error) {
     console.error('Error creating Razorpay order:', error);
@@ -111,7 +123,7 @@ export const openRazorpayCheckout = (options: RazorpayOptions): void => {
   // Log payment attempt (redact sensitive info)
   console.log('Opening Razorpay payment window with options:', {
     ...options,
-    key: options.key ? '****' : undefined, // Don't log the actual key
+    key: options.key ? '****' : undefined,
     amount: options.amount,
     currency: options.currency,
     prefill: options.prefill ? {
@@ -122,29 +134,28 @@ export const openRazorpayCheckout = (options: RazorpayOptions): void => {
   });
   
   try {
-    // Create the razorpay instance
+    // Create the razorpay instance with auto-capture enabled
     const razorpay = new window.Razorpay({
       key: options.key || getRazorpayKeyId(),
-      amount: options.amount, // Amount in paise
+      amount: options.amount,
       currency: options.currency || 'INR',
       name: options.name || 'Konipai',
       description: options.description || 'Payment',
       image: options.image,
       order_id: options.order_id,
+      capture: true, // Enable auto-capture
       handler: function(response: RazorpayResponse) {
         console.log('Razorpay payment success callback received', {
           ...response,
           razorpay_payment_id: response.razorpay_payment_id ? response.razorpay_payment_id.substring(0, 4) + '****' : undefined
         });
         
-        // Handle missing data
         if (!response.razorpay_payment_id) {
           console.error('Missing payment ID in Razorpay response');
           alert('Payment failed: Missing payment details. Please try again or contact support.');
           return;
         }
         
-        // Forward to handler
         if (options.handler) {
           options.handler(response);
         }
@@ -161,10 +172,10 @@ export const openRazorpayCheckout = (options: RazorpayOptions): void => {
       }
     });
     
-    // Open the modal
-    razorpay.on('payment.failed', function(response: any) {
+    // Handle payment failure
+    razorpay.on('payment.failed', function(response: RazorpayResponse) {
       console.error('Payment failed:', response.error);
-      alert(`Payment failed: ${response.error.description}`);
+      alert(`Payment failed: ${response.error?.description || 'Unknown error occurred'}`);
     });
     
     razorpay.open();
@@ -266,12 +277,12 @@ const sendOrderToWebhook = async (orderId: string, user: Record<string, unknown>
         paymentStatus: order.payment_status || 'unknown'
       },
       orderStatus: order.status || 'unknown',
-      products: orderProducts.map(item => ({
-        productId: item.productId || item.product?.id || 'unknown',
+      products: orderProducts.map((item: OrderProduct) => ({
+        productId: item.productId || item.product?.id || '',
         name: item.product?.name || item.name || 'Product',
         quantity: item.quantity || 1,
         price: item.product?.price || item.price || 0,
-        color: item.color || 'N/A',
+        color: item.color || '',
         imageUrl: item.product?.images?.[0] || ''
       })),
       totalItems: orderProducts.reduce((sum, item) => sum + (item.quantity || 1), 0),
@@ -351,7 +362,22 @@ const sendOrderToWebhook = async (orderId: string, user: Record<string, unknown>
   }
 };
 
-// Verify payment after successful transaction
+// Add payment status constants
+export const PAYMENT_STATUS = {
+    PENDING: 'pending',
+    CREATED: 'created',
+    AUTHORIZED: 'authorized',
+    CAPTURED: 'captured',
+    PAID: 'paid',
+    FAILED: 'failed',
+    REFUNDED: 'refunded',
+    TIMEOUT: 'timeout'
+} as const;
+
+// Add payment timeout constant
+const PAYMENT_TIMEOUT = 5 * 60 * 1000; // 5 minutes in milliseconds
+
+// Verify payment with improved error handling and timeout
 export async function verifyPayment(
   orderId: string,
   paymentId: string,
@@ -360,136 +386,126 @@ export async function verifyPayment(
   try {
     console.log('Verifying payment:', { orderId, paymentId, signature: signature ? '****' : undefined });
     
-    // We need to assume the payment is valid at this point
-    // The actual verification would happen server-side with a webhook from Razorpay
-    
-    // Get order details to include in the webhook
+    // Get order details
     let orderDetails;
     try {
       orderDetails = await pocketbase.collection('orders').getOne(orderId);
       console.log('Successfully fetched order details for webhook:', orderDetails.id);
+      
+      // Check if order is already in a final state
+      if (orderDetails.payment_status === PAYMENT_STATUS.PAID ||
+          orderDetails.payment_status === PAYMENT_STATUS.FAILED ||
+          orderDetails.payment_status === PAYMENT_STATUS.TIMEOUT) {
+        console.log(`Order ${orderId} is already in final state: ${orderDetails.payment_status}`);
+        return { success: true };
+      }
     } catch (error) {
-      console.error('Error fetching order details for webhook, but continuing:', error);
-      // Continue with the basic order details we have
+      console.error('Error fetching order details:', error);
+      return {
+        success: false,
+        error: 'Failed to fetch order details'
+      };
     }
     
-    // Try to send a webhook notification
+    // Set up payment timeout
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => {
+        reject(new Error('Payment verification timeout'));
+      }, PAYMENT_TIMEOUT);
+    });
+    
+    // Race between payment verification and timeout
     try {
-      let customerName = 'Customer';
-      let customerEmail = '';
-      let customerPhone = '';
-      let shippingAddress = {};
-      let formattedAddress = '';
-      let orderProducts = [];
-      let subtotal = 0;
-      let shippingCost = 0;
-      let total = 0;
-      
-      // Extract details from the order if available
-      if (orderDetails) {
-        customerName = orderDetails.customer_name || customerName;
-        customerEmail = orderDetails.customer_email || customerEmail;
-        customerPhone = orderDetails.customer_phone || customerPhone;
-        subtotal = orderDetails.subtotal || subtotal;
-        shippingCost = orderDetails.shipping_cost || shippingCost;
-        total = orderDetails.total || total;
-        
-        // Parse products
-        try {
-          orderProducts = typeof orderDetails.products === 'string'
-            ? JSON.parse(orderDetails.products)
-            : orderDetails.products || [];
-          
-          if (!Array.isArray(orderProducts)) {
-            orderProducts = [];
-          }
-        } catch (e) {
-          console.error('Error parsing products for webhook:', e);
-        }
-        
-        // Parse shipping address
-        if (orderDetails.shipping_address_text) {
+      await Promise.race([
+        // Payment verification logic
+        (async () => {
+          // Try to send a webhook notification
           try {
-            console.log(`Processing shipping address text: ${orderDetails.shipping_address_text.substring(0, 50)}...`);
+            const customerName = orderDetails.customer_name || 'Customer';
+            const customerEmail = orderDetails.customer_email || '';
+            const customerPhone = orderDetails.customer_phone || '';
+            const shippingAddress = orderDetails.shipping_address || {};
+            let orderProducts = [];
+            const subtotal = orderDetails.subtotal || 0;
+            const shippingCost = orderDetails.shipping_cost || 0;
+            const total = orderDetails.total || 0;
             
+            // Parse products
             try {
-              const parsedAddress = JSON.parse(orderDetails.shipping_address_text);
-              console.log('Successfully parsed shipping address from text field');
+              orderProducts = typeof orderDetails.products === 'string'
+                ? JSON.parse(orderDetails.products)
+                : orderDetails.products || [];
               
-              shippingAddress = {
-                street: parsedAddress.street || '',
-                city: parsedAddress.city || '',
-                state: parsedAddress.state || '',
-                postalCode: parsedAddress.postalCode || '',
-                country: parsedAddress.country || 'India'
-              };
-              
-              // Build formatted address
-              const addressParts = [];
-              if (parsedAddress.street) addressParts.push(parsedAddress.street);
-              if (parsedAddress.city) addressParts.push(parsedAddress.city);
-              if (parsedAddress.state) addressParts.push(parsedAddress.state);
-              if (parsedAddress.postalCode) addressParts.push(parsedAddress.postalCode);
-              if (parsedAddress.country) addressParts.push(parsedAddress.country);
-              
-              formattedAddress = addressParts.join(', ');
-              console.log('Formatted address from text field:', formattedAddress);
-            } catch (parseError) {
-              console.error('Error parsing address JSON from text field:', parseError);
+              if (!Array.isArray(orderProducts)) {
+                orderProducts = [];
+              }
+            } catch (e) {
+              console.error('Error parsing products:', e);
             }
             
-            // If we still don't have an address, log a warning
-            if (Object.keys(shippingAddress).length === 0) {
-              console.warn('Unable to parse shipping address from text field');
-            }
-          } catch (e) {
-            console.error('Error processing shipping address text:', e);
+            // Use the direct webhook approach
+            const webhookResult = await testDirectWebhook({
+              eventType: "payment_success",
+              notificationType: "order_payment_success",
+              orderId: orderId,
+              customerInfo: {
+                name: customerName,
+                email: customerEmail,
+                phone: customerPhone
+              },
+              shippingAddress: shippingAddress,
+              paymentInfo: {
+                paymentId: paymentId,
+                paymentOrderId: orderId,
+                paymentStatus: PAYMENT_STATUS.PAID
+              },
+              orderStatus: 'processing',
+              products: orderProducts.map((item: OrderProduct) => ({
+                productId: item.productId || item.product?.id || '',
+                name: item.product?.name || item.name || 'Product',
+                quantity: item.quantity || 1,
+                price: item.product?.price || item.price || 0,
+                color: item.color || '',
+                imageUrl: item.product?.images?.[0] || ''
+              })),
+              financialDetails: {
+                subtotal,
+                shippingCost,
+                total
+              }
+            });
+            
+            console.log('Webhook notification result:', webhookResult.success ? 'success' : 'failed');
+          } catch (webhookError) {
+            console.error('Error sending webhook:', webhookError);
+            // Don't fail verification due to webhook issues
           }
-        } else {
-          console.warn('No shipping_address_text field found in order');
+        })(),
+        timeoutPromise
+      ]);
+      
+      return { success: true };
+    } catch (error: unknown) {
+      if (error instanceof Error && error.message === 'Payment verification timeout') {
+        // Update order status to timeout
+        try {
+          const record = await pocketbase.collection('orders').getOne(orderId);
+          record.payment_status = PAYMENT_STATUS.TIMEOUT;
+          record.status = 'payment_timeout';
+          await pocketbase.collection('orders').update(orderId, record);
+          console.log(`Order ${orderId} marked as timeout`);
+        } catch (updateError) {
+          console.error('Error updating order status:', updateError);
         }
+        
+        return {
+          success: false,
+          error: 'Payment verification timeout'
+        };
       }
       
-      // Use the direct webhook approach
-      const webhookResult = await testDirectWebhook({
-        eventType: "payment_success",
-        notificationType: "order_payment_success",
-        orderId: orderId,
-        customerInfo: {
-          name: customerName,
-          email: customerEmail,
-          phone: customerPhone
-        },
-        shippingAddress: shippingAddress,
-        paymentInfo: {
-          paymentId: paymentId,
-          paymentOrderId: orderId,
-          paymentStatus: 'paid'
-        },
-        orderStatus: 'processing',
-        products: orderProducts.map(item => ({
-          productId: item.productId || item.product?.id || '',
-          name: item.product?.name || item.name || 'Product',
-          quantity: item.quantity || 1,
-          price: item.product?.price || item.price || 0,
-          color: item.color || '',
-          imageUrl: item.product?.images?.[0] || ''
-        })),
-        financialDetails: {
-          subtotal,
-          shippingCost,
-          total
-        }
-      });
-      
-      console.log('Webhook notification result:', webhookResult.success ? 'success' : 'failed');
-    } catch (webhookError) {
-      console.error('Error sending webhook but continuing:', webhookError);
-      // Don't fail verification due to webhook issues
+      throw error;
     }
-    
-    // Return success
-    return { success: true };
   } catch (error) {
     console.error('Payment verification error:', error);
     return {
@@ -504,6 +520,22 @@ declare global {
   interface Window {
     Razorpay: new (options: RazorpayOptions) => {
       open: () => void;
+      on: (event: string, handler: (response: RazorpayResponse) => void) => void;
     };
   }
+}
+
+// Update the products mapping with proper typing
+interface OrderProduct {
+  productId?: string;
+  product?: {
+    id?: string;
+    name?: string;
+    price?: number;
+    images?: string[];
+  };
+  name?: string;
+  quantity?: number;
+  price?: number;
+  color?: string;
 }

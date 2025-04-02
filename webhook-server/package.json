@@ -1,13 +1,18 @@
 {
-  "name": "razorpay-webhook-server",
+  "name": "webhook-server",
   "version": "1.0.0",
   "description": "Razorpay webhook handler for Konipai",
   "main": "express-webhook-handler.js",
   "scripts": {
     "start": "node express-webhook-handler.js",
-    "dev": "nodemon express-webhook-handler.js"
+    "dev": "nodemon express-webhook-handler.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": ["razorpay", "webhook", "konipai"],
+  "keywords": [
+    "razorpay",
+    "webhook",
+    "konipai"
+  ],
   "author": "",
   "license": "ISC",
   "dependencies": {
@@ -16,6 +21,6 @@
     "express": "^4.18.3"
   },
   "devDependencies": {
-    "nodemon": "^3.1.0"
+    "nodemon": "^3.1.9"
   }
 }

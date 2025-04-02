@@ -544,25 +544,58 @@ async function processOrderUpdated(newOrder, oldOrder) {
     }
 }
 
+/**
+ * Verify webhook signature
+ */
+function verifyWebhookSignature(body, signature, secret) {
+    if (!signature || !secret) {
+        directLog('Missing signature or secret');
+        return false;
+    }
+
+    try {
+        const expectedSignature = require('crypto')
+            .createHmac('sha256', secret)
+            .update(body)
+            .digest('hex');
+
+        return expectedSignature === signature;
+    } catch (error) {
+        directLog('Error verifying webhook signature:', error);
+        return false;
+    }
+}
+
 // Register Razorpay webhook route
-$app.onRequest('POST', '/api/razorpay-webhook', (e) => {
-    e.bypassAuth = true; // Allow public access
+routerAdd('POST', '/api/razorpay/webhook', async (c) => {
+    // Allow public access to webhook
+    c.bypassAuth = true;
     
     try {
-        // Get request body
-        const body = JSON.parse(e.bodyString);
-        directLog('Received Razorpay webhook:', JSON.stringify(body));
+        // Get request body and signature
+        const body = c.request().body;
+        const signature = c.request().header('X-Razorpay-Signature');
+        const webhookSecret = $os.getenv('RAZORPAY_WEBHOOK_SECRET');
+
+        // Verify webhook signature
+        if (!verifyWebhookSignature(body, signature, webhookSecret)) {
+            directLog('Invalid webhook signature');
+            return c.json(400, { 
+                success: false, 
+                error: 'Invalid signature' 
+            });
+        }
+
+        // Parse the body
+        const bodyObj = JSON.parse(body);
+        directLog('Received Razorpay webhook:', JSON.stringify(bodyObj));
         
         // Extract event details
-        const event = body.event || '';
-        
-        // Validate webhook signature if available
-        // This should be implemented for production to verify requests are from Razorpay
-        // const signature = e.request.headers.get('X-Razorpay-Signature');
+        const event = bodyObj.event || '';
         
         // Handle payment events
         if (event.startsWith('payment.')) {
-            const payload = body.payload?.payment?.entity || {};
+            const payload = bodyObj.payload?.payment?.entity || {};
             
             const paymentId = payload.id || '';
             const orderId = payload.notes?.order_id || '';
@@ -586,30 +619,48 @@ $app.onRequest('POST', '/api/razorpay-webhook', (e) => {
                     paymentStatus = 'pending';
             }
             
-            // Process the payment status update
-            if (orderId && paymentStatus) {
-                // Process payment asynchronously (don't block response)
-                setTimeout(async () => {
-                    await processPaymentWebhook(event, orderId, paymentId, paymentStatus);
-                }, 0);
+            // Process the payment status update with retry logic
+            const maxRetries = 3;
+            let retryCount = 0;
+            let success = false;
+
+            while (retryCount < maxRetries && !success) {
+                try {
+                    success = await processPaymentWebhook(event, orderId, paymentId, paymentStatus);
+                    if (success) {
+                        directLog(`Successfully processed webhook on attempt ${retryCount + 1}`);
+                        break;
+                    }
+                } catch (error) {
+                    directLog(`Error processing webhook (attempt ${retryCount + 1}): ${error.message}`);
+                }
+                
+                retryCount++;
+                if (!success && retryCount < maxRetries) {
+                    // Wait with exponential backoff before retrying
+                    const waitTime = Math.pow(2, retryCount) * 1000; // 2s, 4s, 8s
+                    await new Promise(resolve => setTimeout(resolve, waitTime));
+                }
+            }
+
+            if (!success) {
+                directLog(`Failed to process webhook after ${maxRetries} attempts`);
+                return c.json(500, { 
+                    success: false, 
+                    error: 'Failed to process webhook' 
+                });
             }
         }
         
         // Return success response
-        return new Response(JSON.stringify({ success: true }), {
-            status: 200,
-            headers: { 'Content-Type': 'application/json' }
-        });
+        return c.json(200, { success: true });
     } catch (error) {
-        directLog(`Error processing Razorpay webhook: ${error.message}`);
+        directLog('Error processing Razorpay webhook:', error);
         
         // Return error response
-        return new Response(JSON.stringify({ 
+        return c.json(400, { 
             success: false, 
             error: error.message 
-        }), {
-            status: 400,
-            headers: { 'Content-Type': 'application/json' }
         });
     }
 });

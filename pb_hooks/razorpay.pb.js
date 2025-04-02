@@ -12,7 +12,157 @@ const crypto = require('crypto');
 const RAZORPAY_KEY_ID = $os.getenv('RAZORPAY_KEY_ID') || 'rzp_test_trImBTMCiZgDuF';
 const RAZORPAY_KEY_SECRET = $os.getenv('RAZORPAY_KEY_SECRET') || 'rmnubcj2HK7z9SvnsEDklkoS';
 
-// Create a Razorpay order
+// Add payment timeout constants
+const PAYMENT_TIMEOUT = 5 * 60 * 1000; // 5 minutes in milliseconds
+const PAYMENT_STATUS = {
+    PENDING: 'pending',
+    CREATED: 'created',
+    AUTHORIZED: 'authorized',
+    CAPTURED: 'captured',
+    PAID: 'paid',
+    FAILED: 'failed',
+    REFUNDED: 'refunded',
+    TIMEOUT: 'timeout'
+};
+
+// Add webhook signature verification function
+function verifyWebhookSignature(body, signature, secret) {
+    if (!signature || !secret) {
+        console.error('Missing signature or secret');
+        return false;
+    }
+
+    try {
+        const expectedSignature = crypto
+            .createHmac('sha256', secret)
+            .update(body)
+            .digest('hex');
+
+        return expectedSignature === signature;
+    } catch (error) {
+        console.error('Error verifying webhook signature:', error);
+        return false;
+    }
+}
+
+// Register Razorpay webhook route
+routerAdd('POST', '/api/razorpay/webhook', (c) => {
+    // Allow public access to webhook
+    c.bypassAuth = true;
+    
+    try {
+        // Get request body and signature
+        const body = c.request().body;
+        const signature = c.request().header('X-Razorpay-Signature');
+        const webhookSecret = $os.getenv('RAZORPAY_WEBHOOK_SECRET');
+
+        // Verify webhook signature
+        if (!verifyWebhookSignature(body, signature, webhookSecret)) {
+            console.error('Invalid webhook signature');
+            return c.json(400, { 
+                success: false, 
+                error: 'Invalid signature' 
+            });
+        }
+
+        // Parse the body
+        const bodyObj = JSON.parse(body);
+        console.log('Received Razorpay webhook:', JSON.stringify(bodyObj));
+        
+        // Extract event details
+        const event = bodyObj.event || '';
+        
+        // Handle payment events
+        if (event.startsWith('payment.')) {
+            const payload = bodyObj.payload?.payment?.entity || {};
+            
+            const paymentId = payload.id || '';
+            const orderId = payload.notes?.order_id || '';
+            let paymentStatus = '';
+            
+            // Map Razorpay event to status
+            switch (event) {
+                case 'payment.authorized':
+                    paymentStatus = PAYMENT_STATUS.AUTHORIZED;
+                    break;
+                case 'payment.captured':
+                    paymentStatus = PAYMENT_STATUS.CAPTURED;
+                    break;
+                case 'payment.failed':
+                    paymentStatus = PAYMENT_STATUS.FAILED;
+                    break;
+                case 'payment.refunded':
+                    paymentStatus = PAYMENT_STATUS.REFUNDED;
+                    break;
+                default:
+                    paymentStatus = PAYMENT_STATUS.PENDING;
+            }
+            
+            // Process the payment status update
+            if (orderId && paymentStatus) {
+                try {
+                    // Update the razorpay_orders table
+                    $app.dao().db()
+                        .newQuery('UPDATE razorpay_orders SET payment_id = ?, payment_status = ?, updated = ? WHERE order_id = ?')
+                        .execute(
+                            paymentId,
+                            paymentStatus,
+                            new Date().toISOString(),
+                            orderId
+                        );
+
+                    // Find the order ID in PocketBase
+                    const orderQuery = $app.dao().db()
+                        .newQuery('SELECT receipt FROM razorpay_orders WHERE order_id = ?')
+                        .execute(orderId);
+
+                    if (orderQuery && orderQuery.length > 0) {
+                        const receipt = orderQuery[0].receipt;
+                        // The receipt is expected to be the order ID in our application
+                        // Update the order payment status
+                        try {
+                            const record = $app.dao().findRecordById('orders', receipt);
+                            if (record) {
+                                record.set('payment_status', paymentStatus);
+                                record.set('payment_id', paymentId);
+                                record.set('payment_order_id', orderId);
+                                
+                                // Update order status based on payment status
+                                if (paymentStatus === PAYMENT_STATUS.CAPTURED || paymentStatus === PAYMENT_STATUS.PAID) {
+                                    record.set('status', 'processing');
+                                } else if (paymentStatus === PAYMENT_STATUS.FAILED) {
+                                    record.set('status', 'payment_failed');
+                                } else if (paymentStatus === PAYMENT_STATUS.REFUNDED) {
+                                    record.set('status', 'cancelled');
+                                }
+                                
+                                $app.dao().saveRecord(record);
+                                console.log(`Updated order ${receipt} with payment status ${paymentStatus}`);
+                            }
+                        } catch (orderError) {
+                            console.error('Error updating order:', orderError);
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error processing webhook:', error);
+                }
+            }
+        }
+        
+        // Return success response
+        return c.json(200, { success: true });
+    } catch (error) {
+        console.error('Error processing Razorpay webhook:', error);
+        
+        // Return error response
+        return c.json(400, { 
+            success: false, 
+            error: error.message 
+        });
+    }
+});
+
+// Create a Razorpay order with timeout handling
 routerAdd('POST', '/api/razorpay/create-order', (c) => {
     // Authorize the request - user must be authenticated
     const authRecord = $apis.requestInfo(c).authRecord;
@@ -43,6 +193,7 @@ routerAdd('POST', '/api/razorpay/create-order', (c) => {
                 amount: bodyObj.amount,
                 currency: bodyObj.currency,
                 receipt: bodyObj.receipt,
+                payment_capture: 1, // Enable auto-capture
                 notes: {
                     user_id: authRecord.id
                 }
@@ -59,11 +210,11 @@ routerAdd('POST', '/api/razorpay/create-order', (c) => {
         }
 
         // Store the order in PocketBase
-        // This is useful for tracking payment status later
         const orderData = JSON.parse(response.raw);
         const orderId = orderData.id;
 
         try {
+            // Insert the order with initial status
             $app.dao().db()
                 .newQuery('INSERT INTO razorpay_orders (order_id, user_id, amount, currency, receipt, status, created) VALUES (?, ?, ?, ?, ?, ?, ?)')
                 .execute(
@@ -72,9 +223,43 @@ routerAdd('POST', '/api/razorpay/create-order', (c) => {
                     bodyObj.amount,
                     bodyObj.currency,
                     bodyObj.receipt,
-                    orderData.status,
+                    PAYMENT_STATUS.PENDING,
                     new Date().toISOString()
                 );
+
+            // Set up payment timeout
+            setTimeout(async () => {
+                try {
+                    // Check if order is still pending
+                    const order = $app.dao().db()
+                        .newQuery('SELECT status FROM razorpay_orders WHERE order_id = ? AND status = ?')
+                        .execute(orderId, PAYMENT_STATUS.PENDING);
+
+                    if (order && order.length > 0) {
+                        // Update order status to timeout
+                        $app.dao().db()
+                            .newQuery('UPDATE razorpay_orders SET status = ?, updated = ? WHERE order_id = ?')
+                            .execute(
+                                PAYMENT_STATUS.TIMEOUT,
+                                new Date().toISOString(),
+                                orderId
+                            );
+
+                        // Update the main order status
+                        const record = $app.dao().findRecordById('orders', bodyObj.receipt);
+                        if (record) {
+                            record.set('payment_status', PAYMENT_STATUS.TIMEOUT);
+                            record.set('status', 'payment_timeout');
+                            $app.dao().saveRecord(record);
+                        }
+
+                        console.log(`Order ${orderId} marked as timeout after ${PAYMENT_TIMEOUT/1000} seconds`);
+                    }
+                } catch (error) {
+                    console.error('Error handling payment timeout:', error);
+                }
+            }, PAYMENT_TIMEOUT);
+
         } catch (dbError) {
             console.error('Database error:', dbError);
             // Still return the order data even if local saving fails
