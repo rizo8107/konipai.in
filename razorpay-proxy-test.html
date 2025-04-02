@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Razorpay Proxy Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .test-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+        h2 {
+            margin-top: 0;
+        }
+        .btn {
+            padding: 10px 15px;
+            background-color: #4F46E5;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .btn:hover {
+            background-color: #4338CA;
+        }
+        pre {
+            background-color: #f5f5f5;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+        #result {
+            margin-top: 10px;
+            min-height: 100px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Razorpay Proxy Integration Test</h1>
+    <p>This page allows you to test the Razorpay proxy server endpoints.</p>
+
+    <div class="test-section">
+        <h2>1. Test Proxy Server Health</h2>
+        <p>Check if the Razorpay proxy server is running.</p>
+        <button id="testHealth" class="btn">Test Health</button>
+    </div>
+
+    <div class="test-section">
+        <h2>2. Create Test Order</h2>
+        <p>Create a test order via the proxy server.</p>
+        <button id="testCreateOrder" class="btn">Create Test Order</button>
+    </div>
+
+    <div class="test-section">
+        <h2>3. Verify Payment Signature</h2>
+        <p>Test the payment verification endpoint (mock data).</p>
+        <button id="testVerifyPayment" class="btn">Test Verification</button>
+    </div>
+
+    <div class="test-section">
+        <h2>Result</h2>
+        <pre id="result">Results will appear here...</pre>
+    </div>
+
+    <script>
+        // Configuration
+        const proxyUrl = 'http://localhost:3000'; // Update this to your proxy URL
+        const apiKey = 'your_secure_api_key_for_proxy_auth'; // Update this to your API key
+
+        // Helper function to display results
+        function showResult(data) {
+            document.getElementById('result').textContent = typeof data === 'string' 
+                ? data 
+                : JSON.stringify(data, null, 2);
+        }
+
+        // Test Health Check
+        document.getElementById('testHealth').addEventListener('click', async () => {
+            try {
+                const response = await fetch(`${proxyUrl}/health`, {
+                    method: 'GET',
+                    headers: {
+                        'X-API-Key': apiKey
+                    }
+                });
+                
+                const data = await response.json();
+                showResult({
+                    status: response.status,
+                    statusText: response.statusText,
+                    data
+                });
+            } catch (error) {
+                showResult(`Error: ${error.message}`);
+            }
+        });
+
+        // Test Create Order
+        document.getElementById('testCreateOrder').addEventListener('click', async () => {
+            try {
+                const response = await fetch(`${proxyUrl}/create-order`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-API-Key': apiKey
+                    },
+                    body: JSON.stringify({
+                        amount: 50000, // 500 INR in paise
+                        currency: 'INR',
+                        receipt: `receipt_${Date.now()}`,
+                        notes: {
+                            source: 'Test Page'
+                        }
+                    })
+                });
+                
+                const data = await response.json();
+                showResult({
+                    status: response.status,
+                    statusText: response.statusText,
+                    data
+                });
+            } catch (error) {
+                showResult(`Error: ${error.message}`);
+            }
+        });
+
+        // Test Verify Payment
+        document.getElementById('testVerifyPayment').addEventListener('click', async () => {
+            try {
+                // These are mock values - verification will fail but we want to test the endpoint
+                const response = await fetch(`${proxyUrl}/verify-payment`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-API-Key': apiKey
+                    },
+                    body: JSON.stringify({
+                        payment_id: 'pay_test123456',
+                        order_id: 'order_test123456',
+                        signature: 'test_signature'
+                    })
+                });
+                
+                const data = await response.json();
+                showResult({
+                    status: response.status,
+                    statusText: response.statusText,
+                    data
+                });
+            } catch (error) {
+                showResult(`Error: ${error.message}`);
+            }
+        });
+    </script>
+</body>
+</html> 

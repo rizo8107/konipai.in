@@ -16,7 +16,8 @@ import {
   createRazorpayOrder, 
   openRazorpayCheckout,
   verifyPayment,
-  RazorpayResponse
+  RazorpayResponse,
+  captureRazorpayPayment
 } from '@/lib/razorpay';
 import { trackEcommerceEvent } from '@/utils/analytics';
 import { 
@@ -356,8 +357,8 @@ export default function CheckoutPage() {
       // First verify payment with Razorpay (this is handled by our backend function)
       const verificationResult = await verifyPayment(
         paymentId,
-        razorpayOrderId,
-        signature
+        razorpayOrderId || '',  // Provide empty string fallback
+        signature || ''         // Provide empty string fallback
       );
 
       console.log('Payment verification result:', verificationResult);
@@ -366,7 +367,15 @@ export default function CheckoutPage() {
         throw new Error('Payment verification failed. Please contact support.');
       }
 
-      // First update order in PocketBase
+      // Immediately capture the payment to avoid auto-refund
+      const captureResult = await captureRazorpayPayment(paymentId);
+      console.log('Payment capture result:', captureResult);
+      
+      if (!captureResult) {
+        console.warn('Failed to immediately capture payment. Will rely on auto-capture from Razorpay.');
+      }
+
+      // Update order in PocketBase
       const orderUpdateData = {
         payment_status: 'paid',
         status: 'processing',
@@ -374,7 +383,7 @@ export default function CheckoutPage() {
         razorpay_order_id: razorpayOrderId,
         razorpay_payment_id: paymentId,
         razorpay_signature: signature,
-        notes: `Payment received via Razorpay. Payment ID: ${paymentId}. Verified: ${verificationResult.success ? 'Yes' : 'No'}`,
+        notes: `Payment received via Razorpay. Payment ID: ${paymentId}. Verified: ${verificationResult.success ? 'Yes' : 'No'}. Captured: ${captureResult ? 'Yes' : 'Pending'}`,
         order_id: razorpayOrderId,
         updated: new Date().toISOString()
       };
@@ -390,7 +399,7 @@ export default function CheckoutPage() {
       // Send webhook to n8n
       try {
         const webhookData = {
-          event: "payment.captured",  // Changed from payment.success to payment.captured
+          event: "payment.captured",
           payload: {
             payment: {
               entity: {
@@ -398,15 +407,16 @@ export default function CheckoutPage() {
                 order_id: razorpayOrderId,
                 amount: updatedOrder.total * 100, // Convert to paise
                 currency: "INR",
-                status: "captured",  // Explicitly setting as captured
-                captured: true       // Explicitly marking as captured
+                status: "captured",
+                captured: true
               }
             },
             metadata: {
               pocketbase_order_id: orderId,
               razorpay_order_id: razorpayOrderId,
               razorpay_payment_id: paymentId,
-              verified: verificationResult.success
+              verified: verificationResult.success,
+              manually_captured: captureResult
             }
           }
         };
@@ -425,6 +435,28 @@ export default function CheckoutPage() {
         
         if (!webhookResponse.ok) {
           console.error('Failed to send webhook:', webhookResponse.statusText);
+        }
+        
+        // Also update Razorpay payment with notes
+        try {
+          const razorpayUpdateResponse = await fetch(`https://api.razorpay.com/v1/payments/${paymentId}/notes`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Basic ' + btoa(`${getRazorpayKeyId()}:${getRazorpayKeySecret()}`)
+            },
+            body: JSON.stringify({
+              'pocketbase_order_id': orderId,
+              'order_status': 'processing',
+              'webhook_sent': 'true',
+              'customer_email': updatedOrder.email || '',
+              'customer_name': updatedOrder.name || ''
+            })
+          });
+          
+          console.log('Razorpay update response:', await razorpayUpdateResponse.text());
+        } catch (razorpayError) {
+          console.error('Error updating Razorpay payment:', razorpayError);
         }
       } catch (webhookError) {
         console.error('Error sending webhook:', webhookError);
