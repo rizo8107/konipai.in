@@ -32,27 +32,20 @@ export const ProductImage = memo(function ProductImage({
     height,
     size = "medium",
     useResponsive = true,
-    aspectRatio = "square" // Default to square aspect ratio
+    aspectRatio = "square"
 }: ProductImageProps) {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [imageUrl, setImageUrl] = useState<string | null>(null);
     const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
-    const [sources, setSources] = useState<Array<{srcSet: string, media: string, type: string}>>([]);
     const imgRef = useRef<HTMLImageElement>(null);
-    const observer = useRef<IntersectionObserver | null>(null);
+    const observerRef = useRef<IntersectionObserver | null>(null);
 
-    // Define aspect ratio classes
-    const aspectRatioClasses = {
+    // Define aspect ratio styles
+    const aspectRatioStyles = {
         square: "aspect-square",
         portrait: "aspect-[3/4]",
         landscape: "aspect-[4/3]",
-    };
-
-    // Calculate dimensions - use provided dimensions or defaults based on aspect ratio
-    const imageDimensions = {
-        width: width || defaultDimensions[aspectRatio].width,
-        height: height || defaultDimensions[aspectRatio].height,
     };
 
     useEffect(() => {
@@ -63,26 +56,16 @@ export const ProductImage = memo(function ProductImage({
         }
 
         try {
-            // Always load tiny thumbnail for blur-up effect
-            const tinyThumb = getPocketBaseImageUrl(url, Collections.PRODUCTS, "thumbnail", "webp");
-            setThumbnailUrl(tinyThumb);
+            // Generate optimized image URLs
+            const optimizedUrl = getPocketBaseImageUrl(url, Collections.PRODUCTS, size, "webp");
+            const thumbUrl = getPocketBaseImageUrl(url, Collections.PRODUCTS, "thumbnail", "webp");
             
-            if (useResponsive) {
-                // Set sources for responsive image loading
-                setSources(getResponsiveImageSources(url, Collections.PRODUCTS));
-                
-                // Set fallback image URL (non-WebP)
-                const fallbackUrl = getPocketBaseImageUrl(url, Collections.PRODUCTS, size, "jpeg");
-                setImageUrl(fallbackUrl);
+            setImageUrl(optimizedUrl);
+            setThumbnailUrl(thumbUrl);
+            
+            if (priority) {
+                setIsLoading(true);
             } else {
-                // Use WebP format for better compression
-                const optimizedUrl = getPocketBaseImageUrl(url, Collections.PRODUCTS, size, "webp");
-                setImageUrl(optimizedUrl);
-            }
-            
-            // If image is a priority image, we'll keep isLoading true until the image loads
-            // Otherwise mark loading as false since we'll load it when it comes into view
-            if (!priority) {
                 setIsLoading(false);
             }
         } catch (err) {
@@ -90,131 +73,80 @@ export const ProductImage = memo(function ProductImage({
             setError('Failed to load image');
             setIsLoading(false);
         }
-    }, [url, size, useResponsive, priority]);
+    }, [url, size, priority]);
 
+    // Set up intersection observer for lazy loading
     useEffect(() => {
-        // Set up intersection observer for non-priority images
-        if (!priority && imgRef.current) {
-            observer.current = new IntersectionObserver((entries) => {
-                entries.forEach(entry => {
-                    if (entry.isIntersecting) {
-                        // Start actual loading when image is in viewport
-                        const img = entry.target as HTMLImageElement;
-                        if (img.dataset.src) {
-                            img.src = img.dataset.src;
+        if (!priority && imgRef.current && imageUrl) {
+            observerRef.current = new IntersectionObserver(
+                (entries) => {
+                    entries.forEach((entry) => {
+                        if (entry.isIntersecting) {
+                            const img = entry.target as HTMLImageElement;
+                            img.src = imageUrl;
+                            observerRef.current?.disconnect();
                         }
-                        if (img.dataset.srcset) {
-                            img.srcset = img.dataset.srcset;
-                        }
-                        
-                        // Once we've started loading, disconnect observer
-                        if (observer.current) {
-                            observer.current.disconnect();
-                        }
-                    }
-                });
-            }, {
-                rootMargin: '200px', // Start loading when image is 200px from viewport
-                threshold: 0
-            });
-            
-            observer.current.observe(imgRef.current);
+                    });
+                },
+                {
+                    rootMargin: '50px',
+                    threshold: 0.1
+                }
+            );
+
+            observerRef.current.observe(imgRef.current);
         }
-        
+
         return () => {
-            if (observer.current) {
-                observer.current.disconnect();
+            if (observerRef.current) {
+                observerRef.current.disconnect();
             }
         };
-    }, [priority, imageUrl]);
+    }, [imageUrl, priority]);
 
-    // Handle image load completion
     const handleImageLoad = () => {
+        setIsLoading(false);
+    };
+
+    const handleImageError = () => {
+        setError('Failed to load image');
         setIsLoading(false);
     };
 
     if (error || !imageUrl) {
         return (
             <div 
-                className={cn("bg-muted flex items-center justify-center", aspectRatioClasses[aspectRatio], className)}
-                style={{ width: imageDimensions.width ? `${imageDimensions.width}px` : undefined, height: imageDimensions.height ? `${imageDimensions.height}px` : undefined }}
-                aria-label="Image not available"
+                className={cn(
+                    "bg-muted flex items-center justify-center",
+                    aspectRatioStyles[aspectRatio],
+                    className
+                )}
+                style={{
+                    width: width ? `${width}px` : '100%',
+                    height: height ? `${height}px` : 'auto'
+                }}
             >
-                <ImageIcon className="h-6 w-6 text-muted-foreground" aria-hidden="true" />
+                <ImageIcon className="h-6 w-6 text-muted-foreground" />
             </div>
         );
     }
 
-    // Use picture element for responsive images
-    if (useResponsive && sources.length > 0) {
-        return (
-            <div className={cn("relative overflow-hidden", aspectRatioClasses[aspectRatio])} 
-                style={{ width: imageDimensions.width ? `${imageDimensions.width}px` : undefined, height: 'auto' }}>
-                {/* Blur-up thumbnail */}
-                {isLoading && thumbnailUrl && (
-                    <div className="absolute inset-0 z-0">
-                        <img
-                            src={thumbnailUrl}
-                            alt=""
-                            className={cn("w-full h-full object-cover blur-xl scale-110", className)}
-                            aria-hidden="true"
-                            width={imageDimensions.width}
-                            height={imageDimensions.height}
-                        />
-                    </div>
-                )}
-                
-                {isLoading && (
-                    <div className="absolute inset-0 flex items-center justify-center z-10 bg-background/30">
-                        <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                    </div>
-                )}
-                
-                <picture className="w-full h-full block">
-                    {sources.map((source, index) => (
-                        <source 
-                            key={index} 
-                            srcSet={priority ? source.srcSet : undefined} 
-                            data-srcset={!priority ? source.srcSet : undefined}
-                            media={source.media} 
-                            type={source.type} 
-                        />
-                    ))}
-                    <img
-                        ref={imgRef}
-                        src={priority ? imageUrl : undefined}
-                        data-src={!priority ? imageUrl : undefined}
-                        alt={alt}
-                        className={cn("object-cover w-full h-full transition-opacity duration-500", 
-                            isLoading ? "opacity-0" : "opacity-100",
-                            className
-                        )}
-                        loading={priority ? "eager" : "lazy"}
-                        width={imageDimensions.width}
-                        height={imageDimensions.height}
-                        decoding={priority ? "sync" : "async"}
-                        onLoad={handleImageLoad}
-                        fetchPriority={priority ? "high" : "auto"}
-                    />
-                </picture>
-            </div>
-        );
-    }
-
-    // Fallback to regular img tag
     return (
-        <div className={cn("relative overflow-hidden", aspectRatioClasses[aspectRatio])}
-            style={{ width: imageDimensions.width ? `${imageDimensions.width}px` : undefined, height: 'auto' }}>
+        <div 
+            className={cn(
+                "relative overflow-hidden",
+                aspectRatioStyles[aspectRatio],
+                className
+            )}
+        >
             {/* Blur-up thumbnail */}
             {isLoading && thumbnailUrl && (
                 <div className="absolute inset-0 z-0">
                     <img
                         src={thumbnailUrl}
                         alt=""
-                        className={cn("w-full h-full object-cover blur-xl scale-110", className)}
+                        className="w-full h-full object-cover blur-xl scale-110"
                         aria-hidden="true"
-                        width={imageDimensions.width}
-                        height={imageDimensions.height}
                     />
                 </div>
             )}
@@ -228,18 +160,15 @@ export const ProductImage = memo(function ProductImage({
             <img
                 ref={imgRef}
                 src={priority ? imageUrl : undefined}
-                data-src={!priority ? imageUrl : undefined}
                 alt={alt}
-                className={cn("object-cover w-full h-full transition-opacity duration-500",
-                    isLoading ? "opacity-0" : "opacity-100",
-                    className
+                className={cn(
+                    "w-full h-full object-cover transition-opacity duration-500",
+                    isLoading ? "opacity-0" : "opacity-100"
                 )}
                 loading={priority ? "eager" : "lazy"}
-                width={imageDimensions.width}
-                height={imageDimensions.height}
-                decoding={priority ? "sync" : "async"}
                 onLoad={handleImageLoad}
-                fetchPriority={priority ? "high" : "auto"}
+                onError={handleImageError}
+                decoding={priority ? "sync" : "async"}
             />
         </div>
     );
