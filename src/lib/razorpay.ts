@@ -20,6 +20,11 @@ export interface RazorpayOptions {
   theme?: {
     color?: string;
   };
+  modal?: {
+    ondismiss?: () => void;
+    escape?: boolean;
+    backdropclose?: boolean;
+  };
 }
 
 export interface RazorpayResponse {
@@ -75,25 +80,49 @@ export const getRazorpayKeySecret = (): string => {
   return key;
 };
 
-// Create a Razorpay order via PocketBase
+// Create a Razorpay order via the Razorpay Orders API
 export const createRazorpayOrder = async (
   amount: number,
   currency: string = 'INR',
   receipt: string
 ): Promise<CreateOrderResponse> => {
   try {
-    console.log('Creating Razorpay order');
+    console.log('Creating Razorpay order with amount:', amount);
     
-    // Generate a unique ID for this transaction
-    const uniqueId = `order_${Date.now()}`;
+    // Call the Razorpay Orders API
+    const response = await fetch('https://api.razorpay.com/v1/orders', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Basic ' + btoa(`${getRazorpayKeyId()}:${getRazorpayKeySecret()}`)
+      },
+      body: JSON.stringify({
+        amount: Math.round(amount * 100), // Convert to paise and ensure it's an integer
+        currency,
+        receipt,
+        payment_capture: 1,  // Add this parameter: 1 for auto-capture, 0 for manual
+        partial_payment: false,
+        notes: {
+          source: 'Konipai Website'
+        }
+      })
+    });
     
-    // Return order data for direct payment flow
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Error response from Razorpay Orders API:', errorText);
+      throw new Error(`Failed to create Razorpay order: ${response.status} ${response.statusText}`);
+    }
+    
+    const orderData = await response.json();
+    console.log('Successfully created Razorpay order:', orderData.id);
+    
     return {
-      id: uniqueId,
-      amount: amount * 100, // Convert to paise
-      currency,
-      receipt,
-      status: 'created'
+      id: orderData.id,
+      amount: orderData.amount,
+      currency: orderData.currency,
+      receipt: orderData.receipt,
+      status: orderData.status
     };
   } catch (error) {
     console.error('Error creating Razorpay order:', error);
@@ -152,7 +181,7 @@ export const openRazorpayCheckout = (options: RazorpayOptions): void => {
       prefill: options.prefill || {},
       notes: options.notes || {},
       theme: options.theme || { color: '#4F46E5' },
-      modal: {
+      modal: options.modal || {
         ondismiss: function() {
           console.log('Payment modal closed by user');
         },
@@ -162,7 +191,7 @@ export const openRazorpayCheckout = (options: RazorpayOptions): void => {
     });
     
     // Open the modal
-    razorpay.on('payment.failed', function(response: any) {
+    razorpay.on('payment.failed', function(response: { error: { description: string } }) {
       console.error('Payment failed:', response.error);
       alert(`Payment failed: ${response.error.description}`);
     });
@@ -266,12 +295,12 @@ const sendOrderToWebhook = async (orderId: string, user: Record<string, unknown>
         paymentStatus: order.payment_status || 'unknown'
       },
       orderStatus: order.status || 'unknown',
-      products: orderProducts.map(item => ({
-        productId: item.productId || item.product?.id || 'unknown',
+      products: orderProducts.map((item: any) => ({
+        productId: item.productId || item.product?.id || '',
         name: item.product?.name || item.name || 'Product',
         quantity: item.quantity || 1,
         price: item.product?.price || item.price || 0,
-        color: item.color || 'N/A',
+        color: item.color || '',
         imageUrl: item.product?.images?.[0] || ''
       })),
       totalItems: orderProducts.reduce((sum, item) => sum + (item.quantity || 1), 0),
@@ -353,15 +382,45 @@ const sendOrderToWebhook = async (orderId: string, user: Record<string, unknown>
 
 // Verify payment after successful transaction
 export async function verifyPayment(
-  orderId: string,
   paymentId: string,
+  orderId: string,
   signature: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    console.log('Verifying payment:', { orderId, paymentId, signature: signature ? '****' : undefined });
+    console.log('Verifying payment:', { paymentId, orderId, signature: signature ? '****' : undefined });
     
-    // We need to assume the payment is valid at this point
-    // The actual verification would happen server-side with a webhook from Razorpay
+    // First, verify the payment signature
+    // This should match the implementation in your server
+    // For client-side, we'll check the payment status via Razorpay API
+    
+    // Check payment status via Razorpay API
+    const response = await fetch(`https://api.razorpay.com/v1/payments/${paymentId}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Basic ' + btoa(`${getRazorpayKeyId()}:${getRazorpayKeySecret()}`)
+      }
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error('Payment verification failed:', errorData);
+      return {
+        success: false,
+        error: `Payment verification failed: ${errorData.error?.description || 'Unknown error'}`
+      };
+    }
+    
+    const paymentData = await response.json();
+    console.log('Payment verification result:', paymentData.status);
+    
+    // Check if payment is authorized or captured
+    if (paymentData.status !== 'authorized' && paymentData.status !== 'captured') {
+      return {
+        success: false,
+        error: `Payment is not authorized or captured. Current status: ${paymentData.status}`
+      };
+    }
     
     // Get order details to include in the webhook
     let orderDetails;
@@ -452,7 +511,7 @@ export async function verifyPayment(
       
       // Use the direct webhook approach
       const webhookResult = await testDirectWebhook({
-        eventType: "payment_success",
+        eventType: "payment.success",
         notificationType: "order_payment_success",
         orderId: orderId,
         customerInfo: {
@@ -464,10 +523,10 @@ export async function verifyPayment(
         paymentInfo: {
           paymentId: paymentId,
           paymentOrderId: orderId,
-          paymentStatus: 'paid'
+          paymentStatus: paymentData.status // Use the actual status from Razorpay
         },
         orderStatus: 'processing',
-        products: orderProducts.map(item => ({
+        products: orderProducts.map((item: any) => ({
           productId: item.productId || item.product?.id || '',
           name: item.product?.name || item.name || 'Product',
           quantity: item.quantity || 1,
@@ -488,7 +547,7 @@ export async function verifyPayment(
       // Don't fail verification due to webhook issues
     }
     
-    // Return success
+    // Return success based on payment status
     return { success: true };
   } catch (error) {
     console.error('Payment verification error:', error);
@@ -498,6 +557,44 @@ export async function verifyPayment(
     };
   }
 }
+
+// Immediately capture a payment that's been authorized
+export const captureRazorpayPayment = async (
+  paymentId: string,
+  amount?: number
+): Promise<boolean> => {
+  try {
+    console.log(`Attempting to capture payment ${paymentId}${amount ? ` for amount ${amount}` : ''}`);
+    
+    const response = await fetch(`https://api.razorpay.com/v1/payments/${paymentId}/capture`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Basic ' + btoa(`${getRazorpayKeyId()}:${getRazorpayKeySecret()}`)
+      },
+      body: amount ? JSON.stringify({ amount }) : ''
+    });
+    
+    let responseData;
+    try {
+      responseData = await response.json();
+    } catch (e) {
+      console.error('Error parsing response:', e);
+      return false;
+    }
+    
+    if (!response.ok) {
+      console.error('Failed to capture payment:', responseData);
+      return false;
+    }
+    
+    console.log('Payment captured successfully:', responseData.status);
+    return responseData.status === 'captured';
+  } catch (error) {
+    console.error('Error capturing payment:', error);
+    return false;
+  }
+};
 
 // Add global window type declaration for Razorpay
 declare global {
