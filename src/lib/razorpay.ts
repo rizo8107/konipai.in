@@ -88,7 +88,7 @@ export const createRazorpayOrder = async (
 ): Promise<CreateOrderResponse> => {
   try {
     console.log('Creating Razorpay order with amount:', amount);
-
+    
     // For local development, create a dummy order ID
     if (window.location.hostname === 'localhost') {
       console.log('Running in local development mode, creating mock order');
@@ -102,10 +102,16 @@ export const createRazorpayOrder = async (
       };
     }
     
-    // In production, use PocketBase as a proxy to create Razorpay order
+    // In production, use a separate proxy server
+    const proxyUrl = import.meta.env.VITE_RAZORPAY_PROXY_URL || 'https://backend-n8n.7za6uc.easypanel.host/razorpay';
+    
     try {
-      const response = await pocketbase.send('/api/razorpay/create-order', {
+      const response = await fetch(`${proxyUrl}/create-order`, {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Key': import.meta.env.VITE_RAZORPAY_PROXY_KEY || ''
+        },
         body: JSON.stringify({
           amount: Math.round(amount * 100), // Convert to paise and ensure it's an integer
           currency,
@@ -114,23 +120,25 @@ export const createRazorpayOrder = async (
           notes: {
             source: 'Konipai Website'
           }
-        }),
-        headers: {
-          'Content-Type': 'application/json'
-        }
+        })
       });
       
-      console.log('Successfully created Razorpay order:', response.id);
+      if (!response.ok) {
+        throw new Error(`Failed to create order: ${response.status} ${response.statusText}`);
+      }
+      
+      const orderData = await response.json();
+      console.log('Successfully created Razorpay order:', orderData.id);
       
       return {
-        id: response.id,
-        amount: response.amount,
-        currency: response.currency,
-        receipt: response.receipt,
-        status: response.status
+        id: orderData.id,
+        amount: orderData.amount,
+        currency: orderData.currency,
+        receipt: orderData.receipt,
+        status: orderData.status
       };
-    } catch (pocketbaseError) {
-      console.error('Error using PocketBase proxy for Razorpay order:', pocketbaseError);
+    } catch (proxyError) {
+      console.error('Error creating Razorpay order via proxy:', proxyError);
       
       // Fallback to direct creation for now (will need server implementation)
       const fallbackId = `order_${Date.now()}`;
@@ -416,22 +424,30 @@ export async function verifyPayment(
       return { success: true };
     }
     
-    // In production, we should verify via our backend
+    // In production, we should verify via our proxy server
     let paymentStatus = 'unknown';
+    const proxyUrl = import.meta.env.VITE_RAZORPAY_PROXY_URL || 'https://backend-n8n.7za6uc.easypanel.host/razorpay';
     
     try {
-      // Verify through PocketBase (needs implementation on the backend)
-      const verificationResult = await pocketbase.send('/api/razorpay/verify-payment', {
+      // Verify through the proxy
+      const response = await fetch(`${proxyUrl}/verify-payment`, {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Key': import.meta.env.VITE_RAZORPAY_PROXY_KEY || ''
+        },
         body: JSON.stringify({
           payment_id: paymentId,
           order_id: orderId,
           signature: signature
-        }),
-        headers: {
-          'Content-Type': 'application/json'
-        }
+        })
       });
+      
+      if (!response.ok) {
+        throw new Error(`Payment verification failed: ${response.status} ${response.statusText}`);
+      }
+      
+      const verificationResult = await response.json();
       
       if (!verificationResult.verified) {
         return {
@@ -442,8 +458,8 @@ export async function verifyPayment(
       
       paymentStatus = verificationResult.status || 'authorized';
     } catch (verificationError) {
-      console.error('Error verifying payment through backend:', verificationError);
-      // In case of failure, assume it's valid for now (will be fixed with proper backend)
+      console.error('Error verifying payment through proxy:', verificationError);
+      // In case of failure, assume it's valid for now (will be fixed with proper proxy)
       // In production, this should fail
       console.warn('Bypassing verification failure for now');
     }
@@ -598,26 +614,34 @@ export const captureRazorpayPayment = async (
       return true;
     }
     
-    // In production, use PocketBase as a proxy to capture the payment
+    // In production, use our proxy server to capture the payment
+    const proxyUrl = import.meta.env.VITE_RAZORPAY_PROXY_URL || 'https://backend-n8n.7za6uc.easypanel.host/razorpay';
+    
     try {
-      const response = await pocketbase.send('/api/razorpay/capture-payment', {
+      const response = await fetch(`${proxyUrl}/capture-payment`, {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Key': import.meta.env.VITE_RAZORPAY_PROXY_KEY || ''
+        },
         body: JSON.stringify({
           payment_id: paymentId,
           amount: amount
-        }),
-        headers: {
-          'Content-Type': 'application/json'
-        }
+        })
       });
       
-      console.log('Payment capture response:', response);
-      return response.status === 'captured';
-    } catch (pocketbaseError) {
-      console.error('Error using PocketBase proxy for payment capture:', pocketbaseError);
+      if (!response.ok) {
+        throw new Error(`Failed to capture payment: ${response.status} ${response.statusText}`);
+      }
       
-      // For now, assume success (this should be fixed with proper backend implementation)
-      console.warn('Unable to capture payment through backend, assuming success for now');
+      const responseData = await response.json();
+      console.log('Payment capture response:', responseData);
+      return responseData.status === 'captured';
+    } catch (proxyError) {
+      console.error('Error capturing payment via proxy:', proxyError);
+      
+      // For now, assume success (this should be fixed with proper proxy implementation)
+      console.warn('Unable to capture payment through proxy, assuming success for now');
       return true;
     }
   } catch (error) {
