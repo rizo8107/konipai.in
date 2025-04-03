@@ -12,13 +12,15 @@ import { Loader2, ShoppingBag, CheckCircle, XCircle } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { 
   loadRazorpayScript, 
-  getRazorpayKeyId, 
-  createRazorpayOrder, 
-  openRazorpayCheckout,
-  verifyPayment,
-  RazorpayResponse,
-  captureRazorpayPayment
+  getRazorpayKeyId,
+  RazorpayResponse
 } from '@/lib/razorpay';
+import {
+  createRazorpayOrder,
+  verifyRazorpayPayment,
+  captureRazorpayPayment,
+  openRazorpayCheckout
+} from '@/lib/razorpay-client';
 import { trackEcommerceEvent } from '@/utils/analytics';
 import { 
   trackBeginCheckout, 
@@ -355,10 +357,10 @@ export default function CheckoutPage() {
       }
 
       // First verify payment with Razorpay (this is handled by our backend function)
-      const verificationResult = await verifyPayment(
-        paymentId,
-        razorpayOrderId || '',  // Provide empty string fallback
-        signature || ''         // Provide empty string fallback
+      const verificationResult = await verifyRazorpayPayment(
+        paymentId || '',
+        razorpayOrderId || '',
+        signature || ''
       );
 
       console.log('Payment verification result:', verificationResult);
@@ -368,22 +370,29 @@ export default function CheckoutPage() {
       }
 
       // Immediately capture the payment to avoid auto-refund
+      console.log('Attempting to capture payment with ID:', paymentId);
       const captureResult = await captureRazorpayPayment(paymentId);
       console.log('Payment capture result:', captureResult);
       
-      if (!captureResult) {
-        console.warn('Failed to immediately capture payment. Will rely on auto-capture from Razorpay.');
+      if (!captureResult.success) {
+        console.error('Failed to capture payment:', captureResult.error);
+        toast({
+          variant: "destructive",
+          title: "Payment Capture Failed",
+          description: "Your payment was authorized but couldn't be captured. Please contact support.",
+        });
+        // Still continue with order processing, but note the capture failure
       }
 
       // Update order in PocketBase
       const orderUpdateData = {
-        payment_status: 'paid',
+        payment_status: captureResult.success ? 'captured' : 'authorized',
         status: 'processing',
         payment_id: paymentId,
         razorpay_order_id: razorpayOrderId,
         razorpay_payment_id: paymentId,
         razorpay_signature: signature,
-        notes: `Payment received via Razorpay. Payment ID: ${paymentId}. Verified: ${verificationResult.success ? 'Yes' : 'No'}. Captured: ${captureResult ? 'Yes' : 'Pending'}`,
+        notes: `Payment received via Razorpay. Payment ID: ${paymentId}. Verified: ${verificationResult.success ? 'Yes' : 'No'}. Captured: ${captureResult.success ? 'Yes' : 'Pending'}`,
         order_id: razorpayOrderId,
         updated: new Date().toISOString()
       };
@@ -416,7 +425,7 @@ export default function CheckoutPage() {
               razorpay_order_id: razorpayOrderId,
               razorpay_payment_id: paymentId,
               verified: verificationResult.success,
-              manually_captured: captureResult
+              manually_captured: captureResult.success
             }
           }
         };

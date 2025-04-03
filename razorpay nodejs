@@ -1,0 +1,76 @@
+create a Razorpay order in a Node.js app, you need to use Razorpay’s Node.js SDK and pass necessary details like amount, currency, and receipt to the API. Here's a step-by-step guide to implement it:
+
+✅ Step 1: Install Razorpay SDK
+bash
+Copy
+Edit
+npm install razorpay
+✅ Step 2: Initialize Razorpay in your backend
+js
+Copy
+Edit
+const Razorpay = require('razorpay');
+
+const razorpay = new Razorpay({
+  key_id: 'YOUR_KEY_ID',
+  key_secret: 'YOUR_KEY_SECRET'
+});
+Replace YOUR_KEY_ID and YOUR_KEY_SECRET with your actual Razorpay credentials.
+
+✅ Step 3: Create Order API (Node.js Express Example)
+js
+Copy
+Edit
+const express = require('express');
+const app = express();
+app.use(express.json());
+
+app.post('/create-order', async (req, res) => {
+  const { amount, currency = 'INR', receipt } = req.body;
+
+  try {
+    const options = {
+      amount: amount * 100, // Amount in paise (e.g., ₹100 = 10000 paise)
+      currency,
+      receipt: receipt || `rcpt_${Math.random().toString(36).substring(7)}`,
+      payment_capture: 1, // Auto-capture
+    };
+
+    const order = await razorpay.orders.create(options);
+    res.status(200).json({ orderId: order.id, ...order });
+  } catch (error) {
+    res.status(500).json({ error: 'Order creation failed', details: error });
+  }
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+✅ Sample Request to /create-order
+POST /create-order
+
+json
+Copy
+Edit
+{
+  "amount": 500,           // In rupees
+  "currency": "INR",
+  "receipt": "receipt_123"
+}
+Response:
+
+json
+Copy
+Edit
+{
+  "orderId": "order_JM8l5O...",
+  "amount": 50000,
+  "currency": "INR",
+  "receipt": "receipt_123",
+  ...
+}
+🧠 Notes
+Amount must be in paise for Razorpay (₹500 = 50000 paise).
+
+payment_capture: 1 enables auto-capture. Use 0 if you want to capture manually later.
+
+You’ll use order.id on the frontend to start the Razorpay Checkout.
