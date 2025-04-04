@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { useParams, useSearchParams, Link } from 'react-router-dom';
 import { pocketbase } from '@/lib/pocketbase';
 import { Button } from '@/components/ui/button';
@@ -8,7 +8,6 @@ import { useToast } from '@/components/ui/use-toast';
 import { CheckCircle, ShoppingBag, Loader2, Package, Receipt } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import { trackPurchase, trackPageView, trackDynamicConversion } from '@/lib/analytics';
-import { OrderInvoice } from '@/components/OrderInvoice';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 // Define interfaces for products in order
@@ -58,6 +57,9 @@ interface Order {
   tax?: number;
   shipping_address_text?: string;
 }
+
+// Lazy load the OrderInvoice component
+const OrderInvoice = lazy(() => import('@/components/OrderInvoice').then(module => ({ default: module.OrderInvoice })));
 
 export default function OrderConfirmation() {
   const { orderId } = useParams<{ orderId: string }>();
@@ -125,59 +127,64 @@ export default function OrderConfirmation() {
         // Track purchase
         if (orderData && paymentStatus === 'success') {
           try {
-            // Parse products array from order
-            const products = JSON.parse(orderData.products || '[]') as OrderProduct[];
+            console.log('Tracking purchase event');
             
-            // Track purchase with enhanced data
+            // Parse the products array from the order
+            let orderProducts: OrderProduct[] = [];
+            
+            if (typeof orderData.products === 'string') {
+              try {
+                orderProducts = JSON.parse(orderData.products);
+              } catch (e) {
+                console.error('Failed to parse order products:', e);
+              }
+            } else if (Array.isArray(orderData.products)) {
+              orderProducts = orderData.products;
+            }
+            
+            // Format products for analytics
+            const items = orderProducts.map(item => ({
+              item_id: item.productId || item.product?.id || '',
+              item_name: item.name || item.product?.name || 'Product',
+              price: Number(item.price || item.product?.price || 0),
+              quantity: item.quantity || 1,
+              item_variant: item.color || undefined
+            }));
+            
+            // Track the purchase event
             trackPurchase(
-              products.map(item => ({
-                item_id: item.productId || '',
-                item_name: item.name || '',
-                price: Number(item.price) || 0,
-                quantity: item.quantity || 1,
-                item_variant: item.color || undefined,
-                discount: item.discount || 0,
-                coupon: orderData.coupon || undefined
-              })),
+              items,
               orderData.id,
-              Number(orderData.total) || 0,
-              Number(orderData.shipping_cost) || 0,
-              Number(orderData.tax) || 0,
-              orderData.coupon
+              orderData.total,
+              orderData.shipping_cost || 0,
+              orderData.tax || 0,
+              orderData.coupon_code
             );
             
-            // Also track as dynamic conversion for more flexibility
+            // Track conversion for Meta Pixel
             trackDynamicConversion({
               transaction_id: orderData.id,
-              value: Number(orderData.total) || 0,
-              shipping: Number(orderData.shipping_cost) || 0,
-              tax: Number(orderData.tax) || 0,
-              items: products.map(item => ({
-                item_id: item.productId || '',
-                item_name: item.name || '',
-                price: Number(item.price) || 0,
-                quantity: item.quantity || 1,
-                item_variant: item.color || undefined,
-                discount: item.discount || 0,
-                coupon: orderData.coupon
-              })),
-              coupon: orderData.coupon,
+              value: orderData.total,
+              shipping: orderData.shipping_cost || 0,
+              tax: orderData.tax || 0,
+              currency: 'INR',
+              items: items,
               conversion_type: 'Purchase'
             });
-          } catch (error) {
-            console.error('Error parsing products or tracking purchase:', error);
+          } catch (analyticsError) {
+            console.error('Failed to track purchase:', analyticsError);
           }
         }
       } catch (error) {
-        console.error('Error fetching order details:', error);
-        setError('Failed to load order details');
+        console.error('Error fetching order:', error);
+        setError('Failed to load order details. Please try again.');
       } finally {
         setLoading(false);
       }
     };
     
     fetchOrderDetails();
-  }, [orderId]);
+  }, [orderId, paymentStatus]);
 
   if (loading) {
     return (
@@ -249,34 +256,32 @@ export default function OrderConfirmation() {
             <h2 className="text-lg font-semibold mb-4">Order Summary</h2>
             <div className="space-y-4">
               {products.map((item, index) => (
-                <div key={index} className="flex items-center gap-4 py-2 border-b border-gray-100 last:border-0">
-                  <div className="h-16 w-16 rounded-md bg-gray-50 overflow-hidden flex-shrink-0">
-                    {item.product?.images && item.product.images[0] ? (
-                      <img 
-                        src={`${import.meta.env.VITE_POCKETBASE_URL?.replace(/\/$/, '') || 'https://pocketbase.konipai.in'}/api/files/pbc_4092854851/${item.product.id}/${item.product.images[0].split('/').pop()}`} 
-                        alt={item.product.name} 
-                        className="h-full w-full object-cover"
-                        loading="eager"
-                        crossOrigin="anonymous"
-                        onError={(e) => {
-                          console.error('Image load error:', e);
-                          e.currentTarget.src = '/placeholder-product.svg';
-                        }}
-                      />
-                    ) : (
-                      <div className="h-full w-full flex items-center justify-center bg-gray-100">
-                        <Package className="h-6 w-6 text-gray-400" />
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex-grow flex flex-col">
-                    <h3 className="font-medium">{item.product.name}</h3>
-                    <div className="text-sm text-gray-600">
-                      <span>Qty: {item.quantity}</span>
-                      {item.color && <span className="ml-2">Color: {item.color}</span>}
+                <div key={index} className="flex justify-between py-3 border-b">
+                  <div className="flex">
+                    <div className="w-16 h-16 rounded-md overflow-hidden mr-4 bg-gray-100 flex-shrink-0">
+                      {item.product?.images && item.product.images.length > 0 ? (
+                        <img
+                          src={item.product.images[0]}
+                          alt={item.product?.name || 'Product'}
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src = '/placeholder-product.png';
+                          }}
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center bg-gray-200">
+                          <ShoppingBag className="w-8 h-8 text-gray-400" />
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <p className="font-medium">{item.product?.name || 'Product'}</p>
+                      <p className="text-sm text-gray-500">
+                        Quantity: {item.quantity} {item.color && `• Color: ${item.color}`}
+                      </p>
                     </div>
                   </div>
-                  <div className="font-medium">{formatCurrency(item.product.price * item.quantity)}</div>
+                  <div className="font-medium">{formatCurrency((item.product?.price || 0) * item.quantity)}</div>
                 </div>
               ))}
               <Separator className="my-2" />
@@ -339,7 +344,9 @@ export default function OrderConfirmation() {
         
         <TabsContent value="invoice" className="mt-4">
           {isPaid ? (
-            <OrderInvoice order={order} products={products} />
+            <Suspense fallback={<Loader2 className="h-8 w-8 animate-spin mx-auto" />}>
+              <OrderInvoice order={order} products={products} />
+            </Suspense>
           ) : (
             <Card className="p-6">
               <div className="text-center">

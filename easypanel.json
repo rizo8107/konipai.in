@@ -1,6 +1,6 @@
 {
   "name": "konipai-frontend",
-  "description": "Konipai Frontend Application",
+  "description": "Konipai E-commerce Frontend Application",
   "image": "ghcr.io/rizo8107/konipai.in:latest",
   "imagePullPolicy": "Always",
   "imagePullSecrets": [
@@ -33,11 +33,23 @@
     {
       "name": "VITE_SITE_LOGO",
       "value": "https://konipai.in/assets/logo.png"
+    },
+    {
+      "name": "VITE_GTM_ID",
+      "value": "${GTM_ID}"
+    },
+    {
+      "name": "VITE_META_PIXEL_ID",
+      "value": "${META_PIXEL_ID}"
+    },
+    {
+      "name": "NODE_ENV",
+      "value": "production"
     }
   ],
   "resources": {
-    "cpu": "100m",
-    "memory": "256Mi"
+    "cpu": "200m",
+    "memory": "512Mi"
   },
   "healthcheck": {
     "path": "/",
@@ -46,6 +58,21 @@
     "timeout": "10s",
     "retries": 3
   },
+  "volumes": [
+    {
+      "name": "cache",
+      "path": "/app/node_modules/.vite",
+      "size": "1Gi"
+    }
+  ],
   "restartPolicy": "always",
-  "networks": ["default"]
-} 
+  "networks": ["default"],
+  "replicas": 1,
+  "autoscaling": {
+    "enabled": true,
+    "minReplicas": 1,
+    "maxReplicas": 3,
+    "targetCPUUtilizationPercentage": 80,
+    "targetMemoryUtilizationPercentage": 80
+  }
+}
