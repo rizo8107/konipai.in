@@ -20,6 +20,8 @@ interface CartContextType {
   clearCart: () => void;
   getItem: (productId: string, color?: string) => CartItem | undefined;
   isLoading: boolean;
+  isSyncing: boolean;
+  lastSynced: Date | null;
   subtotal: number;
   total: number;
   itemCount: number;
@@ -36,6 +38,8 @@ const SHIPPING_COST = 10;
 export function CartProvider({ children }: { children: React.ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [lastSynced, setLastSynced] = useState<Date | null>(null);
   const { toast } = useToast();
   const { user, loading: authLoading } = useAuth();
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -158,98 +162,144 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   // Sync cart to server
   const syncCart = async () => {
-    // Only sync if user is logged in
-    if (!user?.id) return;
-    
+    if (!user) {
+      console.log('No user, skipping cart sync');
+      return;
+    }
+
+    if (!pocketbase.authStore.isValid) {
+      console.warn('Auth token invalid, skipping cart sync');
+      return;
+    }
+
     try {
-      // Stringify cart items for storage
-      const cartData = JSON.stringify(items);
-      
-      // First, try to get the existing cart
+      setIsSyncing(true);
+      console.log('Starting cart sync for user:', user.id);
+
+      // Prepare cart data for API
+      const cartData = items.map(item => ({
+        productId: item.productId,
+        quantity: item.quantity,
+        color: item.color || null
+      }));
+
+      // Check if user already has a cart
       let existingCart = null;
       try {
-        existingCart = await pocketbase
-          .collection('carts')
-          .getFirstListItem(`user="${user.id}"`)
-          .catch(() => null);
+        const cartRecords = await pocketbase.collection('carts').getList(1, 1, {
+          filter: `user="${user.id}"`,
+        });
+        
+        if (cartRecords.items.length > 0) {
+          existingCart = cartRecords.items[0];
+          console.log('Found existing cart:', existingCart.id);
+        }
       } catch (error) {
-        console.log('Error fetching existing cart:', error);
+        console.warn('Error checking for existing cart:', error);
+        // Continue with creation flow if we couldn't check for existing cart
       }
 
-      // Retry function with exponential backoff
-      const retryOperation = async (operation: () => Promise<any>, maxRetries = 3) => {
-        let lastError;
-        for (let attempt = 0; attempt < maxRetries; attempt++) {
+      // Create a new cart with retry logic
+      const createCartWithRetry = async (retries = 3, delay = 1000) => {
+        // Ensure user is still authenticated
+        if (!pocketbase.authStore.isValid) {
+          console.warn('Auth token invalid, skipping cart creation');
+          return null;
+        }
+
+        for (let attempt = 0; attempt < retries; attempt++) {
           try {
-            return await operation();
-          } catch (error) {
-            console.warn(`Operation failed (attempt ${attempt + 1}/${maxRetries}):`, error);
-            lastError = error;
-            // Exponential backoff
-            await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 500));
+            console.log(`Creating new cart (attempt ${attempt + 1}/${retries})`);
+            
+            // Create a new cart record
+            return await pocketbase.collection('carts').create({
+              user: user.id,
+              items: cartData
+            });
+          } catch (error: any) {
+            console.error(`Cart creation failed (attempt ${attempt + 1}/${retries}):`, error);
+            
+            // If this is a 400 error, log more details
+            if (error.status === 400) {
+              console.error('Validation error details:', error.data);
+            }
+            
+            // If we have more retries, wait before trying again
+            if (attempt < retries - 1) {
+              // Exponential backoff
+              const backoffDelay = delay * Math.pow(2, attempt);
+              console.log(`Retrying in ${backoffDelay}ms...`);
+              await new Promise(resolve => setTimeout(resolve, backoffDelay));
+            } else {
+              throw error; // Re-throw the last error
+            }
           }
         }
-        throw lastError;
+        return null; // Should never reach here due to throw above
       };
 
-      const createCartWithRetry = async () => {
-        try {
-          // Ensure user is still authenticated
-          if (!pocketbase.authStore.isValid) {
-            console.warn('Auth token invalid, skipping cart creation');
-            return null;
-          }
-          
-          // Create a new cart record
-          return await pocketbase.collection('carts').create({
-            user: user.id,
-            items: cartData
-          });
-        } catch (error) {
-          console.error('Failed to create cart:', error);
-          
-          // If it's a validation error, log details
-          if (error.status === 400) {
-            console.error('Validation error details:', error.data);
-          }
-          
-          throw error;
+      // Update existing cart with retry logic
+      const updateCartWithRetry = async (cartId: string, retries = 3, delay = 1000) => {
+        // Ensure user is still authenticated
+        if (!pocketbase.authStore.isValid) {
+          console.warn('Auth token invalid, skipping cart update');
+          return null;
         }
-      };
 
-      const updateCartWithRetry = async () => {
-        try {
-          // Ensure user is still authenticated
-          if (!pocketbase.authStore.isValid) {
-            console.warn('Auth token invalid, skipping cart update');
-            return null;
+        for (let attempt = 0; attempt < retries; attempt++) {
+          try {
+            console.log(`Updating cart ${cartId} (attempt ${attempt + 1}/${retries})`);
+            
+            // Update the existing cart
+            return await pocketbase.collection('carts').update(cartId, {
+              items: cartData
+            });
+          } catch (error: any) {
+            console.error(`Cart update failed (attempt ${attempt + 1}/${retries}):`, error);
+            
+            // If this is a 400 error, log more details
+            if (error.status === 400) {
+              console.error('Validation error details:', error.data);
+            }
+            
+            // If we have more retries, wait before trying again
+            if (attempt < retries - 1) {
+              // Exponential backoff
+              const backoffDelay = delay * Math.pow(2, attempt);
+              console.log(`Retrying in ${backoffDelay}ms...`);
+              await new Promise(resolve => setTimeout(resolve, backoffDelay));
+            } else {
+              throw error; // Re-throw the last error
+            }
           }
-          
-          // Update existing cart
-          return await pocketbase.collection('carts').update(existingCart.id, {
-            items: cartData
-          });
-        } catch (error) {
-          console.error('Failed to update cart:', error);
-          
-          // If it's a validation error, log details
-          if (error.status === 400) {
-            console.error('Validation error details:', error.data);
-          }
-          
-          throw error;
         }
+        return null; // Should never reach here due to throw above
       };
 
-      // Create or update cart
+      // Either update existing cart or create a new one
       if (existingCart) {
-        await retryOperation(updateCartWithRetry);
+        await updateCartWithRetry(existingCart.id);
+        console.log('Cart updated successfully');
       } else {
-        await retryOperation(createCartWithRetry);
+        await createCartWithRetry();
+        console.log('New cart created successfully');
       }
+
+      setIsSyncing(false);
+      setLastSynced(new Date());
     } catch (error) {
-      console.error('Failed to sync cart after retries:', error);
-      // Don't show error to user, just log it
+      console.error('Failed to sync cart:', error);
+      setIsSyncing(false);
+      
+      // Don't show error toast for network issues in production
+      // as it can be annoying for users with intermittent connections
+      if (import.meta.env.MODE !== 'production') {
+        toast({
+          title: 'Cart Sync Error',
+          description: 'Failed to sync your cart with the server. Your items are saved locally.',
+          variant: 'destructive',
+        });
+      }
     }
   };
 
@@ -391,6 +441,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     clearCart,
     getItem,
     isLoading,
+    isSyncing,
+    lastSynced,
     subtotal,
     total,
     itemCount,

@@ -1,11 +1,32 @@
 import PocketBase, { RecordModel } from 'pocketbase';
 
+// Log the environment for debugging
 console.log('Initializing PocketBase client with URL:', import.meta.env.VITE_POCKETBASE_URL);
+console.log('Environment:', import.meta.env.MODE);
 
-// Initialize PocketBase client with proper fallback URL
-const pb = new PocketBase(
-    import.meta.env.VITE_POCKETBASE_URL || 'https://backend-pocketbase.7za6uc.easypanel.host'
-);
+// Default PocketBase URL - used as fallback
+const DEFAULT_POCKETBASE_URL = 'https://backend-pocketbase.7za6uc.easypanel.host';
+
+// Initialize PocketBase client with proper fallback URL and error handling
+let pb: PocketBase;
+try {
+    // Use environment variable with fallback
+    const pocketbaseUrl = import.meta.env.VITE_POCKETBASE_URL || DEFAULT_POCKETBASE_URL;
+    console.log('Using PocketBase URL:', pocketbaseUrl);
+    
+    pb = new PocketBase(pocketbaseUrl);
+    
+    // Add auth change listener for debugging
+    pb.authStore.onChange(() => {
+        console.log('Auth state changed:', 
+            pb.authStore.isValid ? 'Authenticated' : 'Not authenticated',
+            'Model:', pb.authStore.model?.id);
+    });
+} catch (error) {
+    console.error('Failed to initialize PocketBase:', error);
+    // Fallback to default URL if initialization fails
+    pb = new PocketBase(DEFAULT_POCKETBASE_URL);
+}
 
 // Export the client instance
 export const pocketbase = pb;

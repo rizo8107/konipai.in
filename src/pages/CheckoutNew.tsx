@@ -89,6 +89,7 @@ export default function CheckoutPage() {
   const [couponLoading, setCouponLoading] = useState(false);
   const [couponError, setCouponError] = useState<string | null>(null);
   const [errors, setErrors] = useState<{ [key: string]: string | null }>({});
+  const [orderError, setOrderError] = useState<string | null>(null);
 
   // Check for live mode
   const isLiveMode = import.meta.env.VITE_RAZORPAY_KEY_ID?.startsWith('rzp_live') || false;
@@ -421,111 +422,93 @@ export default function CheckoutPage() {
   // Submit handler
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!razorpayLoaded) {
-      toast({
-        title: 'Payment Error',
-        description: 'Payment gateway is not available. Please refresh the page.',
-        variant: 'destructive'
-      });
-      return;
-    }
-    
-    if (isSubmitting || isPaymentProcessing) {
-      return;
-    }
-    
-    // Validate form
-    if (!validateForm()) {
-      trackFormError('checkout', 'checkout-form', 'Validation errors in form');
-      toast({
-        title: 'Form Error',
-        description: 'Please fix the errors in the form before continuing.',
-        variant: 'destructive'
-      });
-      return;
-    }
-    
-    trackFormCompletion('checkout', 'checkout-form');
     setIsSubmitting(true);
-    
+    setOrderError(null);
+
     try {
-      // Create shipping address string
-      const addressString = `${formData.address}, ${formData.city}, ${formData.state} ${formData.zipCode}`;
+      // Validate form
+      if (!validateForm()) {
+        setIsSubmitting(false);
+        return;
+      }
+
+      console.log('Starting order creation process...');
       
-      // Final calculations
-      const { finalTotal, calculatedShippingCost } = calculateFinalTotal();
-      
-      // Track add shipping info
-      trackAddShippingInfo(
-        cartItemsToProductItems(items), 
-        finalTotal, 
-        'standard', 
-        appliedCoupon?.code
-      );
-      
-      // Prepare product data with minimal information to avoid relation errors
-      const productItems = items.map(item => ({
-        productId: item.productId,
-        quantity: item.quantity,
-        price: Number(item.product.price) || 0,
-        color: item.color || null
-      }));
-      
-      // Create order in PocketBase with retry logic
-      const createOrder = async () => {
-        // Ensure user is still authenticated
-        if (!pocketbase.authStore.isValid || !user?.id) {
-          throw new Error('Authentication required. Please log in again.');
-        }
-        
-        const orderData = {
-          user: user.id,
-          customer_name: formData.name,
-          customer_email: formData.email,
-          customer_phone: formData.phone,
-          shipping_address: addressString,
-          shipping_address_json: JSON.stringify({
-            street: formData.address,
-            city: formData.city,
-            state: formData.state,
-            postalCode: formData.zipCode
-          }),
-          products_json: JSON.stringify(productItems),
-          subtotal: subtotal,
-          shipping_cost: calculatedShippingCost,
-          total: finalTotal,
-          status: 'pending',
-          payment_status: 'pending',
-          coupon: appliedCoupon ? appliedCoupon.couponId : null,
-          discount_amount: appliedCoupon ? appliedCoupon.discountAmount : 0
-        };
-        
-        try {
-          return await pocketbase.collection('orders').create(orderData);
-        } catch (error: any) {
-          console.error('Order creation error:', error);
-          
-          // If it's a validation error, log details
-          if (error.status === 400) {
-            console.error('Validation error details:', error.data);
-          }
-          
-          throw error;
-        }
+      // Ensure user is authenticated
+      if (!user || !pocketbase.authStore.isValid) {
+        console.error('User not authenticated');
+        setOrderError('Authentication error. Please log in again.');
+        setIsSubmitting(false);
+        return;
+      }
+
+      // Prepare order data
+      const orderData = {
+        user: user.id,
+        customer_name: formData.name,
+        customer_email: formData.email,
+        customer_phone: formData.phone,
+        shipping_address: `${formData.address}, ${formData.city}, ${formData.state} ${formData.zipCode}`,
+        products: items.map(item => ({
+          productId: item.productId,
+          quantity: item.quantity,
+          color: item.color || null,
+          price: Number(item.product.price) || 0,
+          name: item.product.name
+        })),
+        subtotal: subtotal,
+        shipping_cost: calculateFinalTotal().calculatedShippingCost,
+        total: calculateFinalTotal().finalTotal,
+        status: 'pending',
+        payment_status: 'pending',
+        coupon: appliedCoupon ? appliedCoupon.couponId : null,
+        discount_amount: appliedCoupon ? appliedCoupon.discountAmount : 0
       };
-      
-      // Create order with retry
-      const order = await retryOperation(createOrder);
-      console.log('Order created:', order);
-      
+
+      console.log('Order data prepared:', JSON.stringify(orderData));
+
+      // Create order with retry logic
+      const createOrderWithRetry = async (retries = 3, delay = 1000) => {
+        for (let attempt = 0; attempt < retries; attempt++) {
+          try {
+            console.log(`Creating order (attempt ${attempt + 1}/${retries})`);
+            
+            // Create order record
+            const order = await pocketbase.collection('orders').create(orderData);
+            console.log('Order created successfully:', order.id);
+            return order;
+          } catch (error: any) {
+            console.error(`Order creation failed (attempt ${attempt + 1}/${retries}):`, error);
+            
+            // If this is a 400 error, log more details
+            if (error.status === 400) {
+              console.error('Validation error details:', error.data);
+            }
+            
+            // If we have more retries, wait before trying again
+            if (attempt < retries - 1) {
+              // Exponential backoff
+              const backoffDelay = delay * Math.pow(2, attempt);
+              console.log(`Retrying in ${backoffDelay}ms...`);
+              await new Promise(resolve => setTimeout(resolve, backoffDelay));
+            } else {
+              throw error; // Re-throw the last error
+            }
+          }
+        }
+        throw new Error('Failed to create order after multiple attempts');
+      };
+
+      // Create the order
+      const order = await createOrderWithRetry();
+
       // Track payment start
-      trackPaymentStart(order.id, finalTotal, 'Razorpay');
+      trackPaymentStart(order.id, calculateFinalTotal().finalTotal, 'Razorpay');
       
       // Track add payment info
       trackAddPaymentInfo(
         cartItemsToProductItems(items), 
-        finalTotal, 
+        calculateFinalTotal().finalTotal, 
         'Razorpay', 
         appliedCoupon?.code
       );
@@ -539,7 +522,7 @@ export default function CheckoutPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          amount: Math.round(finalTotal * 100), // Amount in currency's smallest unit (paise)
+          amount: Math.round(calculateFinalTotal().finalTotal * 100), // Amount in currency's smallest unit (paise)
           receipt: order.id,
           notes: {
             order_id: order.id,
@@ -584,7 +567,7 @@ export default function CheckoutPage() {
             setIsSubmitting(false);
             
             // Track payment failure on dismissal
-            trackPaymentFailure(order.id, finalTotal, 'Razorpay', 'modal_dismissed');
+            trackPaymentFailure(order.id, calculateFinalTotal().finalTotal, 'Razorpay', 'modal_dismissed');
             
             toast({
               title: 'Payment Cancelled',
@@ -602,7 +585,7 @@ export default function CheckoutPage() {
         console.error('Payment failed:', response.error);
         
         // Track payment failure
-        trackPaymentFailure(order.id, finalTotal, 'Razorpay', response.error?.description || 'payment_failed');
+        trackPaymentFailure(order.id, calculateFinalTotal().finalTotal, 'Razorpay', response.error?.description || 'payment_failed');
         
         toast({
           title: 'Payment Failed',
@@ -615,15 +598,24 @@ export default function CheckoutPage() {
       
       // Open payment modal
       rzp.open();
-    } catch (error) {
-      console.error('Error during checkout:', error);
+    } catch (error: any) {
+      console.error('Checkout error:', error);
       
-      toast({
-        title: 'Checkout Error',
-        description: error instanceof Error ? error.message : 'An error occurred during checkout',
-        variant: 'destructive'
-      });
+      // Provide more detailed error messages
+      let errorMessage = 'An error occurred during checkout. Please try again.';
       
+      if (error.status === 400) {
+        errorMessage = 'Invalid order data. Please check your information and try again.';
+        console.error('Validation error details:', error.data);
+      } else if (error.status === 401) {
+        errorMessage = 'Authentication error. Please log in again.';
+      } else if (error.status === 429) {
+        errorMessage = 'Too many requests. Please wait a moment and try again.';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      setOrderError(errorMessage);
       setIsSubmitting(false);
     }
   };
