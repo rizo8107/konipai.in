@@ -21,47 +21,53 @@ export default defineConfig(({ mode }) => ({
   },
   build: {
     // Generate sourcemaps for debugging in production
-    sourcemap: mode === 'development',
+    sourcemap: false, // Disable sourcemaps to reduce memory usage
     // Optimize chunks to improve caching
     rollupOptions: {
       output: {
+        // Limit the number of chunks to reduce memory usage
         manualChunks: (id) => {
-          // Handle react and react-dom
-          if (id.includes('node_modules/react/') || id.includes('node_modules/react-dom/')) {
-            return 'react';
+          // Group all node_modules together
+          if (id.includes('node_modules')) {
+            // Handle react and related packages
+            if (id.includes('/react') || id.includes('/react-dom') || id.includes('/react-router')) {
+              return 'vendor-react';
+            }
+            
+            // Handle UI libraries
+            if (id.includes('@radix-ui') || id.includes('@shadcn') || id.includes('lucide-react')) {
+              return 'vendor-ui';
+            }
+            
+            // All other dependencies
+            return 'vendor';
           }
           
-          // Handle react-router-dom
-          if (id.includes('node_modules/react-router-dom/')) {
-            return 'router';
+          // Group app code by main directories to reduce chunk count
+          if (id.includes('/src/components/')) {
+            return 'components';
           }
           
-          // Handle react-intersection-observer specifically
-          if (id.includes('node_modules/react-intersection-observer/')) {
-            return 'utils';
-          }
-          
-          // Handle all radix UI components
-          if (id.includes('node_modules/@radix-ui/react-')) {
-            return 'ui';
+          if (id.includes('/src/pages/')) {
+            return 'pages';
           }
         },
-        // Configure code splitting
+        // Configure code splitting with fewer chunks
         chunkFileNames: 'assets/[name]-[hash].js',
         assetFileNames: 'assets/[name]-[hash].[ext]',
+        // Limit the number of entry points processed concurrently
+        entryFileNames: 'assets/[name]-[hash].js',
       }
     },
-    // Optimize minification
-    minify: 'terser',
-    terserOptions: {
-      compress: {
-        drop_console: mode === 'production',
-        drop_debugger: mode === 'production',
-      },
-    },
+    // Use esbuild for faster builds with less memory
+    minify: 'esbuild',
+    // Disable CSS code splitting to reduce the number of generated files
+    cssCodeSplit: false,
     // Improve chunk loading
     target: 'esnext',
-    assetsInlineLimit: 4096, // Inline small assets to reduce HTTP requests
+    assetsInlineLimit: 8192, // Inline more assets to reduce file count
+    // Chunk size warnings threshold - increase to reduce noise
+    chunkSizeWarningLimit: 1000,
   },
   // Enable brotli compression for even better compression (when supported by the server)
   preview: {
