@@ -64,12 +64,8 @@ RUN echo "VITE_POCKETBASE_URL=$VITE_POCKETBASE_URL" > .env && \
     echo "VITE_SITE_TITLE=$VITE_SITE_TITLE" >> .env && \
     echo "VITE_SITE_LOGO=$VITE_SITE_LOGO" >> .env
 
-# Create a custom build script that skips image optimization
-RUN echo "#!/bin/sh\nNODE_OPTIONS=\"--max-old-space-size=768\" npx vite build" > build.sh && \
-    chmod +x build.sh
-
-# Build with memory optimizations - skip the image optimization step
-RUN ./build.sh
+# Build with memory optimizations - directly use npx vite build
+RUN NODE_OPTIONS="--max-old-space-size=768" npx vite build
 
 # Production stage
 FROM nginx:alpine
