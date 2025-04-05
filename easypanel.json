@@ -1,30 +1,46 @@
 {
-  "name": "konipai-frontend",
-  "description": "Konipai Frontend Application",
-  "image": "ghcr.io/rizo8107/konipai.in:latest",
-  "imagePullPolicy": "Always",
-  "imagePullSecrets": [
-    {
-      "name": "ghcr-secret",
-      "username": "rizo8107",
-      "password": "${GITHUB_PAT}"
-    }
+  "name": "konipai",
+  "type": "web",
+  "image": "ghcr.io/konipai/konipai:latest",
+  "domains": [
+    "konipai.in",
+    "www.konipai.in"
   ],
   "ports": [
     {
-      "port": 80,
-      "targetPort": 80,
+      "external": 80,
+      "internal": 80,
       "protocol": "http"
     }
   ],
   "env": [
+    {
+      "name": "NODE_ENV",
+      "value": "production"
+    },
+    {
+      "name": "EASYPANEL_BUILD",
+      "value": "true"
+    },
+    {
+      "name": "SKIP_IMAGE_OPTIMIZATION",
+      "value": "true"
+    },
     {
       "name": "VITE_POCKETBASE_URL",
       "value": "https://backend-pocketbase.7za6uc.easypanel.host/"
     },
     {
       "name": "VITE_RAZORPAY_KEY_ID",
-      "value": "rzp_test_trImBTMCiZgDuF"
+      "value": "rzp_live_3rZx2njbNwMEE1"
+    },
+    {
+      "name": "VITE_RAZORPAY_PROXY_URL",
+      "value": "https://konipai-server.7za6uc.easypanel.host"
+    },
+    {
+      "name": "VITE_RAZORPAY_PROXY_KEY", 
+      "value": "5cfd34e6-ef3b-4121-bfce-945d96a178d9"
     },
     {
       "name": "VITE_SITE_TITLE",
@@ -36,15 +52,26 @@
     }
   ],
   "resources": {
-    "cpu": "100m",
-    "memory": "256Mi"
+    "cpu": "500m",
+    "memory": "512Mi"
+  },
+  "build": {
+    "type": "dockerfile",
+    "dockerfile": "Dockerfile",
+    "buildOptions": {
+      "memory": 2048,
+      "memswap": 4096,
+      "cpuShares": 4,
+      "buildkit": true,
+      "platform": "linux/amd64",
+      "noCache": false
+    }
   },
   "healthcheck": {
     "path": "/",
     "port": 80,
-    "interval": "30s",
-    "timeout": "10s",
-    "retries": 3
+    "initialDelaySeconds": 30,
+    "periodSeconds": 10
   },
   "restartPolicy": "always",
   "networks": ["default"]

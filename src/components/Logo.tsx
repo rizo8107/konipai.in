@@ -33,12 +33,11 @@ export function Logo({ className, variant = 'default' }: LogoProps) {
       {!loaded && <Loader2 className={cn("h-6 w-6 animate-spin absolute", variant === 'light' ? "text-white" : "")} />}
       <img 
         src={logoUrl} 
-        alt="Logo" 
-        className={cn("h-8", !loaded && "opacity-0", loaded && "opacity-100", "transition-opacity")}
+        alt="Konipai Logo" 
+        className={cn("h-8 w-auto", !loaded && "opacity-0", loaded && "opacity-100", "transition-opacity")}
+        loading="eager"
         onError={() => setError(true)}
         onLoad={() => setLoaded(true)}
-        loading="eager"
-        fetchPriority="high"
       />
     </div>
   );

@@ -2,9 +2,10 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0" />
-    <title>Konipai Tote Bags</title>
-    <meta name="description" content="Discover our collection of beautifully crafted tote bags, designed for style and sustainability." />
+    <link rel="icon" type="image/svg+xml" href="/favicon.ico" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Konipai - Handcrafted Tote Bags</title>
+    <meta name="description" content="Discover our handcrafted tote bags, designed for style and sustainability." />
     <meta name="author" content="Konipai" />
     <meta property="og:image" content="/og-image.png" />
     
@@ -37,6 +38,71 @@
     
     <!-- Cache control -->
     <meta http-equiv="Cache-Control" content="max-age=86400" />
+    
+    <!-- Preload critical assets -->
+    <link rel="preload" href="/images/shop-hero.webp" as="image" type="image/webp" />
+    
+    <!-- Social Media Meta Tags -->
+    <meta property="og:title" content="Konipai - Handcrafted Tote Bags">
+    <meta property="og:description" content="Discover our handcrafted tote bags, designed for style and sustainability.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://konipai.in">
+    <meta property="og:image" content="https://konipai.in/og-image.webp">
+    <meta property="og:image:alt" content="Konipai handcrafted tote bags">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:type" content="image/webp">
+    <!-- Fallback for platforms not supporting webp -->
+    <meta property="og:image" content="https://konipai.in/og-image.jpg">
+    <meta property="og:image:type" content="image/jpeg">
+    
+    <!-- Twitter Card data -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Konipai - Handcrafted Tote Bags">
+    <meta name="twitter:description" content="Discover our handcrafted tote bags, designed for style and sustainability.">
+    <meta name="twitter:image" content="https://konipai.in/og-image.webp">
+    
+    <!-- Defer non-critical third-party scripts -->
+    <script>
+      // Utility to defer loading of non-critical scripts
+      window.deferThirdPartyScripts = function() {
+        // List of scripts to defer
+        const scripts = [
+          { id: 'facebook-pixel', src: 'https://connect.facebook.net/en_US/fbevents.js', async: true, defer: true },
+          { id: 'clarity', src: 'https://www.clarity.ms/tag/0.8.1/clarity.js', async: true, defer: true }
+        ];
+        
+        // Wait until page is fully loaded and idle
+        if (window.requestIdleCallback) {
+          requestIdleCallback(() => {
+            loadDeferredScripts(scripts);
+          });
+        } else {
+          // Fallback for browsers without requestIdleCallback
+          setTimeout(() => {
+            loadDeferredScripts(scripts);
+          }, 2000);
+        }
+      };
+      
+      function loadDeferredScripts(scripts) {
+        scripts.forEach(scriptData => {
+          if (!document.getElementById(scriptData.id)) {
+            const script = document.createElement('script');
+            script.id = scriptData.id;
+            script.src = scriptData.src;
+            if (scriptData.async) script.async = true;
+            if (scriptData.defer) script.defer = true;
+            document.body.appendChild(script);
+          }
+        });
+      }
+      
+      // Defer third-party scripts
+      window.addEventListener('load', function() {
+        window.deferThirdPartyScripts();
+      });
+    </script>
   </head>
 
   <body>

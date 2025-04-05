@@ -45,6 +45,7 @@ import {
 } from '@/lib/analytics';
 import { ProductReviews } from '@/components/ProductReviews';
 import { ProductDetails } from '@/components/ProductDetails';
+import { Breadcrumbs, BreadcrumbItem } from '@/components/Breadcrumbs';
 
 // Generate a very low-res placeholder
 const generatePlaceholder = (color = '#f3f4f6') => {
@@ -531,17 +532,34 @@ const ProductDetail = () => {
     }
   };
   
+  // Generate breadcrumb items
+  const breadcrumbItems: BreadcrumbItem[] = [
+    {
+      label: 'Shop',
+      href: '/shop',
+    }
+  ];
+  
+  // Add category if available
+  if (product?.category) {
+    breadcrumbItems.push({
+      label: product.category.charAt(0).toUpperCase() + product.category.slice(1),
+      href: `/shop?category=${product.category}`,
+    });
+  }
+  
+  // Current product is always last
+  if (product?.name) {
+    breadcrumbItems.push({
+      label: product.name,
+    });
+  }
+  
   return (
     <div className="pb-32">
       <div className="konipai-container py-8">
         {/* Breadcrumb */}
-        <div className="flex items-center gap-2 text-sm text-muted-foreground mb-8">
-          <Link to="/shop" className="hover:text-primary">Shop</Link>
-          <span>/</span>
-          <Link to={`/shop/${product.category}`} className="hover:text-primary capitalize">{product.category}</Link>
-          <span>/</span>
-          <span className="text-foreground">{product.name}</span>
-        </div>
+        <Breadcrumbs items={breadcrumbItems} isLoading={loading} />
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
           {/* Product Images - Enhanced Gallery */}

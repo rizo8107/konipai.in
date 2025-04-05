@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Razorpay Checkout Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .card {
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        h1, h2 {
+            color: #4F46E5;
+        }
+        .btn {
+            background-color: #4F46E5;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            font-size: 16px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .btn:hover {
+            background-color: #4338CA;
+        }
+        input {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        .success {
+            color: green;
+            font-weight: bold;
+        }
+        .error {
+            color: red;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h1>Razorpay Checkout Test</h1>
+    
+    <div class="card">
+        <h2>Test Order</h2>
+        <p>Enter the Order ID generated from the test script:</p>
+        <input type="text" id="orderId" placeholder="order_ID123456">
+        <p>
+            <strong>Amount:</strong> ₹500.00 (fixed for this test)
+        </p>
+        <button id="payButton" class="btn">Pay Now</button>
+    </div>
+    
+    <div class="card">
+        <h2>Payment Result</h2>
+        <div id="result">No payment attempted yet.</div>
+    </div>
+    
+    <div class="card">
+        <h2>Test Card</h2>
+        <p>Card Number: 4111 1111 1111 1111</p>
+        <p>Expiry: Any future date</p>
+        <p>CVV: Any 3 digits</p>
+        <p>Name: Any name</p>
+        <p>3D Secure Password: 1234</p>
+    </div>
+    
+    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+    <script>
+        // Configuration
+        const keyId = 'rzp_live_3rZx2njbNwMEE1'; // Your Razorpay Key ID from the .env file
+        
+        // Reference elements
+        const orderIdInput = document.getElementById('orderId');
+        const payButton = document.getElementById('payButton');
+        const resultElement = document.getElementById('result');
+        
+        // Handle Pay Now button click
+        payButton.addEventListener('click', function() {
+            const orderId = orderIdInput.value.trim();
+            
+            if (!orderId) {
+                resultElement.innerHTML = '<p class="error">Please enter an Order ID</p>';
+                return;
+            }
+            
+            resultElement.innerHTML = '<p>Initializing payment...</p>';
+            
+            // Create options for Razorpay
+            const options = {
+                key: keyId,
+                amount: 50000, // Fixed at ₹500.00 (in paise)
+                currency: 'INR',
+                name: 'Konipai',
+                description: 'Test Payment',
+                order_id: orderId,
+                handler: function(response) {
+                    console.log('Payment success!', response);
+                    resultElement.innerHTML = `
+                        <p class="success">Payment Successful!</p>
+                        <p><strong>Payment ID:</strong> ${response.razorpay_payment_id}</p>
+                        <p><strong>Order ID:</strong> ${response.razorpay_order_id}</p>
+                        <p><strong>Signature:</strong> ${response.razorpay_signature}</p>
+                    `;
+                    
+                    // Now we would verify the payment, but for this test, we'll just show the result
+                },
+                prefill: {
+                    name: 'Test User',
+                    email: 'test@example.com',
+                    contact: '9876543210'
+                },
+                theme: {
+                    color: '#4F46E5'
+                },
+                modal: {
+                    ondismiss: function() {
+                        resultElement.innerHTML = '<p>Payment modal closed by user</p>';
+                    }
+                }
+            };
+            
+            try {
+                // Initialize Razorpay
+                const razorpay = new Razorpay(options);
+                
+                // Register error handler
+                razorpay.on('payment.failed', function(response) {
+                    console.error('Payment failed:', response.error);
+                    resultElement.innerHTML = `
+                        <p class="error">Payment Failed!</p>
+                        <p><strong>Error Code:</strong> ${response.error.code}</p>
+                        <p><strong>Description:</strong> ${response.error.description}</p>
+                    `;
+                });
+                
+                // Open the payment modal
+                razorpay.open();
+            } catch (error) {
+                console.error('Error initializing Razorpay:', error);
+                resultElement.innerHTML = `<p class="error">Error initializing payment: ${error.message}</p>`;
+            }
+        });
+    </script>
+</body>
+</html> 

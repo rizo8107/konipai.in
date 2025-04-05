@@ -184,7 +184,11 @@ const Index = () => {
       <section 
         ref={newArrivalsRef} 
         className="py-24 bg-white animate-fade-in"
-        style={{ animationDelay: '0.2s' }}
+        style={{ 
+          animationDelay: '0.2s',
+          minHeight: '600px',
+          willChange: 'opacity'
+        }}
       >
         <div className="konipai-container">
           <div className="text-center max-w-3xl mx-auto mb-12">
@@ -217,7 +221,11 @@ const Index = () => {
       <section 
         ref={featuresRef}
         className="py-20 bg-[#219898]/5 animate-fade-in"
-        style={{ animationDelay: '0.3s' }}
+        style={{ 
+          animationDelay: '0.3s',
+          minHeight: '500px',
+          willChange: 'opacity'
+        }}
       >
         <div className="konipai-container">
           <div className="text-center max-w-3xl mx-auto mb-16">
@@ -252,7 +260,11 @@ const Index = () => {
       <section 
         ref={bestsellersRef}
         className="py-24 bg-white animate-fade-in"
-        style={{ animationDelay: '0.4s' }}
+        style={{ 
+          animationDelay: '0.4s',
+          minHeight: '600px',
+          willChange: 'opacity'
+        }}
       >
         <div className="konipai-container">
           <div className="text-center max-w-3xl mx-auto mb-12">
