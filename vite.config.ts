@@ -37,30 +37,45 @@ export default defineConfig(({ command, mode }: ConfigEnv): UserConfig => {
       // Optimize chunks to improve caching and reduce memory usage
       rollupOptions: {
         // Reduce memory usage by limiting parallelism
-        maxParallelFileOps: 3,
-        // Disable treeshake to speed up build (we'll rely on terser)
-        treeshake: false,
+        maxParallelFileOps: 2,
+        // Enable more targeted treeshaking for better optimization
+        treeshake: true,
         output: {
-          // Simpler chunking strategy to reduce memory usage
-          manualChunks: {
-            'vendor': [
-              'react', 
-              'react-dom', 
-              'react-router-dom',
-              '@radix-ui/react-dialog',
-              '@radix-ui/react-dropdown-menu',
-              '@radix-ui/react-slot',
-              'lucide-react',
-            ],
-            'app': [
-              './src/App.tsx',
-              './src/main.tsx',
-              './src/routes.tsx',
-            ],
+          // More optimized chunking strategy
+          manualChunks(id) {
+            // Group core React runtime
+            if (id.includes('node_modules/react/') || 
+                id.includes('node_modules/react-dom/') ||
+                id.includes('node_modules/scheduler/')) {
+              return 'react-runtime';
+            }
+            
+            // Group React router
+            if (id.includes('node_modules/react-router') || 
+                id.includes('node_modules/@remix-run/router')) {
+              return 'router';
+            }
+            
+            // Group Radix UI components
+            if (id.includes('node_modules/@radix-ui/')) {
+              return 'ui-components';
+            }
+            
+            // Group lucide icons
+            if (id.includes('node_modules/lucide-react')) {
+              return 'icons';
+            }
+            
+            // Group utilities
+            if (id.includes('node_modules/clsx') || 
+                id.includes('node_modules/tailwind-merge') ||
+                id.includes('node_modules/class-variance-authority')) {
+              return 'utils';
+            }
           },
-          // Configure code splitting
-          chunkFileNames: 'assets/[name]-[hash].js',
-          assetFileNames: 'assets/[name]-[hash].[ext]',
+          // Optimize asset filenames
+          chunkFileNames: 'assets/[name]-[hash:8].js',
+          assetFileNames: 'assets/[name]-[hash:8].[ext]',
         }
       },
       // Use faster esbuild minification instead of terser
@@ -75,13 +90,13 @@ export default defineConfig(({ command, mode }: ConfigEnv): UserConfig => {
     },
     // Optimize build performance
     optimizeDeps: {
-      // Skip dependency optimization in production to save memory
-      disabled: mode === 'production',
-      // Limit esbuild memory usage
+      // Better dependency discovery
+      disabled: false,
+      // Optimize esbuild memory usage
       esbuildOptions: {
         logLevel: 'error', // Reduce log verbosity
         logLimit: 0, // Disable logging to save memory
-        treeShaking: false, // Disable tree shaking to reduce memory usage
+        treeShaking: true, // Enable tree shaking for better optimization
       }
     },
     preview: {
@@ -96,13 +111,16 @@ export default defineConfig(({ command, mode }: ConfigEnv): UserConfig => {
       ...config,
       // Disable sourcemaps completely for EasyPanel builds
       build: {
+        ...config.build,
         sourcemap: false,
         // Use simplest possible chunking strategy
         rollupOptions: {
-          // Disable treeshake to save memory
+          // Reduce parallel operations even further for memory-constrained environments
+          maxParallelFileOps: 1,
+          // Disable treeshake for the first build pass to save memory
           treeshake: false,
           output: {
-            // Simplest possible chunking - just vendor and app
+            // Simplest possible chunking to save memory
             manualChunks: {
               'vendor': [
                 'react', 
@@ -113,7 +131,7 @@ export default defineConfig(({ command, mode }: ConfigEnv): UserConfig => {
                 './src/main.tsx',
               ],
             },
-            // Simple naming
+            // Simple naming for faster builds
             entryFileNames: 'assets/[name].js',
             chunkFileNames: 'assets/[name].js',
             assetFileNames: 'assets/[name].[ext]',
@@ -126,9 +144,23 @@ export default defineConfig(({ command, mode }: ConfigEnv): UserConfig => {
         // Increase limit to avoid warnings
         chunkSizeWarningLimit: 5000,
       },
-      // Disable dependency optimization for EasyPanel builds
+      // Optimize dependency handling
       optimizeDeps: {
-        disabled: true,
+        // Only include key dependencies
+        include: ['react', 'react-dom', 'react-router-dom'],
+        // Exclude large libraries to reduce memory usage during build
+        exclude: [
+          '@tanstack/react-query',
+          'recharts',
+          'html2pdf.js',
+          'date-fns',
+          'embla-carousel-react'
+        ],
+        esbuildOptions: {
+          logLevel: 'error',
+          logLimit: 0,
+          treeShaking: false,
+        }
       },
     };
   }
