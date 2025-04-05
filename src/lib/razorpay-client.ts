@@ -81,20 +81,15 @@ export async function createRazorpayOrder(
   try {
     console.log(`Creating order with CRM endpoint: ${CRM_ORDER_ENDPOINT}`);
     
-    // Convert amount to paise (smallest currency unit for INR)
-    // For INR: 1 rupee = 100 paise
-    // IMPORTANT: Razorpay always expects amount in paise, not rupees
-    let amountInPaise: number;
+    // CORRECT FLOW:
+    // 1. Client receives amount in rupees (e.g., 1.00)
+    // 2. Convert to paise by multiplying by 100 (e.g., 100 paise)
+    // 3. Send to server which passes directly to Razorpay
+    // 4. Razorpay displays correct amount (₹1.00)
     
-    if (amount < 1) {
-      // For very small amounts (like after coupon), enforce minimum 1 rupee (100 paise)
-      amountInPaise = 100; // Minimum 1 rupee (100 paise)
-      console.log(`Amount too small: ₹${amount}, enforcing minimum ₹1.00 (100 paise)`);
-    } else {
-      // Normal conversion - multiply rupees by 100 to get paise
-      amountInPaise = Math.round(amount * 100);
-      console.log(`Converting ₹${amount} to ${amountInPaise} paise for Razorpay`);
-    }
+    // Convert rupees to paise (1 rupee = 100 paise)
+    const amountInPaise = Math.round(amount * 100);
+    console.log(`Converting ₹${amount} to ${amountInPaise} paise for Razorpay`);
     
     // Log the exact payload we're sending to the CRM endpoint
     const payload = {

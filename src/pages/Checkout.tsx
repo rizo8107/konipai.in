@@ -755,9 +755,10 @@ export default function CheckoutPage() {
       appliedCoupon?.code
     );
     
-    // Fixed amount handling - use the actual order amount
-    // Razorpay conversion will happen in createRazorpayOrder (rupees → paise)
-    console.log(`Creating Razorpay order for amount: ₹${order.total}`);
+    // Use order.total as-is in rupees (₹)
+    // The createRazorpayOrder function will correctly convert it to paise (× 100)
+    // for the Razorpay API which expects amounts in the smallest currency unit
+    console.log(`Creating Razorpay order for amount: ₹${order.total} (will be converted to ${order.total * 100} paise)`);
     
     try {
       const razorpayOrderResponse = await createRazorpayOrder(
