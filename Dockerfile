@@ -39,16 +39,16 @@ ENV VITE_POCKETBASE_URL=$VITE_POCKETBASE_URL \
 
 WORKDIR /app
 
-# Copy only essential files first to optimize layer caching
-COPY package.json ./
-COPY vite.easypanel.config.js ./vite.config.js
-COPY tsconfig.json index.html ./
-COPY scripts/optimize-build.js ./scripts/
+# Copy package files first to leverage Docker caching
+COPY package.json package-lock.json ./
+COPY vite.config.ts tsconfig.json index.html ./
 
-# Install only minimal dependencies with extreme memory optimizations
+# Install dependencies with memory optimizations
 RUN npm config set loglevel error && \
     npm config set progress false && \
-    npm i --no-package-lock --no-save react react-dom react-router-dom @vitejs/plugin-react-swc vite esbuild && \
+    # Use npm ci for deterministic installs
+    npm ci --no-fund --prefer-offline && \
+    # Clean cache to free up space
     npm cache clean --force
 
 # Create a minimal .env file with the build arguments
@@ -59,14 +59,12 @@ RUN echo "VITE_POCKETBASE_URL=$VITE_POCKETBASE_URL" > .env && \
     echo "VITE_SITE_TITLE=$VITE_SITE_TITLE" >> .env && \
     echo "VITE_SITE_LOGO=$VITE_SITE_LOGO" >> .env
 
-# Copy source code in stages to reduce memory usage
+# Copy source code
 COPY public ./public/
 COPY src ./src/
 
-# Build in stages with minimal memory usage
-RUN mkdir -p dist && \
-    # Use the ultra-lightweight build config
-    NODE_OPTIONS="--max-old-space-size=512" npx vite build --config vite.config.js --outDir=dist --emptyOutDir
+# Build with memory optimizations
+RUN NODE_OPTIONS="--max-old-space-size=512" npm run build
 
 # Production stage - use the smallest possible nginx image
 FROM nginx:alpine-slim
