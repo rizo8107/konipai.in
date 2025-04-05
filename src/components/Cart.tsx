@@ -7,6 +7,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetDescri
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ProductImage } from '@/components/ProductImage';
+import { CartCrossSell } from '@/components/CartCrossSell';
 
 interface CartProps {
   children?: ReactNode;
@@ -36,6 +37,10 @@ export function Cart({ children }: CartProps) {
       total,
       itemCount
     }));
+    setIsOpen(false);
+  };
+
+  const handleCloseCart = () => {
     setIsOpen(false);
   };
 
@@ -143,6 +148,9 @@ export function Cart({ children }: CartProps) {
                     </div>
                   </div>
                 ))}
+                
+                {/* Cross-selling component */}
+                <CartCrossSell onClose={handleCloseCart} />
               </div>
             </ScrollArea>
 

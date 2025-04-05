@@ -65,17 +65,15 @@ interface OrderData {
   customer_name: string;
   customer_email: string;
   customer_phone: string;
-  shipping_address: string;
-  products: Array<{
-    productId: string;
-    product: {
-      name: string;
-      price: number;
-      images?: string[];
-    };
-    quantity: number;
-    color?: string;
-  }>;
+  shipping_address: string; // ID of the address record in addresses collection
+  products: string; // JSON string of products array
+  payment_id?: string;
+  razorpay_order_id?: string;
+  razorpay_payment_id?: string;
+  razorpay_signature?: string;
+  coupon_code?: string;
+  discount_amount?: number;
+  notes?: string;
 }
 
 export default function CheckoutPage() {
@@ -393,7 +391,6 @@ export default function CheckoutPage() {
         razorpay_payment_id: paymentId,
         razorpay_signature: signature,
         notes: `Payment received via Razorpay. Payment ID: ${paymentId}. Verified: ${verificationResult.success ? 'Yes' : 'No'}. Captured: ${captureResult.success ? 'Yes' : 'Pending'}`,
-        order_id: razorpayOrderId,
         updated: new Date().toISOString()
       };
 
@@ -644,31 +641,50 @@ export default function CheckoutPage() {
       );
 
       // Create or update address
-      let addressData;
+      let addressId;
       try {
-        addressData = {
+        // Prepare address data
+        const addressData = {
+          user: user.id,
           street: formData.address,
           city: formData.city,
           state: formData.state,
           postalCode: formData.zipCode,
-          country: 'India'
+          country: 'India',
+          isDefault: true // Set as default address
         };
 
         console.log('Preparing shipping address data:', addressData);
+        
+        // Check if user already has an address
+        try {
+          const existingAddress = await pocketbase.collection('addresses')
+            .getFirstListItem(`user="${user.id}"`);
+          
+          if (existingAddress) {
+            // Update existing address
+            await pocketbase.collection('addresses').update(existingAddress.id, addressData);
+            addressId = existingAddress.id;
+            console.log('Updated existing address:', addressId);
+          }
+        } catch (addressError: any) {
+          // No existing address found, create new one
+          console.log('No existing address found, creating new one');
+          const newAddress = await pocketbase.collection('addresses').create(addressData);
+          addressId = newAddress.id;
+          console.log('Created new address:', addressId);
+        }
+        
+        if (!addressId) {
+          throw new Error('Failed to create or update address');
+        }
       } catch (error) {
         trackFormError('checkout_form', 'checkout-form', 'Failed to prepare shipping address');
         console.error('Error preparing address:', error);
         throw new Error('Failed to prepare shipping address. Please try again.');
       }
 
-      // Verify that we have valid address data
-      if (!addressData || !addressData.street || !addressData.city || !addressData.state || !addressData.postalCode) {
-        console.error('Invalid shipping address data');
-        trackFormError('checkout_form', 'checkout-form', 'Invalid address data');
-        throw new Error('Please fill in all required address fields.');
-      }
-
-      console.log(`Using shipping address data for order creation`);
+      console.log(`Using shipping address ID for order creation: ${addressId}`);
 
       // Create order in PocketBase
       const orderData = {
@@ -676,22 +692,25 @@ export default function CheckoutPage() {
         customer_name: formData.name,
         customer_email: formData.email,
         customer_phone: validatedPhone,
-        shipping_address_text: JSON.stringify(addressData),
-        products: items.map(item => ({
+        shipping_address: addressId, // Use the address ID instead of the address data
+        products: JSON.stringify(items.map(item => ({
           productId: item.productId,
           product: item.product,
           quantity: item.quantity,
           color: item.color
-        })),
+        }))),
         subtotal: subtotal,
         shipping_cost: calculateFinalTotal().shipping_cost,
         total: calculateFinalTotal().finalTotal,
         status: 'pending',
         payment_status: 'pending',
-        coupon_code: appliedCoupon?.code,
+        coupon_code: appliedCoupon?.code || null,
         discount_amount: appliedCoupon?.discountAmount || 0,
         notes: 'Order created, awaiting payment',
-        order_id: '',
+        payment_id: '',
+        razorpay_order_id: '',
+        razorpay_payment_id: '',
+        razorpay_signature: '',
       };
 
       console.log('Creating order with data:', {
@@ -754,6 +773,7 @@ export default function CheckoutPage() {
     // Open Razorpay payment form
     openRazorpayCheckout({
       key: getRazorpayKeyId(),
+      order_id: razorpayOrderResponse.id,
       amount: order.total * 100, // Razorpay expects amount in paise
       currency: 'INR',
       name: 'Konipai',

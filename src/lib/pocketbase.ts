@@ -97,6 +97,7 @@ export interface Product extends RecordModel {
     name: string;
     description: string;
     price: number;
+    original_price?: number;
     images: string[];
     colors: ProductColor[];
     features: string[];

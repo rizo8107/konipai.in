@@ -1,0 +1,282 @@
+konipai
+/
+
+konipai
+
+app
+CPU 0.0%
+Memory 13.6 MB
+Network I/O 9.3 KB / 69.8 KB
+Deployment History
+
+Deploy service: Add Razorpay proxy testing file and update Checkout page
+0 seconds
+/
+33 minutes ago
+Deploy service: v5: Fixed Razorpay payment capture and CORS issues
+270 seconds
+/
+about 12 hours ago
+Deploy service: Add Razorpay proxy testing file and update Checkout page
+2 seconds
+/
+1 day ago
+Deploy service
+0 seconds
+/
+1 day ago
+Deploy service
+0 seconds
+/
+1 day ago
+Deploy service: Add Razorpay proxy testing file and update Checkout page
+1 second
+/
+1 day ago
+Deploy service
+0 seconds
+/
+1 day ago
+Deploy service: Add Razorpay proxy testing file and update Checkout page
+1 second
+/
+1 day ago
+Deploy service: Add Razorpay proxy testing file and update Checkout page
+1 second
+/
+1 day ago
+Deploy service: Add Razorpay proxy testing file and update Checkout page
+2 seconds
+/
+1 day ago
+Deployment Trigger
+
+Making a request to this URL will trigger a deployment for this service. You can use it to integrate external services with Easypanel.
+
+Action
+Commit: v5: Fixed Razorpay payment capture and CORS issues 
+##########################################
+### Download Github Archive Started...
+### Thu, 03 Apr 2025 17:11:47 GMT
+##########################################
+
+#0 building with "default" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 590B done
+#1 WARN: FromAsCasing: 'as' and 'FROM' keywords' casing do not match (line 2)
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/node:18-alpine
+#2 DONE 1.3s
+
+#3 [internal] load metadata for docker.io/library/nginx:alpine
+#3 DONE 1.3s
+
+#4 [internal] load .dockerignore
+#4 transferring context: 2B done
+#4 DONE 0.0s
+
+#5 [stage-1 1/3] FROM docker.io/library/nginx:alpine@sha256:4ff102c5d78d254a6f0da062b3cf39eaf07f01eec0927fd21e219d0af8bc0591
+#5 resolve docker.io/library/nginx:alpine@sha256:4ff102c5d78d254a6f0da062b3cf39eaf07f01eec0927fd21e219d0af8bc0591 0.0s done
+#5 sha256:4ff102c5d78d254a6f0da062b3cf39eaf07f01eec0927fd21e219d0af8bc0591 10.36kB / 10.36kB done
+#5 sha256:a71e0884a7f1192ecf5decf062b67d46b54ad63f0cc1b8aa7e705f739a97c2fc 2.50kB / 2.50kB done
+#5 sha256:1ff4bb4faebcfb1f7e01144fa9904a570ab9bab88694457855feb6c6bba3fa07 11.23kB / 11.23kB done
+#5 DONE 0.2s
+
+#6 [builder 1/6] FROM docker.io/library/node:18-alpine@sha256:8d6421d663b4c28fd3ebc498332f249011d118945588d0a35cb9bc4b8ca09d9e
+#6 resolve docker.io/library/node:18-alpine@sha256:8d6421d663b4c28fd3ebc498332f249011d118945588d0a35cb9bc4b8ca09d9e 0.0s done
+#6 sha256:929b04d7c782f04f615cf785488fed452b6569f87c73ff666ad553a7554f0006 1.72kB / 1.72kB done
+#6 sha256:ee77c6cd7c1886ecc802ad6cedef3a8ec1ea27d1fb96162bf03dd3710839b8da 6.18kB / 6.18kB done
+#6 sha256:dd71dde834b5c203d162902e6b8994cb2309ae049a0eabc4efea161b2b5a3d0e 0B / 40.01MB 0.1s
+#6 sha256:1e5a4c89cee5c0826c540ab06d4b6b491c96eda01837f430bd47f0d26702d6e3 0B / 1.26MB 0.1s
+#6 sha256:25ff2da83641908f65c3a74d80409d6b1b62ccfaab220b9ea70b80df5a2e0549 0B / 446B 0.1s
+#6 sha256:8d6421d663b4c28fd3ebc498332f249011d118945588d0a35cb9bc4b8ca09d9e 7.67kB / 7.67kB done
+#6 ...
+
+#7 [internal] load build context
+#7 transferring context: 43.01MB 0.3s done
+#7 DONE 0.3s
+
+#6 [builder 1/6] FROM docker.io/library/node:18-alpine@sha256:8d6421d663b4c28fd3ebc498332f249011d118945588d0a35cb9bc4b8ca09d9e
+#6 sha256:dd71dde834b5c203d162902e6b8994cb2309ae049a0eabc4efea161b2b5a3d0e 28.31MB / 40.01MB 0.3s
+#6 sha256:dd71dde834b5c203d162902e6b8994cb2309ae049a0eabc4efea161b2b5a3d0e 40.01MB / 40.01MB 0.3s done
+#6 sha256:1e5a4c89cee5c0826c540ab06d4b6b491c96eda01837f430bd47f0d26702d6e3 1.26MB / 1.26MB 0.3s done
+#6 sha256:25ff2da83641908f65c3a74d80409d6b1b62ccfaab220b9ea70b80df5a2e0549 446B / 446B 0.4s done
+#6 extracting sha256:dd71dde834b5c203d162902e6b8994cb2309ae049a0eabc4efea161b2b5a3d0e 0.1s
+#6 extracting sha256:dd71dde834b5c203d162902e6b8994cb2309ae049a0eabc4efea161b2b5a3d0e 1.2s done
+#6 extracting sha256:1e5a4c89cee5c0826c540ab06d4b6b491c96eda01837f430bd47f0d26702d6e3
+#6 extracting sha256:1e5a4c89cee5c0826c540ab06d4b6b491c96eda01837f430bd47f0d26702d6e3 0.0s done
+#6 extracting sha256:25ff2da83641908f65c3a74d80409d6b1b62ccfaab220b9ea70b80df5a2e0549 done
+#6 DONE 1.8s
+
+#8 [builder 2/6] WORKDIR /app
+#8 DONE 0.1s
+
+#9 [builder 3/6] COPY package*.json ./
+#9 DONE 0.0s
+
+#10 [builder 4/6] RUN npm cache clean --force &&     npm ci --production=false
+#10 0.376 npm warn using --force Recommended protections disabled.
+#10 0.994 npm warn config production Use `--omit=dev` instead.
+#10 13.16 
+#10 13.16 added 590 packages, and audited 591 packages in 12s
+#10 13.16 
+#10 13.16 103 packages are looking for funding
+#10 13.16   run `npm fund` for details
+#10 13.17 
+#10 13.17 3 moderate severity vulnerabilities
+#10 13.17 
+#10 13.17 To address all issues, run:
+#10 13.17   npm audit fix
+#10 13.17 
+#10 13.17 Run `npm audit` for details.
+#10 DONE 13.3s
+
+#11 [builder 5/6] COPY . .
+#11 DONE 0.3s
+
+#12 [builder 6/6] RUN npm run build
+#12 0.339 
+#12 0.339 > vite_react_shadcn_ts@0.0.0 prebuild
+#12 0.339 > npm run optimize:images
+#12 0.339 
+#12 0.562 
+#12 0.562 > vite_react_shadcn_ts@0.0.0 optimize:images
+#12 0.562 > node scripts/optimize-images.js
+#12 0.562 
+#12 0.778 Optimizing hero image...
+#12 2.543 Hero image optimized successfully
+#12 2.544 Processing directory: public/product-images
+#12 2.546 Optimizing: public/product-images/create-a-mockup-of-black-tote-bag--aesthetic-backg.png
+#12 2.552 Error optimizing image public/product-images/create-a-mockup-of-black-tote-bag--aesthetic-backg.png: Error: Input file contains unsupported image format
+#12 2.552     at Sharp.metadata (/app/node_modules/sharp/lib/input.js:487:17)
+#12 2.552     at optimizeImage (file:///app/scripts/optimize-images.js:121:44)
+#12 2.552     at processDirectory (file:///app/scripts/optimize-images.js:103:15)
+#12 2.552     at main (file:///app/scripts/optimize-images.js:210:13)
+#12 2.552 Optimizing: public/product-images/create-a-mockup-of-teal-tote-bag--aesthetic-backgr.png
+#12 4.535 Created WebP: public/product-images/create-a-mockup-of-teal-tote-bag--aesthetic-backgr.webp
+#12 4.535 Created AVIF: public/product-images/create-a-mockup-of-teal-tote-bag--aesthetic-backgr.avif
+#12 5.548 Optimized original: public/product-images/create-a-mockup-of-teal-tote-bag--aesthetic-backgr.png
+#12 5.548 Optimizing: public/product-images/create-a-mockup-of-white-jute-purse-aesthetic-back (1).png
+#12 8.502 Created WebP: public/product-images/create-a-mockup-of-white-jute-purse-aesthetic-back (1).webp
+#12 8.503 Created AVIF: public/product-images/create-a-mockup-of-white-jute-purse-aesthetic-back (1).avif
+#12 9.835 Optimized original: public/product-images/create-a-mockup-of-white-jute-purse-aesthetic-back (1).png
+#12 9.838 Optimizing: public/product-images/create-a-mockup-of-white-jute-purse-aesthetic-back.png
+#12 12.53 Created WebP: public/product-images/create-a-mockup-of-white-jute-purse-aesthetic-back.webp
+#12 12.53 Created AVIF: public/product-images/create-a-mockup-of-white-jute-purse-aesthetic-back.avif
+#12 13.70 Optimized original: public/product-images/create-a-mockup-of-white-jute-purse-aesthetic-back.png
+#12 13.70 Optimizing: public/product-images/create-a-mockup-of-white-paper--textured-college-n.png
+#12 16.47 Created WebP: public/product-images/create-a-mockup-of-white-paper--textured-college-n.webp
+#12 16.47 Created AVIF: public/product-images/create-a-mockup-of-white-paper--textured-college-n.avif
+#12 17.48 Optimized original: public/product-images/create-a-mockup-of-white-paper--textured-college-n.png
+#12 17.48 Optimizing: public/product-images/create-a-mockup-of-white-texture-iphone-case-in-ae.png
+#12 20.59 Created WebP: public/product-images/create-a-mockup-of-white-texture-iphone-case-in-ae.webp
+#12 20.59 Created AVIF: public/product-images/create-a-mockup-of-white-texture-iphone-case-in-ae.avif
+#12 21.84 Optimized original: public/product-images/create-a-mockup-of-white-texture-iphone-case-in-ae.png
+#12 21.84 Optimizing: public/product-images/create-a-mockup-of-white-tote-bag--aesthetic-backg (1).png
+#12 23.95 Created WebP: public/product-images/create-a-mockup-of-white-tote-bag--aesthetic-backg (1).webp
+#12 23.95 Created AVIF: public/product-images/create-a-mockup-of-white-tote-bag--aesthetic-backg (1).avif
+#12 24.98 Optimized original: public/product-images/create-a-mockup-of-white-tote-bag--aesthetic-backg (1).png
+#12 24.98 Optimizing: public/product-images/create-a-mockup-of-white-tote-bag--aesthetic-backg.png
+#12 27.13 Created WebP: public/product-images/create-a-mockup-of-white-tote-bag--aesthetic-backg.webp
+#12 27.13 Created AVIF: public/product-images/create-a-mockup-of-white-tote-bag--aesthetic-backg.avif
+#12 28.10 Optimized original: public/product-images/create-a-mockup-of-white-tote-bag--aesthetic-backg.png
+#12 28.10 Optimizing: public/product-images/create-a-mockup-of-white-tote-bag-a-girl-wearing-i.png
+#12 30.31 Created WebP: public/product-images/create-a-mockup-of-white-tote-bag-a-girl-wearing-i.webp
+#12 30.31 Created AVIF: public/product-images/create-a-mockup-of-white-tote-bag-a-girl-wearing-i.avif
+#12 32.38 Optimized original: public/product-images/create-a-mockup-of-white-tote-bag-a-girl-wearing-i.png
+#12 32.38 Optimizing: public/product-images/create-a-modern-mockup-of-white-tote-bag-with-brow.png
+#12 38.33 Created WebP: public/product-images/create-a-modern-mockup-of-white-tote-bag-with-brow.webp
+#12 38.33 Created AVIF: public/product-images/create-a-modern-mockup-of-white-tote-bag-with-brow.avif
+#12 39.18 Optimized original: public/product-images/create-a-modern-mockup-of-white-tote-bag-with-brow.png
+#12 39.18 Processing directory: public/images
+#12 39.18 Optimizing: public/images/shop-hero.jpg
+#12 40.29 Created WebP: public/images/shop-hero.webp
+#12 40.29 Created AVIF: public/images/shop-hero.avif
+#12 41.52 Created AVIF version of og-image
+#12 41.64 Created WebP version of og-image
+#12 41.76 Created JPG version of og-image
+#12 41.76 Original PNG: 1139KB
+#12 41.76 Optimized AVIF: 26KB (2%)
+#12 41.76 Optimized WebP: 40KB (4%)
+#12 41.76 Optimized JPG: 61KB (5%)
+#12 41.76 Image optimization complete!
+#12 41.82 
+#12 41.82 > vite_react_shadcn_ts@0.0.0 build
+#12 41.82 > vite build
+#12 41.82 
+#12 42.33 vite v5.4.10 building for production...
+#12 42.90 transforming...
+#12 42.95 Browserslist: browsers data (caniuse-lite) is 6 months old. Please run:
+#12 42.95   npx update-browserslist-db@latest
+#12 42.95   Why you should do it regularly: https://github.com/browserslist/update-db#readme
+#12 51.32 ✓ 2416 modules transformed.
+#12 52.78 rendering chunks...
+#12 240.1 computing gzip size...
+#12 240.1 dist/index.html                                 5.86 kB │ gzip:   1.97 kB
+#12 240.1 dist/assets/index-Dditdj34.css                 86.68 kB │ gzip:  14.26 kB
+#12 240.1 dist/assets/skeleton-COOeY0ob.js                0.21 kB │ gzip:   0.17 kB
+#12 240.1 dist/assets/label-DBgzAgwM.js                   0.36 kB │ gzip:   0.26 kB
+#12 240.1 dist/assets/circle-alert-G-VocP09.js            0.42 kB │ gzip:   0.29 kB
+#12 240.1 dist/assets/map-pin-Bp_OCkDf.js                 0.42 kB │ gzip:   0.32 kB
+#12 240.1 dist/assets/html2canvas-CF2L7zN5.js             0.50 kB │ gzip:   0.36 kB
+#12 240.1 dist/assets/textarea-DXWIqGFD.js                0.52 kB │ gzip:   0.33 kB
+#12 240.1 dist/assets/NotFound-D1FL3sc5.js                0.58 kB │ gzip:   0.34 kB
+#12 240.1 dist/assets/input-DI8YHarJ.js                   0.62 kB │ gzip:   0.37 kB
+#12 240.1 dist/assets/triangle-alert-BoZfhxlt.js          0.73 kB │ gzip:   0.39 kB
+#12 240.1 dist/assets/phone-B-hWwpGd.js                   0.89 kB │ gzip:   0.45 kB
+#12 240.1 dist/assets/alert-CjUJjGzu.js                   0.95 kB │ gzip:   0.48 kB
+#12 240.1 dist/assets/card-ICYVISY_.js                    1.05 kB │ gzip:   0.40 kB
+#12 240.1 dist/assets/tabs-BRsiofqp.js                    1.16 kB │ gzip:   0.49 kB
+#12 240.1 dist/assets/Bestsellers-DXZClVS5.js             1.28 kB │ gzip:   0.67 kB
+#12 240.1 dist/assets/NewArrivals-BKiN0nHT.js             1.29 kB │ gzip:   0.68 kB
+#12 240.1 dist/assets/Breadcrumbs-BXUi1Z9B.js             1.30 kB │ gzip:   0.57 kB
+#12 240.1 dist/assets/forgot-password-SflEM6qB.js         2.12 kB │ gzip:   0.91 kB
+#12 240.1 dist/assets/reset-password-D9fHBlBo.js          2.81 kB │ gzip:   1.10 kB
+#12 240.1 dist/assets/ContactUs-BXOxov2q.js               2.88 kB │ gzip:   1.01 kB
+#12 240.1 dist/assets/About-Bk1DbjNH.js                   2.98 kB │ gzip:   1.22 kB
+#12 240.1 dist/assets/ShippingPolicy-ojNUcmAO.js          3.03 kB │ gzip:   1.12 kB
+#12 240.1 dist/assets/profile-DfFjaT8A.js                 3.93 kB │ gzip:   1.50 kB
+#12 240.1 dist/assets/login-Bjjww6pz.js                   4.82 kB │ gzip:   1.91 kB
+#12 240.1 dist/assets/TermsAndConditions-O8E21dvD.js      4.84 kB │ gzip:   1.86 kB
+#12 240.1 dist/assets/PrivacyPolicy-BisAsyeA.js           5.04 kB │ gzip:   1.82 kB
+#12 240.1 dist/assets/signup-D-Jpbz7X.js                  5.82 kB │ gzip:   2.27 kB
+#12 240.1 dist/assets/WebhookTest-ejg7uZsy.js             6.13 kB │ gzip:   2.15 kB
+#12 240.1 dist/assets/CancellationsRefunds-D9VHeVHC.js    6.14 kB │ gzip:   2.10 kB
+#12 240.1 dist/assets/Orders-DUqMfRPU.js                  7.65 kB │ gzip:   2.49 kB
+#12 240.1 dist/assets/OrderDetail-B408Ibh9.js             9.27 kB │ gzip:   2.56 kB
+#12 240.1 dist/assets/Shop-D9p9d4wH.js                   12.23 kB │ gzip:   4.24 kB
+#12 240.1 dist/assets/Checkout-z4SSseQp.js               18.65 kB │ gzip:   5.95 kB
+#12 240.1 dist/assets/format-DT6t7sv7.js                 18.98 kB │ gzip:   5.41 kB
+#12 240.1 dist/assets/router-SKPimbDf.js                 20.99 kB │ gzip:   7.66 kB
+#12 240.1 dist/assets/purify.es-B24Mc-d5.js              21.89 kB │ gzip:   8.42 kB
+#12 240.1 dist/assets/ProductDetail-4Z9D-HNF.js          35.70 kB │ gzip:   9.72 kB
+#12 240.1 dist/assets/form-Dcbtxnqg.js                   79.13 kB │ gzip:  21.50 kB
+#12 240.1 dist/assets/ui-Dzhy9pal.js                    131.43 kB │ gzip:  39.63 kB
+#12 240.1 dist/assets/react-9wryFjfa.js                 141.60 kB │ gzip:  45.26 kB
+#12 240.1 dist/assets/index.es-Z8T4cVJn.js              150.37 kB │ gzip:  50.48 kB
+#12 240.1 dist/assets/index-lgT5UD2o.js                 167.77 kB │ gzip:  48.34 kB
+#12 240.1 dist/assets/OrderConfirmation-CsYbXGtH.js     686.66 kB │ gzip: 188.93 kB
+#12 240.1 
+#12 240.1 (!) Some chunks are larger than 500 kB after minification. Consider:
+#12 240.1 - Using dynamic import() to code-split the application
+#12 240.1 - Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+#12 240.1 - Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+#12 240.1 ✓ built in 3m 18s
+#12 240.3 
+#12 240.3 > vite_react_shadcn_ts@0.0.0 postbuild
+#12 240.3 > node scripts/optimize-build.js
+#12 240.3 
+#12 240.6 Starting build optimization...
+#12 240.6 Optimizing HTML...
+#12 240.6 HTML optimization completed
+#12 240.6 Optimizing images...
+#12 240.6 Found 16 images in dist directory
+#12 240.7 Created WebP: /app/dist/lovable-uploads/create-a-mockup-of-black-tote-bag--aesthetic-backg.webp
+#12 240.8 Created WebP: /app/dist/lovable-uploads/d184b622-f7e8-44d2-99b0-618cddbdf37f.webp
+#12 240.8 Error converting /app/dist/placeholder-product.png to WebP: Input file contains unsupported image format
+#12 240.8 Error converting /app/dist/product-images/create-a-mockup-of-black-tote-bag--aesthetic-backg.png to WebP: Input file contains unsupported image format
+#12 240.8 Image optimization completed
+#12 240.8 Build optimization completed successfully!
+#12 DONE 240.9s

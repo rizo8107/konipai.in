@@ -5,6 +5,18 @@ import { useAuth } from '@/contexts/AuthContext';
 import { deduplicateCartItems, isValidCartItem } from '@/utils/cartUtils';
 import { trackEcommerceEvent } from '@/utils/analytics';
 
+// Define a PocketBaseError interface to avoid using 'any'
+interface PocketBaseError {
+  message?: string;
+  status?: number;
+  data?: Record<string, unknown>;
+  response?: {
+    code?: number;
+    message?: string;
+    data?: Record<string, unknown>;
+  };
+}
+
 export interface CartItem {
   productId: string;
   product: Product;
@@ -222,10 +234,57 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
           
           const createCartWithRetry = async () => {
             try {
-              await pocketbase.collection('carts').create(cartData, requestOptions);
+              // Verify user exists before creating cart to prevent DrySubmit rule failure
+              try {
+                await pocketbase.collection('users').getOne(user.id);
+              } catch (userError) {
+                console.error('Cannot create cart: User verification failed', userError);
+                return; // Exit if user doesn't exist
+              }
+              
+              // Ensure cartData follows the exact expected schema
+              const cleanCartData = {
+                user: user.id, // This must be a valid user ID
+                items: JSON.stringify(deduplicatedItems.map(item => ({
+                  productId: item.productId,
+                  product: {
+                    id: item.product.id,
+                    name: item.product.name,
+                    price: item.product.price,
+                    images: Array.isArray(item.product.images) ? item.product.images : []
+                  },
+                  quantity: item.quantity,
+                  color: item.color || ""
+                })))
+              };
+              
+              // Special validation for DrySubmit
+              if (!cleanCartData.user || typeof cleanCartData.user !== 'string' || cleanCartData.user.trim() === '') {
+                console.error('Cannot create cart: Invalid user ID');
+                return;
+              }
+              
+              if (!cleanCartData.items || typeof cleanCartData.items !== 'string') {
+                console.error('Cannot create cart: Invalid items data');
+                return;
+              }
+              
+              console.log('Attempting to create cart with data:', {
+                user: cleanCartData.user,
+                items: `JSON string with ${deduplicatedItems.length} items`
+              });
+              
+              // Use more detailed error handling
+              await pocketbase.collection('carts').create(cleanCartData, requestOptions);
               console.log('Created new cart for user');
-            } catch (createError) {
-              console.warn(`Unable to create cart (attempt ${retryCount + 1}/${maxRetries}):`, createError);
+            } catch (error) {
+              const createError = error as PocketBaseError;
+              console.error('Cart creation error details:', {
+                message: createError?.message || 'Unknown error',
+                status: createError?.status,
+                data: createError?.data,
+                response: createError?.response
+              });
               
               if (retryCount < maxRetries - 1) {
                 retryCount++;
@@ -244,10 +303,62 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
           
           const updateCartWithRetry = async () => {
             try {
-              await pocketbase.collection('carts').update(userCart.id, cartData, requestOptions);
+              // Verify user exists before updating cart
+              try {
+                await pocketbase.collection('users').getOne(user.id);
+              } catch (userError) {
+                console.error('Cannot update cart: User verification failed', userError);
+                return; // Exit if user doesn't exist
+              }
+              
+              // Use the same clean data structure for updates
+              const cleanCartData = {
+                user: user.id,
+                items: JSON.stringify(deduplicatedItems.map(item => ({
+                  productId: item.productId,
+                  product: {
+                    id: item.product.id,
+                    name: item.product.name,
+                    price: item.product.price,
+                    images: Array.isArray(item.product.images) ? item.product.images : []
+                  },
+                  quantity: item.quantity,
+                  color: item.color || ""
+                })))
+              };
+              
+              // Special validation for DrySubmit
+              if (!cleanCartData.user || typeof cleanCartData.user !== 'string' || cleanCartData.user.trim() === '') {
+                console.error('Cannot update cart: Invalid user ID');
+                return;
+              }
+              
+              if (!cleanCartData.items || typeof cleanCartData.items !== 'string') {
+                console.error('Cannot update cart: Invalid items data');
+                return;
+              }
+              
+              if (!userCart.id || typeof userCart.id !== 'string' || userCart.id.trim() === '') {
+                console.error('Cannot update cart: Invalid cart ID');
+                return;
+              }
+            
+              console.log('Updating cart with data:', {
+                id: userCart.id,
+                user: cleanCartData.user,
+                items: `JSON string with ${deduplicatedItems.length} items`
+              });
+            
+              await pocketbase.collection('carts').update(userCart.id, cleanCartData, requestOptions);
               console.log('Updated existing cart');
-            } catch (updateError) {
-              console.warn(`Unable to update cart (attempt ${retryCount + 1}/${maxRetries}):`, updateError);
+            } catch (error) {
+              const updateError = error as PocketBaseError;
+              console.error('Cart update error details:', {
+                message: updateError?.message || 'Unknown error',
+                status: updateError?.status,
+                data: updateError?.data,
+                response: updateError?.response
+              });
               
               if (retryCount < maxRetries - 1) {
                 retryCount++;

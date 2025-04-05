@@ -51,9 +51,17 @@ export interface RazorpayPaymentResponse {
 // Use a relative URL instead of trying to construct an absolute one
 const SERVER_URL = '/api/razorpay';
 
+// New CRM Supabase endpoint for order creation
+const CRM_ORDER_ENDPOINT = import.meta.env.VITE_CRM_ORDER_ENDPOINT || 'https://crm-supabase.7za6uc.easypanel.host/functions/v1/create-order';
+
 // Get Razorpay Key ID from environment
 export function getRazorpayKeyId(): string {
   return import.meta.env.VITE_RAZORPAY_KEY_ID || 'rzp_test_1DP5mmOlF5G5ag';
+}
+
+// Get Razorpay Key Secret from environment (for server-side operations)
+export function getRazorpayKeySecret(): string {
+  return import.meta.env.VITE_RAZORPAY_KEY_SECRET || '';
 }
 
 /**
@@ -71,16 +79,19 @@ export async function createRazorpayOrder(
   notes?: Record<string, string>
 ): Promise<RazorpayOrder> {
   try {
-    console.log(`Creating order with endpoint: ${SERVER_URL}/create-order`);
+    console.log(`Creating order with CRM endpoint: ${CRM_ORDER_ENDPOINT}`);
     
-    // Use fetch with a relative URL
-    const response = await fetch(`${SERVER_URL}/create-order`, {
+    // Convert amount to paise if it's not already (Razorpay expects amount in smallest currency unit)
+    const amountInPaise = Math.round(amount * 100);
+    
+    // Use fetch with the CRM Supabase endpoint
+    const response = await fetch(CRM_ORDER_ENDPOINT, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        amount,
+        amount: amountInPaise,
         currency,
         receipt,
         notes
@@ -98,7 +109,9 @@ export async function createRazorpayOrder(
       }
     }
 
-    return await response.json();
+    const orderData = await response.json();
+    console.log('Order created successfully:', orderData);
+    return orderData;
   } catch (error) {
     console.error('Error creating Razorpay order:', error);
     throw error;
