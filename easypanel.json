@@ -45,11 +45,15 @@
     {
       "name": "NODE_ENV",
       "value": "production"
+    },
+    {
+      "name": "NODE_OPTIONS",
+      "value": "--max-old-space-size=1024"
     }
   ],
   "resources": {
-    "cpu": "100m",
-    "memory": "256Mi"
+    "cpu": "200m",
+    "memory": "1Gi"
   },
   "healthcheck": {
     "path": "/",
