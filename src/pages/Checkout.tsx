@@ -755,29 +755,27 @@ export default function CheckoutPage() {
       appliedCoupon?.code
     );
     
-    // TEMPORARY FIX: Force amount to be exactly 1 rupee (100 paise) for testing 
-    // when the amount is very small (less than 5 rupees)
-    const testFixedAmount = order.total < 5 ? 1 : order.total;
-    console.log(`TEST MODE: Using fixed amount of ₹${testFixedAmount} for small totals`);
-    console.log(`Original: ₹${order.total}, Min: ₹${testFixedAmount}`);
+    // Fixed amount handling - use the actual order amount
+    // Razorpay conversion will happen in createRazorpayOrder (rupees → paise)
+    console.log(`Creating Razorpay order for amount: ₹${order.total}`);
     
     try {
       const razorpayOrderResponse = await createRazorpayOrder(
-        testFixedAmount, // TESTING with fixed ₹1 for small amounts
-        'INR',  // currency
-        order.id // receipt (using our order ID)
+        order.total, // Original amount in rupees (will be converted to paise)
+        'INR',       // currency
+        order.id     // receipt (using our order ID)
       );
       
       console.log('Razorpay order response details:');
       console.log('- ID:', razorpayOrderResponse.id);
-      console.log('- Amount:', razorpayOrderResponse.amount);
+      console.log('- Amount:', razorpayOrderResponse.amount, 'paise (₹' + (razorpayOrderResponse.amount / 100).toFixed(2) + ')');
       console.log('- Currency:', razorpayOrderResponse.currency);
       console.log('- Receipt:', razorpayOrderResponse.receipt);
       console.log('- Status:', razorpayOrderResponse.status);
       
-      // Force a specific amount for testing (100 paise = ₹1)
-      const forcedAmount = order.total < 5 ? 100 : razorpayOrderResponse.amount;
-      console.log(`Using ${forcedAmount} paise for payment window`);
+      // IMPORTANT: The amount in the Razorpay order response is ALREADY in paise
+      // and should be used directly without further conversion
+      console.log(`Razorpay order amount: ${razorpayOrderResponse.amount} paise (₹${(razorpayOrderResponse.amount/100).toFixed(2)})`);
 
       if (!razorpayOrderResponse || !razorpayOrderResponse.id) {
         trackPaymentFailure(order.id, order.total, 'Razorpay', 'Failed to create payment order');
@@ -791,7 +789,7 @@ export default function CheckoutPage() {
       openRazorpayCheckout({
         key: getRazorpayKeyId(),
         order_id: razorpayOrderResponse.id,
-        amount: forcedAmount, // Use the forced amount for payment
+        amount: razorpayOrderResponse.amount, // Amount is already in paise from the Razorpay order
         currency: 'INR',
         name: 'Konipai',
         description: `Order #${order.id}`,
