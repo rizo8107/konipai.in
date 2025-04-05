@@ -29,16 +29,12 @@ const ResetPasswordPage = lazy(() => import("./pages/auth/reset-password"))
 const ProfilePage = lazy(() => import("./pages/profile"))
 const OrderDetail = lazy(() => import("./pages/OrderDetail"))
 const OrderConfirmation = lazy(() => import("./pages/OrderConfirmation"))
-const Orders = lazy(() => import("./pages/Orders"))
-
-// Policy pages
+const OrdersNew = lazy(() => import("./pages/OrdersNew")) 
 const ContactUs = lazy(() => import("./pages/ContactUs"))
 const ShippingPolicy = lazy(() => import("./pages/ShippingPolicy"))
 const TermsAndConditions = lazy(() => import("./pages/TermsAndConditions"))
 const CancellationsRefunds = lazy(() => import("./pages/CancellationsRefunds"))
 const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"))
-
-// Add the webhook test page to the import
 const WebhookTest = lazy(() => import("./pages/WebhookTest"))
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
@@ -89,7 +85,6 @@ function ScrollToTop() {
   return null;
 }
 
-// Add the webhook test route with the other pages
 function generateRoutes() {
   const pages = [
     // ... existing pages ...
@@ -145,7 +140,9 @@ export function Routes() {
                   path="/orders"
                   element={
                     <PrivateRoute>
-                      <Orders />
+                      <Suspense fallback={<PageLoader />}>
+                        <OrdersNew />
+                      </Suspense>
                     </PrivateRoute>
                   }
                 />

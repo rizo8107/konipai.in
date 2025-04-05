@@ -33,6 +33,18 @@
     {
       "name": "VITE_SITE_LOGO",
       "value": "https://konipai.in/assets/logo.png"
+    },
+    {
+      "name": "VITE_SUPABASE_URL",
+      "value": "${SUPABASE_URL}"
+    },
+    {
+      "name": "VITE_SUPABASE_ANON_KEY",
+      "value": "${SUPABASE_ANON_KEY}"
+    },
+    {
+      "name": "NODE_ENV",
+      "value": "production"
     }
   ],
   "resources": {
@@ -48,4 +60,4 @@
   },
   "restartPolicy": "always",
   "networks": ["default"]
-} 
+}
