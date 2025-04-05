@@ -47,6 +47,10 @@ export default defineConfig(({ mode }) => ({
     assetsInlineLimit: 8192, // Inline more assets to reduce file count
     // Chunk size warnings threshold - increase to reduce noise
     chunkSizeWarningLimit: 1000,
+    assetsInclude: ['**/*.png', '**/*.jpg', '**/*.jpeg', '**/*.gif', '**/*.svg'],
+  },
+  optimizeDeps: {
+    exclude: ['lovable-tagger'] // Exclude the image optimizer
   },
   // Enable brotli compression for even better compression (when supported by the server)
   preview: {
