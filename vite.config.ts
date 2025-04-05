@@ -20,30 +20,56 @@ export default defineConfig(({ mode }) => ({
     },
   },
   build: {
-    // Generate sourcemaps for debugging in production
+    // Generate sourcemaps only in development to save memory in production
     sourcemap: mode === 'development',
-    // Optimize chunks to improve caching
+    // Optimize chunks to improve caching and reduce memory usage
     rollupOptions: {
       output: {
         manualChunks: (id) => {
-          // Handle react and react-dom
-          if (id.includes('node_modules/react/') || id.includes('node_modules/react-dom/')) {
-            return 'react';
+          // Group node_modules into larger chunks to reduce overhead
+          if (id.includes('node_modules')) {
+            // Handle react and react-dom
+            if (id.includes('/react/') || id.includes('/react-dom/') || id.includes('/scheduler/')) {
+              return 'vendor-react';
+            }
+            
+            // Handle react-router-dom and related packages
+            if (id.includes('/react-router') || id.includes('/@remix-run/')) {
+              return 'vendor-router';
+            }
+            
+            // Group UI-related libraries
+            if (id.includes('/@radix-ui/') || 
+                id.includes('/class-variance-authority/') || 
+                id.includes('/clsx/') || 
+                id.includes('/tailwind') ||
+                id.includes('/lucide-react/')) {
+              return 'vendor-ui';
+            }
+            
+            // Group utility libraries
+            if (id.includes('/date-fns/') || 
+                id.includes('/react-intersection-observer/') ||
+                id.includes('/sonner/') ||
+                id.includes('/zod/')) {
+              return 'vendor-utils';
+            }
+            
+            // All other node_modules
+            return 'vendor-other';
           }
           
-          // Handle react-router-dom
-          if (id.includes('node_modules/react-router-dom/')) {
-            return 'router';
+          // Group application code by feature
+          if (id.includes('/src/pages/')) {
+            return 'app-pages';
           }
           
-          // Handle react-intersection-observer specifically
-          if (id.includes('node_modules/react-intersection-observer/')) {
-            return 'utils';
+          if (id.includes('/src/components/')) {
+            return 'app-components';
           }
           
-          // Handle all radix UI components
-          if (id.includes('node_modules/@radix-ui/react-')) {
-            return 'ui';
+          if (id.includes('/src/lib/') || id.includes('/src/utils/')) {
+            return 'app-utils';
           }
         },
         // Configure code splitting
@@ -57,13 +83,33 @@ export default defineConfig(({ mode }) => ({
       compress: {
         drop_console: mode === 'production',
         drop_debugger: mode === 'production',
+        passes: 2, // Additional optimization passes
+      },
+      format: {
+        comments: false, // Remove comments to reduce size
       },
     },
     // Improve chunk loading
     target: 'esnext',
     assetsInlineLimit: 4096, // Inline small assets to reduce HTTP requests
+    // Limit concurrent file operations to reduce memory pressure
+    emptyOutDir: true,
+    reportCompressedSize: false, // Disable compressed size reporting to save memory
+    chunkSizeWarningLimit: 1000, // Increase warning limit to reduce noise
   },
-  // Enable brotli compression for even better compression (when supported by the server)
+  // Optimize build performance
+  optimizeDeps: {
+    // Force inclusion of these dependencies in the optimization step
+    include: ['react', 'react-dom', 'react-router-dom'],
+    // Skip optimization of these dependencies (typically large or problematic ones)
+    exclude: [],
+    // Limit esbuild memory usage
+    esbuildOptions: {
+      logLevel: 'error', // Reduce log verbosity
+      logLimit: 0, // Disable logging to save memory
+      treeShaking: true, // Enable tree shaking to reduce bundle size
+    }
+  },
   preview: {
     host: "::",
     port: 8080,
