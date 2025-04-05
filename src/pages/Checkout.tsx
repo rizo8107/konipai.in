@@ -755,49 +755,74 @@ export default function CheckoutPage() {
       appliedCoupon?.code
     );
     
-    console.log(`Creating Razorpay order for total amount: ₹${order.total}`);
-    const razorpayOrderResponse = await createRazorpayOrder(
-      order.total, // amount in INR with coupon discount applied
-      'INR',  // currency
-      order.id // receipt (using our order ID)
-    );
+    // TEMPORARY FIX: Force amount to be exactly 1 rupee (100 paise) for testing 
+    // when the amount is very small (less than 5 rupees)
+    const testFixedAmount = order.total < 5 ? 1 : order.total;
+    console.log(`TEST MODE: Using fixed amount of ₹${testFixedAmount} for small totals`);
+    console.log(`Original: ₹${order.total}, Min: ₹${testFixedAmount}`);
     
-    console.log('Razorpay order response:', razorpayOrderResponse);
+    try {
+      const razorpayOrderResponse = await createRazorpayOrder(
+        testFixedAmount, // TESTING with fixed ₹1 for small amounts
+        'INR',  // currency
+        order.id // receipt (using our order ID)
+      );
+      
+      console.log('Razorpay order response details:');
+      console.log('- ID:', razorpayOrderResponse.id);
+      console.log('- Amount:', razorpayOrderResponse.amount);
+      console.log('- Currency:', razorpayOrderResponse.currency);
+      console.log('- Receipt:', razorpayOrderResponse.receipt);
+      console.log('- Status:', razorpayOrderResponse.status);
+      
+      // Force a specific amount for testing (100 paise = ₹1)
+      const forcedAmount = order.total < 5 ? 100 : razorpayOrderResponse.amount;
+      console.log(`Using ${forcedAmount} paise for payment window`);
 
-    if (!razorpayOrderResponse || !razorpayOrderResponse.id) {
-      trackPaymentFailure(order.id, order.total, 'Razorpay', 'Failed to create payment order');
-      throw new Error('Failed to create payment order. Please try again.');
-    }
-    
-    // Track payment start
-    trackPaymentStart(order.id, order.total, 'Razorpay');
-
-    // Open Razorpay payment form
-    openRazorpayCheckout({
-      key: getRazorpayKeyId(),
-      order_id: razorpayOrderResponse.id,
-      amount: razorpayOrderResponse.amount, // Amount is already in paise from the order response
-      currency: 'INR',
-      name: 'Konipai',
-      description: `Order #${order.id}`,
-      image: import.meta.env.VITE_SITE_LOGO || 'https://konipai.in/assets/logo.png',
-      handler: (response) => handlePaymentSuccess(response, order.id),
-      prefill: {
-        name: formData.name,
-        email: formData.email,
-        contact: order.customer_phone, // Use the validated phone number from the order
-      },
-      notes: {
-        order_id: order.id,
-        address: `${formData.address}, ${formData.city}, ${formData.state} - ${formData.zipCode}`
-      },
-      theme: {
-        color: '#4F46E5', // Indigo color that matches Konipai theme
+      if (!razorpayOrderResponse || !razorpayOrderResponse.id) {
+        trackPaymentFailure(order.id, order.total, 'Razorpay', 'Failed to create payment order');
+        throw new Error('Failed to create payment order. Please try again.');
       }
-    });
 
-    // NOTE: After this point, the payment flow is handled by Razorpay's modal
-    // The handlePaymentSuccess function will be called when payment is completed
+      // Track payment start
+      trackPaymentStart(order.id, order.total, 'Razorpay');
+
+      // Open Razorpay payment form
+      openRazorpayCheckout({
+        key: getRazorpayKeyId(),
+        order_id: razorpayOrderResponse.id,
+        amount: forcedAmount, // Use the forced amount for payment
+        currency: 'INR',
+        name: 'Konipai',
+        description: `Order #${order.id}`,
+        image: import.meta.env.VITE_SITE_LOGO || 'https://konipai.in/assets/logo.png',
+        handler: (response) => handlePaymentSuccess(response, order.id),
+        prefill: {
+          name: formData.name,
+          email: formData.email,
+          contact: order.customer_phone, // Use the validated phone number from the order
+        },
+        notes: {
+          order_id: order.id,
+          address: `${formData.address}, ${formData.city}, ${formData.state} - ${formData.zipCode}`
+        },
+        theme: {
+          color: '#4F46E5', // Indigo color that matches Konipai theme
+        }
+      });
+
+      // NOTE: After this point, the payment flow is handled by Razorpay's modal
+      // The handlePaymentSuccess function will be called when payment is completed
+    } catch (error) {
+      console.error('Error creating Razorpay order:', error);
+      trackPaymentFailure(order.id, order.total, 'Razorpay', error instanceof Error ? error.message : 'Unknown error');
+      toast({
+        variant: "destructive",
+        title: "Payment Error",
+        description: "There was an issue processing your payment. Please contact support.",
+      });
+      navigate(`/order-confirmation/${order.id}?status=payment_error`);
+    }
   };
 
   const handleAddressSelect = (address: {

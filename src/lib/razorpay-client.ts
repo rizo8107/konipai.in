@@ -82,8 +82,20 @@ export async function createRazorpayOrder(
     console.log(`Creating order with CRM endpoint: ${CRM_ORDER_ENDPOINT}`);
     
     // Convert amount to paise if it's not already (Razorpay expects amount in smallest currency unit)
-    const amountInPaise = Math.round(amount * 100);
+    // Ensure we're sending the correct amount for small values like ₹1
+    const amountInPaise = Math.max(Math.round(amount * 100), 100); // Minimum 100 paise (₹1)
     console.log(`Amount: ₹${amount} converted to ${amountInPaise} paise`);
+    
+    // Log the exact payload we're sending to the CRM endpoint
+    const payload = {
+      amount: amountInPaise,
+      currency,
+      receipt,
+      notes,
+      amount_in_paise: true, // Explicitly indicate amount is in paise
+      original_amount_inr: amount // Send original amount for debug
+    };
+    console.log('Sending payload to CRM endpoint:', payload);
     
     // Use fetch with the CRM Supabase endpoint
     const response = await fetch(CRM_ORDER_ENDPOINT, {
@@ -91,12 +103,7 @@ export async function createRazorpayOrder(
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        amount: amountInPaise,
-        currency,
-        receipt,
-        notes
-      }),
+      body: JSON.stringify(payload),
     });
 
     if (!response.ok) {
