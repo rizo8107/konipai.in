@@ -85,15 +85,18 @@ export function CartCrossSell({ onClose }: CartCrossSellProps) {
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {crossSellProducts.map((product) => (
-            <div key={product.id} className="flex flex-col gap-2 border rounded-lg p-2">
-              <div className="relative aspect-square overflow-hidden bg-gray-100 rounded-md">
+            <div 
+              key={product.id} 
+              className="flex gap-3 border rounded-lg p-3 hover:shadow-md transition-shadow bg-white"
+            >
+              <div className="relative w-24 h-24 overflow-hidden bg-gray-100 rounded-md group flex-shrink-0">
                 {product.images && product.images[0] ? (
                   <ProductImage
                     url={product.images[0]}
                     alt={product.name}
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
                   />
                 ) : (
                   <div className="w-full h-full bg-gray-200 flex items-center justify-center text-gray-400">
@@ -102,23 +105,23 @@ export function CartCrossSell({ onClose }: CartCrossSellProps) {
                 )}
               </div>
               
-              <div className="flex-1">
+              <div className="flex-1 flex flex-col justify-between min-w-0">
                 <Link
                   to={`/product/${product.id}`}
-                  className="text-sm font-medium hover:text-primary line-clamp-2"
+                  className="text-sm font-medium hover:text-primary line-clamp-2 hover:underline"
                   onClick={onClose}
                 >
                   {product.name}
                 </Link>
-                <div className="flex items-center justify-between mt-1">
-                  <div className="flex items-center gap-1">
+                <div className="flex flex-col gap-2">
+                  <div className="flex flex-wrap items-center gap-1">
                     <span className="text-sm font-medium">₹{product.price.toFixed(2)}</span>
                     {product.original_price && product.original_price > product.price && (
                       <>
                         <span className="text-xs text-gray-500 line-through">
                           ₹{product.original_price.toFixed(2)}
                         </span>
-                        <span className="text-xs bg-red-100 text-red-700 px-1 py-0.5 rounded-sm">
+                        <span className="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded">
                           {Math.round((1 - product.price / product.original_price) * 100)}%
                         </span>
                       </>
@@ -127,7 +130,7 @@ export function CartCrossSell({ onClose }: CartCrossSellProps) {
                   <Button 
                     size="sm" 
                     variant="outline"
-                    className="h-8 text-xs"
+                    className="h-8 text-xs w-full whitespace-nowrap"
                     onClick={() => handleAddToCart(product)}
                   >
                     Add to Cart

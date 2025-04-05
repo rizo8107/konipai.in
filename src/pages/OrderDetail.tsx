@@ -312,10 +312,10 @@ export default function OrderDetail() {
                         <div className="flex items-center gap-3">
                           {/* Product Image - Direct from Backend */}
                           <div className="w-16 h-16 rounded overflow-hidden bg-muted">
-                            {item.product?.images && item.product.images[0] ? (
+                            {item.product?.images?.[0] ? (
                               <img 
                                 src={`${import.meta.env.VITE_POCKETBASE_URL.replace(/\/$/, '')}/api/files/pbc_4092854851/${item.product.id}/${item.product.images[0].split('/').pop()}`} 
-                                alt={item.product.name || 'Product'} 
+                                alt={item.product?.name || 'Product'} 
                                 className="w-full h-full object-cover"
                                 loading="eager"
                                 crossOrigin="anonymous"
@@ -332,15 +332,17 @@ export default function OrderDetail() {
                             )}
                           </div>
                           <div>
-                            <div className="font-medium">{item.product.name}</div>
+                            <div className="font-medium">{item.product?.name || 'Product Not Found'}</div>
                             <div className="text-sm text-muted-foreground">
                               Qty: {item.quantity} {item.color && `• ${item.color}`}
                             </div>
-                            <div className="text-sm">{formatCurrency(item.product.price)} each</div>
+                            <div className="text-sm">
+                              {item.product?.price ? formatCurrency(item.product.price) : 'Price not available'} each
+                            </div>
                           </div>
                         </div>
                         <div className="font-medium">
-                          {formatCurrency(item.product.price * item.quantity)}
+                          {item.product?.price && item.quantity ? formatCurrency(item.product.price * item.quantity) : 'N/A'}
                         </div>
                       </div>
                     ))}

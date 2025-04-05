@@ -10,19 +10,7 @@ import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ShoppingBag, PackageOpen, AlertCircle, ArrowRight, Clock, Check, AlertTriangle, Package, MapPin } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
-
-// Add image optimization utility with format fallback
-const getOptimizedImageUrl = (collectionId: string, recordId: string, filename: string) => {
-  const baseUrl = import.meta.env.VITE_POCKETBASE_URL.replace(/\/$/, '');
-  // Try to detect image format from filename
-  const format = filename.split('.').pop()?.toLowerCase() || '';
-  const supportedFormats = ['webp', 'jpg', 'jpeg', 'png'];
-  
-  // If format is supported, use it; otherwise default to original
-  const useFormat = supportedFormats.includes(format) ? format : 'original';
-  
-  return `${baseUrl}/api/files/${collectionId}/${recordId}/${filename}${useFormat === 'original' ? '' : `?thumb=100x100&format=${useFormat}&quality=80`}`;
-};
+import { ProductImage } from '@/components/ProductImage';
 
 // Add placeholder image constant
 const PLACEHOLDER_IMAGE = '/placeholder.svg';
@@ -250,14 +238,12 @@ export default function Orders() {
   if (error) {
     return (
       <div className="container py-10">
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-10">
-            <AlertCircle className="h-12 w-12 text-destructive mb-4" />
-            <h2 className="text-xl font-semibold mb-2">Error Loading Orders</h2>
-            <p className="text-muted-foreground mb-6">{error}</p>
-            <Button onClick={fetchOrders}>Try Again</Button>
-          </CardContent>
-        </Card>
+        <div className="flex flex-col items-center justify-center text-center">
+          <AlertCircle className="h-10 w-10 text-red-500 mb-4" />
+          <h2 className="text-xl font-semibold mb-2">Unable to Load Orders</h2>
+          <p className="text-gray-600 mb-4">{error}</p>
+          <Button onClick={fetchOrders}>Try Again</Button>
+        </div>
       </div>
     );
   }
@@ -268,165 +254,172 @@ export default function Orders() {
       <div className="container py-10">
         <h1 className="text-2xl font-bold mb-6">My Orders</h1>
         <Card>
-          <CardContent className="flex flex-col items-center justify-center py-10">
-            <ShoppingBag className="h-12 w-12 text-muted-foreground mb-4" />
+          <CardContent className="flex flex-col items-center justify-center py-10 text-center">
+            <ShoppingBag className="h-12 w-12 text-gray-400 mb-4" />
             <h2 className="text-xl font-semibold mb-2">No Orders Yet</h2>
-            <p className="text-muted-foreground mb-6">You haven't placed any orders yet.</p>
-            <Button asChild>
-              <Link to="/shop">Start Shopping</Link>
-            </Button>
+            <p className="text-gray-600 mb-4">Start shopping to create your first order</p>
+            <Link to="/shop">
+              <Button>
+                Browse Products
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            </Link>
           </CardContent>
         </Card>
       </div>
     );
   }
 
-  // Render orders
+  // Helper function to parse products
+  const parseProducts = (products: Order['products']): OrderProduct[] => {
+    if (typeof products === 'string') {
+      try {
+        return JSON.parse(products);
+      } catch (e) {
+        console.error('Error parsing products:', e);
+        return [];
+      }
+    }
+    return products as OrderProduct[];
+  };
+
   return (
     <div className="container py-10">
       <h1 className="text-2xl font-bold mb-6">My Orders</h1>
       <div className="space-y-6">
         {orders.map((order) => {
-          // Parse products data
-          let products: OrderProduct[] = [];
-          try {
-            if (typeof order.products === 'string') {
-              products = JSON.parse(order.products);
-            } else {
-              products = order.products as OrderProduct[];
-            }
-          } catch (err) {
-            products = [];
-          }
-
-          // Safely parse the date with validation
-          let orderDate = new Date();
-          try {
-            const parsedDate = new Date(order.created);
-            if (isValid(parsedDate)) {
-              orderDate = parsedDate;
-            }
-          } catch (err) {
-            console.error('Invalid date format:', order.created);
-            // Keep default current date if parsing fails
-          }
+          const orderProducts = parseProducts(order.products);
           
           return (
             <Card key={order.id}>
-              <CardHeader className="bg-muted/50 py-3">
-                <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-2">
+              <CardHeader>
+                <div className="flex items-center justify-between">
                   <div>
-                    <CardTitle className="text-base flex items-center gap-2">
-                      Order #{order.id}
-                      {order.payment_id && (
-                        <span className="text-xs text-muted-foreground">
-                          Payment: {order.payment_id}
-                        </span>
-                      )}
-                    </CardTitle>
-                    <CardDescription className="text-xs">
-                      {format(orderDate, 'PPP')}
+                    <Link to={`/orders/${order.id}`} className="hover:underline">
+                      <CardTitle className="text-lg">
+                        Order #{order.id.slice(-8)}
+                      </CardTitle>
+                    </Link>
+                    <CardDescription>
+                      {isValid(new Date(order.created))
+                        ? format(new Date(order.created), 'PPP')
+                        : 'Invalid Date'}
                     </CardDescription>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Badge variant={getStatusBadgeVariant(order.status)}>
+                    <Badge variant={getStatusBadgeVariant(order.status)} className="ml-2">
                       <span className="flex items-center gap-1">
                         {getStatusIcon(order.status)}
                         {getStatusLabel(order.status)}
                       </span>
                     </Badge>
-                    <Badge variant="outline">
-                      {order.payment_status.charAt(0).toUpperCase() + order.payment_status.slice(1)}
-                    </Badge>
+                    {order.payment_status && (
+                      <Badge variant="outline">
+                        {order.payment_status.charAt(0).toUpperCase() + order.payment_status.slice(1)}
+                      </Badge>
+                    )}
                   </div>
                 </div>
               </CardHeader>
-              <CardContent className="py-3">
-                <div className="space-y-2">
-                  {products.slice(0, 2).map((item, index) => (
-                    <div key={index} className="flex justify-between items-center">
-                      <div className="flex items-center gap-2">
-                        {/* Optimized Product Image with better error handling */}
-                        <div className="w-10 h-10 rounded overflow-hidden bg-muted">
-                          {item.product?.images && item.product.images[0] ? (
-                            <img 
-                              src={getOptimizedImageUrl('pbc_4092854851', item.product.id, item.product.images[0].split('/').pop() || '')}
-                              alt={item.product.name || 'Product'} 
-                              className="w-full h-full object-cover"
-                              loading="lazy"
-                              width={40}
-                              height={40}
-                              crossOrigin="anonymous"
-                              onError={(e) => {
-                                console.error('Image load error, trying original format');
-                                const target = e.currentTarget;
-                                const originalSrc = target.src;
-                                
-                                // If not already using original format, try it
-                                if (originalSrc.includes('?thumb=')) {
-                                  const baseUrl = originalSrc.split('?')[0];
-                                  target.src = baseUrl;
-                                } else {
-                                  // If original format also fails, use placeholder
-                                  console.error('Original format failed, using placeholder');
-                                  target.src = PLACEHOLDER_IMAGE;
-                                  target.onerror = null; // Prevent infinite loop
-                                }
-                              }}
+              <CardContent>
+                <div className="space-y-4">
+                  {/* Products */}
+                  <div className="space-y-3">
+                    {orderProducts.map((item, index) => (
+                      <div key={`${item.productId}-${index}`} className="flex items-center gap-4">
+                        <div className="relative h-16 w-16 overflow-hidden rounded-md border">
+                          {item.product?.images?.[0] ? (
+                            <ProductImage
+                              url={Array.isArray(item.product.images) 
+                                ? item.product.images[0] 
+                                : typeof item.product.images === 'string'
+                                  ? item.product.images 
+                                  : ''}
+                              alt={item.product?.name || 'Product image'}
+                              className="h-full w-full object-cover"
+                              size="thumbnail"
+                              aspectRatio="square"
+                              priority={false}
                             />
                           ) : (
-                            <div className="w-full h-full flex items-center justify-center bg-muted">
-                              <Package className="h-5 w-5 text-muted-foreground" />
+                            <div className="flex h-full w-full items-center justify-center bg-gray-100">
+                              <PackageOpen className="h-8 w-8 text-gray-400" />
                             </div>
                           )}
                         </div>
-                        <div>
-                          <div className="font-medium text-sm">{item.product.name}</div>
-                          <div className="text-xs text-muted-foreground">
-                            Qty: {item.quantity} {item.color && `• ${item.color}`}
+                        <div className="flex-1 space-y-1">
+                          <h3 className="font-medium">
+                            {item.product?.name || 'Product Not Found'}
+                          </h3>
+                          <div className="text-sm text-gray-500">
+                            <span>Qty: {item.quantity}</span>
+                            {item.color && (
+                              <>
+                                <span className="ml-2 text-gray-400">|</span>
+                                <span className="ml-2">{item.color}</span>
+                              </>
+                            )}
+                          </div>
+                          <div className="text-sm font-medium">
+                            ₹{(item.product?.price && item.quantity) 
+                              ? (item.product.price * item.quantity).toFixed(2) 
+                              : '0.00'}
                           </div>
                         </div>
                       </div>
-                      <div className="font-medium text-sm">
-                        {formatCurrency(item.product.price * item.quantity)}
-                      </div>
+                    ))}
+                  </div>
+
+                  <Separator />
+
+                  {/* Order Summary */}
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-500">Subtotal</span>
+                      <span>₹{(typeof order.subtotal === 'number') ? order.subtotal.toFixed(2) : '0.00'}</span>
                     </div>
-                  ))}
-                  {products.length > 2 && (
-                    <div className="text-xs text-muted-foreground">
-                      +{products.length - 2} more items
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-500">Shipping</span>
+                      <span>₹{(typeof order.shipping_cost === 'number') ? order.shipping_cost.toFixed(2) : '0.00'}</span>
+                    </div>
+                    <div className="flex justify-between font-medium">
+                      <span>Total</span>
+                      <span>₹{(typeof order.total === 'number') ? order.total.toFixed(2) : '0.00'}</span>
+                    </div>
+                  </div>
+
+                  {/* Shipping Address */}
+                  {order.expand?.shippingAddress && (
+                    <div className="mt-4 rounded-lg bg-gray-50 p-4">
+                      <div className="flex items-center gap-2 mb-2 text-sm font-medium text-gray-700">
+                        <MapPin className="h-4 w-4" />
+                        Shipping Address
+                      </div>
+                      <div className="text-sm text-gray-600">
+                        <p>{order.expand.shippingAddress.street}</p>
+                        <p>
+                          {order.expand.shippingAddress.city}, {order.expand.shippingAddress.state} {order.expand.shippingAddress.postalCode}
+                        </p>
+                        <p>{order.expand.shippingAddress.country}</p>
+                        {order.expand.shippingAddress.phone && (
+                          <p className="mt-1">Phone: {order.expand.shippingAddress.phone}</p>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
               </CardContent>
-              <CardFooter className="bg-muted/30 flex justify-between">
+              <CardFooter className="bg-muted/30 flex justify-between items-center">
                 <div className="text-sm text-muted-foreground">
                   {order.payment_id && (
-                    <p>Payment ID: {order.payment_id}</p>
+                    <span>Payment ID: {order.payment_id}</span>
                   )}
                 </div>
-                
-                {/* Shipping Address */}
-                {order.expand?.shippingAddress && (
-                  <div className="mt-2">
-                    <div className="flex items-start gap-2">
-                      <MapPin className="h-3.5 w-3.5 text-muted-foreground mt-0.5" />
-                      <div className="text-xs text-muted-foreground">
-                        {order.expand.shippingAddress.street}, {order.expand.shippingAddress.city}, {order.expand.shippingAddress.state} {order.expand.shippingAddress.postalCode}
-                      </div>
-                    </div>
-                  </div>
-                )}
-                
-                <Separator className="my-2" />
-                <div className="flex justify-between font-medium text-sm">
-                  <span>Total</span>
-                  <span>{formatCurrency(order.total)}</span>
-                </div>
-              </CardFooter>
-              <CardFooter className="bg-muted/30 py-2">
-                <Button asChild variant="secondary" size="sm" className="ml-auto">
-                  <Link to={`/orders/${order.id}`}>View Details</Link>
+                <Button variant="outline" size="sm" asChild>
+                  <Link to={`/orders/${order.id}`}>
+                    View Details
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Link>
                 </Button>
               </CardFooter>
             </Card>
