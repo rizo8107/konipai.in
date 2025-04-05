@@ -4,6 +4,9 @@ const imageUrlCache = new Map<string, string>();
 // Track which images have been preloaded to avoid duplicates
 const preloadedImages = new Set<string>();
 
+// Track failed image URLs to avoid retrying them
+const failedImages = new Set<string>();
+
 // Default size optimizations for different screen sizes
 export type ImageSize = "thumbnail" | "small" | "medium" | "large" | "original";
 export type ImageFormat = "avif" | "webp" | "jpeg" | "png" | "original";
@@ -12,6 +15,13 @@ interface ImageSizeConfig {
   width: number;
   height?: number;
   quality: number;
+}
+
+// Source interface for responsive images
+export interface SourceProps {
+  srcSet: string;
+  media: string;
+  type: string;
 }
 
 const IMAGE_SIZES: Record<ImageSize, ImageSizeConfig> = {
@@ -30,22 +40,53 @@ interface ImageDimensions {
 }
 const imageDimensionCache = new Map<string, ImageDimensions>();
 
+// Default fallback image paths
+const FALLBACK_IMAGE = '/placeholder-product.svg';
+
+/**
+ * Validates an image URL structure
+ * @param url - Image URL to validate
+ * @returns boolean indicating if the URL has valid structure
+ */
+export function isValidImageUrl(url: string): boolean {
+  if (!url || typeof url !== 'string') return false;
+  
+  // Check if it's an absolute URL (starts with http or /)
+  if (url.startsWith('http') || url.startsWith('/')) {
+    return true;
+  }
+  
+  // Check if it has the expected recordId/filename format
+  const parts = url.split('/');
+  return parts.length === 2 && !!parts[0] && !!parts[1];
+}
+
 /**
  * Builds and caches PocketBase image URLs with optimization parameters
+ * Uses the local Nginx proxy for better caching and performance
+ * 
  * @param url - The partial URL (recordId/filename format)
  * @param collection - The PocketBase collection name
  * @param size - The desired image size preset
  * @param format - The desired image format (avif is recommended for best compression)
- * @param baseUrl - The base URL for the PocketBase instance
  * @returns The full image URL with optimization parameters
  */
 export function getPocketBaseImageUrl(
   url: string,
   collection: string,
   size: ImageSize = "medium",
-  format: ImageFormat = "avif",
-  baseUrl: string = 'https://backend-pocketbase.7za6uc.easypanel.host'
+  format: ImageFormat = "avif"
 ): string {
+  // Handle invalid or missing URLs
+  if (!url) {
+    return FALLBACK_IMAGE;
+  }
+  
+  // Check if this URL previously failed to load
+  if (failedImages.has(url)) {
+    return FALLBACK_IMAGE;
+  }
+  
   // Create a cache key that includes size and format
   const cacheKey = `${url}-${size}-${format}`;
   
@@ -56,16 +97,26 @@ export function getPocketBaseImageUrl(
 
   // Process the URL
   try {
+    // Handle direct/absolute URLs
+    if (url.startsWith('http') || url.startsWith('/')) {
+      imageUrlCache.set(cacheKey, url);
+      return url;
+    }
+    
+    // Process PocketBase image URL
     const [recordId, filename] = url.split('/');
     if (!recordId || !filename) {
       throw new Error('Invalid image URL format');
     }
 
-    // Build base URL
-    let fullUrl = `${baseUrl.replace(/\/$/, '')}/api/files/${collection}/${recordId}/${filename}`;
+    // Use direct PocketBase URL as fallback if Nginx proxying fails
+    const pocketbaseUrl = import.meta.env.VITE_POCKETBASE_URL || 'https://backend-pocketbase.7za6uc.easypanel.host';
+    
+    // First try to use local Nginx proxy for better caching and performance
+    let fullUrl = `/api/files/${collection}/${recordId}/${filename}`;
     
     // Add optimization parameters if not original format
-    if (format !== "original") {
+    if (size !== 'original' && format !== "original") {
       const sizeConfig = IMAGE_SIZES[size];
       const params = new URLSearchParams();
       
@@ -78,7 +129,7 @@ export function getPocketBaseImageUrl(
       params.append('quality', sizeConfig.quality.toString());
       
       // Add cache control hints to maximize caching
-      const cacheVersion = '2'; // Increment this when image processing changes
+      const cacheVersion = '4'; // Increment this when image processing changes
       params.append('v', `${cacheVersion}-${size}-${format}`);
       
       if (params.toString()) {
@@ -91,9 +142,19 @@ export function getPocketBaseImageUrl(
     
     return fullUrl;
   } catch (error) {
-    console.error('Error processing image URL:', error);
-    return '';
+    console.error('Error processing image URL:', error, url);
+    // Store in failed images set
+    failedImages.add(url);
+    return FALLBACK_IMAGE;
   }
+}
+
+/**
+ * Mark an image URL as failed to prevent further loading attempts
+ * @param url - The URL that failed to load
+ */
+export function markImageAsFailed(url: string): void {
+  failedImages.add(url);
 }
 
 /**
@@ -102,25 +163,15 @@ export function getPocketBaseImageUrl(
  * @param collection - The PocketBase collection name
  * @returns Array of source objects for use with picture element
  */
-export function getResponsiveImageSources(url: string, collection: string) {
-  return [
-    // AVIF sources for browsers with best support (smallest file size)
-    {
-      srcSet: getPocketBaseImageUrl(url, collection, "small", "avif"),
-      media: "(max-width: 640px)",
-      type: "image/avif"
-    },
-    {
-      srcSet: getPocketBaseImageUrl(url, collection, "medium", "avif"),
-      media: "(max-width: 1024px)",
-      type: "image/avif"
-    },
-    {
-      srcSet: getPocketBaseImageUrl(url, collection, "large", "avif"),
-      media: "(min-width: 1025px)",
-      type: "image/avif"
-    },
-    // WebP sources for browsers that don't support AVIF
+export function getResponsiveImageSources(url: string, collection: string): SourceProps[] {
+  // Handle invalid URLs
+  if (!isValidImageUrl(url)) {
+    return [];
+  }
+  
+  // Generate sources for each format and size
+  const sources = [
+    // WebP sources for best browser support
     {
       srcSet: getPocketBaseImageUrl(url, collection, "small", "webp"),
       media: "(max-width: 640px)",
@@ -136,7 +187,7 @@ export function getResponsiveImageSources(url: string, collection: string) {
       media: "(min-width: 1025px)",
       type: "image/webp"
     },
-    // Fallback JPEG sources for older browsers
+    // JPEG fallback for maximum compatibility
     {
       srcSet: getPocketBaseImageUrl(url, collection, "small", "jpeg"),
       media: "(max-width: 640px)",
@@ -153,6 +204,9 @@ export function getResponsiveImageSources(url: string, collection: string) {
       type: "image/jpeg"
     }
   ];
+  
+  // Filter out any fallback images
+  return sources.filter(source => source.srcSet !== FALLBACK_IMAGE);
 }
 
 /**
@@ -192,50 +246,32 @@ export function preloadImages(
     
     activePreloads++;
     
-    // For better browser support, use WebP as the default preload format
-    // AVIF support is still not universal
+    // Use WebP as the default preload format for better browser support
     const imageUrl = getPocketBaseImageUrl(url, collection, size, "webp");
     
-    if (imageUrl) {
-      // For high priority, create a preload link for the browser to discover it
-      if (highPriority) {
-        const link = document.createElement('link');
-        link.rel = 'preload';
-        link.as = 'image';
-        link.href = imageUrl;
-        link.type = 'image/webp';
-        link.setAttribute('fetchpriority', 'high');
-        document.head.appendChild(link);
-      }
+    if (imageUrl && imageUrl !== FALLBACK_IMAGE) {
+      // Mark as preloaded to avoid duplicating work
+      preloadedImages.add(cacheKey);
       
-      // Use requestIdleCallback for non-critical images
-      if (!highPriority && 'requestIdleCallback' in window) {
-        requestIdleCallback(() => {
-          const img = new Image();
-          img.onload = img.onerror = () => {
-            activePreloads--;
-            processQueue();
-          };
-          img.src = imageUrl;
-          preloadedImages.add(cacheKey);
-        });
-      } else {
-        // Fallback or high priority images
-        const img = new Image();
-        img.onload = img.onerror = () => {
-          activePreloads--;
-          processQueue();
-        };
-        img.src = imageUrl;
-        preloadedImages.add(cacheKey);
-      }
+      const img = new Image();
+      img.src = imageUrl;
+      img.onload = () => {
+        activePreloads--;
+        processQueue();
+      };
+      img.onerror = () => {
+        // Mark as failed to avoid retrying later
+        markImageAsFailed(url);
+        activePreloads--;
+        processQueue();
+      };
     } else {
       activePreloads--;
       processQueue();
     }
   };
   
-  // Start initial batch of preloads
+  // Start processing the queue
   for (let i = 0; i < maxParallelPreloads; i++) {
     processQueue();
   }

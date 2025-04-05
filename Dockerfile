@@ -6,15 +6,18 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Clean install dependencies
+# Install dependencies
 RUN npm cache clean --force && \
-    npm ci --production=false
+    npm install
 
 # Copy source code
 COPY . .
 
-# Build the application
-RUN npm run build
+# Set memory limit and build the application
+ENV NODE_OPTIONS="--max-old-space-size=2048"
+ENV EASYPANEL_BUILD="true"
+ENV SKIP_IMAGE_OPTIMIZATION="true"
+RUN npm run build:easypanel
 
 # Production stage
 FROM nginx:alpine
