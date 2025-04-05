@@ -472,16 +472,23 @@ export default function CheckoutPage() {
       // Track successful payment
       trackPaymentSuccess(orderId, calculateFinalTotal().finalTotal, 'Razorpay', 'Online');
       
+      console.log('Payment processed successfully - preparing to navigate to confirmation page');
+      console.log(`Navigation target: /order-confirmation/${orderId}?status=success`);
+      
       // Clear cart after successful payment
       clearCart();
+      console.log('Cart cleared');
 
-      // Navigate to success page
-      navigate(`/order-confirmation/${orderId}?status=success`);
-      
-      toast({
-        title: "Payment Successful!",
-        description: "Your order has been confirmed.",
-      });
+      // Make sure we wait a moment for state updates before navigating
+      setTimeout(() => {
+        console.log('Navigating to confirmation page...');
+        navigate(`/order-confirmation/${orderId}?status=success`);
+        
+        toast({
+          title: "Payment Successful!",
+          description: "Your order has been confirmed.",
+        });
+      }, 100);
 
     } catch (error) {
       console.error('Payment processing error:', error);

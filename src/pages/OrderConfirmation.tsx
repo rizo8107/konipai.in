@@ -94,13 +94,15 @@ export default function OrderConfirmation() {
         console.log(`Fetching order details for order ID: ${orderId}`);
         
         const orderData = await pocketbase.collection('orders').getOne(orderId, {
-          expand: 'user'
+          expand: 'user,shipping_address'
         });
         
         console.log('Fetched order data:', {
           id: orderData.id,
           status: orderData.status,
           payment_status: orderData.payment_status,
+          payment_id: orderData.payment_id,
+          has_shipping_address: !!orderData.expand?.shipping_address,
           has_shipping_address_text: !!orderData.shipping_address_text
         });
         
@@ -224,7 +226,15 @@ export default function OrderConfirmation() {
   }
 
   const shippingAddress = order.expand?.shipping_address;
-  const isPaid = order.payment_status === 'paid';
+  
+  // Check for any of the valid "paid" payment statuses
+  const isPaid = ['paid', 'captured', 'authorized'].includes(order.payment_status);
+  
+  console.log('Payment status check:', {
+    status: order.payment_status,
+    isPaid: isPaid,
+    paymentId: order.payment_id
+  });
 
   return (
     <div className="container max-w-2xl mx-auto py-8 px-4">
