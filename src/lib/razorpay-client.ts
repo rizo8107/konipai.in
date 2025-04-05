@@ -83,6 +83,7 @@ export async function createRazorpayOrder(
     
     // Convert amount to paise if it's not already (Razorpay expects amount in smallest currency unit)
     const amountInPaise = Math.round(amount * 100);
+    console.log(`Amount: ₹${amount} converted to ${amountInPaise} paise`);
     
     // Use fetch with the CRM Supabase endpoint
     const response = await fetch(CRM_ORDER_ENDPOINT, {

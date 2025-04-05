@@ -755,12 +755,14 @@ export default function CheckoutPage() {
       appliedCoupon?.code
     );
     
-    // Create Razorpay order
+    console.log(`Creating Razorpay order for total amount: ₹${order.total}`);
     const razorpayOrderResponse = await createRazorpayOrder(
       order.total, // amount in INR with coupon discount applied
       'INR',  // currency
       order.id // receipt (using our order ID)
     );
+    
+    console.log('Razorpay order response:', razorpayOrderResponse);
 
     if (!razorpayOrderResponse || !razorpayOrderResponse.id) {
       trackPaymentFailure(order.id, order.total, 'Razorpay', 'Failed to create payment order');
@@ -774,7 +776,7 @@ export default function CheckoutPage() {
     openRazorpayCheckout({
       key: getRazorpayKeyId(),
       order_id: razorpayOrderResponse.id,
-      amount: order.total * 100, // Razorpay expects amount in paise
+      amount: razorpayOrderResponse.amount, // Amount is already in paise from the order response
       currency: 'INR',
       name: 'Konipai',
       description: `Order #${order.id}`,
