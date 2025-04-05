@@ -89,7 +89,6 @@ export default function CheckoutPage() {
   const [couponLoading, setCouponLoading] = useState(false);
   const [couponError, setCouponError] = useState<string | null>(null);
   const [errors, setErrors] = useState<{ [key: string]: string | null }>({});
-  const [orderError, setOrderError] = useState<string | null>(null);
 
   // Check for live mode
   const isLiveMode = import.meta.env.VITE_RAZORPAY_KEY_ID?.startsWith('rzp_live') || false;
@@ -134,52 +133,55 @@ export default function CheckoutPage() {
     if (items && items.length > 0) {
       trackBeginCheckout(cartItemsToProductItems(items), subtotal);
     }
-    
-    // Load user's address if available
-    loadUserAddress();
-    
-    // Track form start
-    trackFormStart('checkout', 'checkout-form');
-    
   }, [user, items, cartLoading, navigate, toast, subtotal]);
 
-  // Load user's default address if available
-  const loadUserAddress = async () => {
-    if (!user?.id) return;
-    
-    try {
-      const addresses = await pocketbase
-        .collection('addresses')
-        .getList(1, 10, {
-          filter: `user="${user.id}" && isDefault=true`,
-        });
-      
-      if (addresses && addresses.items.length > 0) {
-        const defaultAddress = addresses.items[0];
-        
+  // Load user address when available
+  useEffect(() => {
+    const loadUserAddress = async () => {
+      if (!user?.id) return;
+
+      try {
+        // Update form with user data including phone number
         setFormData(prev => ({
           ...prev,
-          address: defaultAddress.street || '',
-          city: defaultAddress.city || '',
-          state: defaultAddress.state || '',
-          zipCode: defaultAddress.postalCode || '',
-          phone: defaultAddress.phone || prev.phone || '',
+          name: user.name || '',
+          email: user.email || '',
+          phone: user.phone || '' // Use user's phone number
         }));
+
+        // Attempt to load default address
+        const addressRecords = await pocketbase.collection('addresses').getList(1, 1, {
+          filter: `user="${user.id}" && isDefault=true`
+        });
+
+        if (addressRecords.items.length > 0) {
+          const defaultAddress = addressRecords.items[0];
+          setFormData(prev => ({
+            ...prev,
+            address: defaultAddress.street || '',
+            city: defaultAddress.city || '',
+            state: defaultAddress.state || '',
+            zipCode: defaultAddress.postalCode || '',
+            // If the address has a phone and user doesn't, use it
+            phone: prev.phone || defaultAddress.phone || '' 
+          }));
+        }
+      } catch (error) {
+        console.error('Failed to load user address:', error);
       }
-    } catch (error) {
-      console.warn('Failed to load user address:', error);
-      // Non-critical error, don't show to user
-    }
-  };
+    };
+
+    loadUserAddress();
+  }, [user]);
 
   // Helper function to convert cart items to product items for analytics
   const cartItemsToProductItems = (items: any[]): ProductItem[] => {
     return items.map(item => ({
       item_id: item.productId,
       item_name: item.product.name,
-      price: Number(item.product.price) || 0,
+      price: item.product.price,
       quantity: item.quantity,
-      item_variant: item.color || undefined
+      item_variant: item.color || undefined,
     }));
   };
 
@@ -195,111 +197,102 @@ export default function CheckoutPage() {
   };
 
   // Coupon validation function
-  const validateCouponInFrontend = (code: string, currentSubtotal: number) => {
-    // This is a simplified frontend validation
-    // In a real app, you'd validate this server-side
-    
-    // For demo purposes, we'll use some hardcoded coupons
-    const validCoupons = [
-      {
-        id: 'welcome10',
-        code: 'WELCOME10',
-        type: 'percentage' as const,
-        amount: 10,
-        minOrderValue: 0,
-        maxDiscountAmount: 1000,
-      },
-      {
-        id: 'summer20',
-        code: 'SUMMER20',
-        type: 'percentage' as const,
-        amount: 20,
-        minOrderValue: 100,
-        maxDiscountAmount: 500,
-      },
-      {
-        id: 'flat50',
-        code: 'FLAT50',
-        type: 'fixed_amount' as const,
-        amount: 50,
-        minOrderValue: 200,
-      }
-    ];
-    
-    const coupon = validCoupons.find(c => c.code === code.toUpperCase());
-    
-    if (!coupon) {
-      return {
-        valid: false,
-        error: 'Invalid coupon code'
-      };
-    }
-    
-    if (coupon.minOrderValue > currentSubtotal) {
-      return {
-        valid: false,
-        error: `This coupon requires a minimum order of ₹${coupon.minOrderValue}`
-      };
-    }
-    
-    let discountAmount = 0;
-    
-    if (coupon.type === 'percentage') {
-      discountAmount = (currentSubtotal * coupon.amount) / 100;
+  const validateCouponInFrontend = async (code: string, currentSubtotal: number) => {
+    // This would typically call your backend to validate the coupon
+    try {
+      const couponsCollection = await pocketbase.collection('coupons').getList(1, 10, {
+        filter: `code="${code}" && active=true`
+      });
       
-      // Apply max discount cap if exists
-      if (coupon.maxDiscountAmount && discountAmount > coupon.maxDiscountAmount) {
-        discountAmount = coupon.maxDiscountAmount;
+      if (couponsCollection.items.length === 0) {
+        return { valid: false, error: 'Invalid coupon code' };
       }
-    } else {
-      discountAmount = coupon.amount;
+      
+      const coupon = couponsCollection.items[0];
+      
+      // Check if the coupon has expired
+      if (coupon.expiry && new Date(coupon.expiry) < new Date()) {
+        return { valid: false, error: 'This coupon has expired' };
+      }
+      
+      // Check minimum order value if specified
+      if (coupon.min_order_value && currentSubtotal < coupon.min_order_value) {
+        return { 
+          valid: false, 
+          error: `This coupon requires a minimum order of ₹${coupon.min_order_value.toFixed(2)}` 
+        };
+      }
+      
+      // Calculate discount
+      let discountAmount = 0;
+      if (coupon.type === 'percentage') {
+        discountAmount = (currentSubtotal * coupon.amount) / 100;
+        // Apply maximum discount if specified
+        if (coupon.max_discount && discountAmount > coupon.max_discount) {
+          discountAmount = coupon.max_discount;
+        }
+      } else {
+        // Fixed amount discount
+        discountAmount = coupon.amount;
+        // Ensure discount doesn't exceed subtotal
+        if (discountAmount > currentSubtotal) {
+          discountAmount = currentSubtotal;
+        }
+      }
+      
+      return { 
+        valid: true, 
+        couponData: {
+          couponId: coupon.id,
+          code: coupon.code,
+          type: coupon.type,
+          amount: coupon.amount,
+          discountAmount
+        }
+      };
+    } catch (error) {
+      console.error('Error validating coupon:', error);
+      return { valid: false, error: 'Failed to validate coupon' };
     }
-    
-    return {
-      valid: true,
-      coupon: {
-        couponId: coupon.id,
-        code: coupon.code,
-        type: coupon.type,
-        amount: coupon.amount,
-        discountAmount: discountAmount
-      }
-    };
   };
 
   // Apply coupon handler
-  const applyCoupon = () => {
+  const applyCoupon = async () => {
     if (!couponCode.trim()) {
       setCouponError('Please enter a coupon code');
+      return;
+    }
+    
+    if (appliedCoupon) {
+      setCouponError('A coupon is already applied');
       return;
     }
     
     setCouponLoading(true);
     setCouponError(null);
     
-    // Simulate API call with timeout
-    setTimeout(() => {
-      const result = validateCouponInFrontend(couponCode, subtotal);
+    try {
+      const result = await validateCouponInFrontend(couponCode, subtotal);
       
-      if (result.valid && result.coupon) {
-        setAppliedCoupon(result.coupon);
-        
-        toast({
-          title: 'Coupon Applied',
-          description: `Discount of ₹${result.coupon.discountAmount.toFixed(2)} applied to your order.`,
-        });
-        
-        // Track coupon application
-        trackEcommerceEvent('add_coupon', [{
-          coupon: result.coupon.code,
-          discount: result.coupon.discountAmount
-        }]);
-      } else {
+      if (!result.valid) {
         setCouponError(result.error || 'Invalid coupon');
+        setAppliedCoupon(null);
+        return;
       }
       
+      if (result.couponData) {
+        setAppliedCoupon(result.couponData);
+        toast({
+          title: 'Coupon Applied',
+          description: `Discount of ₹${result.couponData.discountAmount.toFixed(2)} applied to your order.`,
+        });
+      }
+    } catch (error) {
+      console.error('Error applying coupon:', error);
+      setCouponError('Failed to apply coupon');
+    } finally {
       setCouponLoading(false);
-    }, 800);
+    }
   };
 
   // Remove coupon handler
@@ -307,34 +300,32 @@ export default function CheckoutPage() {
     setAppliedCoupon(null);
     setCouponCode('');
     setCouponError(null);
-    
     toast({
       title: 'Coupon Removed',
-      description: 'The coupon has been removed from your order.',
+      description: 'Coupon has been removed from your order.'
     });
   };
 
   // Calculate final total
   const calculateFinalTotal = () => {
-    // Calculate shipping cost (free over threshold)
-    const SHIPPING_THRESHOLD = 100;
-    const SHIPPING_COST = 10;
-    
-    const calculatedShippingCost = subtotal >= SHIPPING_THRESHOLD ? 0 : SHIPPING_COST;
-    
-    // Calculate discount amount
+    let finalSubtotal = subtotal;
     let discountAmount = 0;
+    
+    // Apply free shipping for orders over ₹100
+    const calculatedShippingCost = subtotal >= 100 ? 0 : 10;
+    
+    // Apply coupon discount if available
     if (appliedCoupon) {
       discountAmount = appliedCoupon.discountAmount;
+      finalSubtotal = Math.max(0, finalSubtotal - discountAmount);
     }
     
-    // Calculate final total
-    const finalTotal = subtotal + calculatedShippingCost - discountAmount;
+    const finalTotal = finalSubtotal + calculatedShippingCost;
     
     return {
       calculatedShippingCost,
       discountAmount,
-      finalTotal: Math.max(0, finalTotal) // Ensure total is not negative
+      finalTotal
     };
   };
 
@@ -345,11 +336,11 @@ export default function CheckoutPage() {
     // Required fields
     if (!formData.name.trim()) newErrors.name = 'Name is required';
     if (!formData.email.trim()) newErrors.email = 'Email is required';
+    if (!formData.phone.trim()) newErrors.phone = 'Phone number is required';
     if (!formData.address.trim()) newErrors.address = 'Address is required';
     if (!formData.city.trim()) newErrors.city = 'City is required';
     if (!formData.state.trim()) newErrors.state = 'State is required';
     if (!formData.zipCode.trim()) newErrors.zipCode = 'ZIP code is required';
-    if (!formData.phone.trim()) newErrors.phone = 'Phone number is required';
     
     // Email validation
     if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
@@ -357,8 +348,8 @@ export default function CheckoutPage() {
     }
     
     // Phone validation (basic)
-    if (formData.phone && !/^\d{10,15}$/.test(formData.phone.replace(/[^0-9]/g, ''))) {
-      newErrors.phone = 'Please enter a valid phone number';
+    if (formData.phone && !/^\d{10}$/.test(formData.phone.replace(/[^0-9]/g, ''))) {
+      newErrors.phone = 'Please enter a valid 10-digit phone number';
     }
     
     setErrors(newErrors);
@@ -367,148 +358,135 @@ export default function CheckoutPage() {
 
   // Handle payment success
   const handlePaymentSuccess = async (response: RazorpayResponse, orderId: string) => {
-    setIsPaymentProcessing(true);
-    
     try {
-      // Update order payment status
+      setIsPaymentProcessing(true);
+      
+      console.log('Payment successful:', response);
+      trackPaymentSuccess(orderId, response.razorpay_payment_id, finalTotal, 'Razorpay');
+      
+      // Update order with payment details
       await pocketbase.collection('orders').update(orderId, {
         payment_status: 'paid',
         payment_id: response.razorpay_payment_id,
-        payment_signature: response.razorpay_signature,
-        status: 'processing'
+        payment_order_id: response.razorpay_order_id,
+        payment_signature: response.razorpay_signature
       });
-      
-      // Track payment success
-      trackPaymentSuccess(orderId, calculateFinalTotal().finalTotal, 'Razorpay', response.razorpay_payment_id);
       
       // Clear cart
       clearCart();
       
-      // Navigate to order confirmation
-      navigate(`/order-confirmation/${orderId}`);
-    } catch (error) {
-      console.error('Error updating order after payment:', error);
-      
+      // Show success message
       toast({
-        title: 'Payment Recorded',
-        description: 'Your payment was successful, but we had trouble updating your order. Please contact support if needed.',
-        variant: 'default'
+        title: 'Payment Successful',
+        description: 'Your order has been placed successfully!',
       });
       
-      // Still navigate to confirmation as payment was successful
+      // Redirect to confirmation page
       navigate(`/order-confirmation/${orderId}`);
+    } catch (error) {
+      console.error('Error handling payment success:', error);
+      toast({
+        title: 'Processing Error',
+        description: 'Your payment was successful, but we had trouble processing your order. Please contact support.',
+        variant: 'destructive'
+      });
     } finally {
-      setIsSubmitting(false);
       setIsPaymentProcessing(false);
+      setIsSubmitting(false);
     }
-  };
-
-  // Retry operation with exponential backoff
-  const retryOperation = async <T,>(operation: () => Promise<T>, maxRetries = 3): Promise<T> => {
-    let lastError: any;
-    for (let attempt = 0; attempt < maxRetries; attempt++) {
-      try {
-        return await operation();
-      } catch (error) {
-        console.warn(`Operation failed (attempt ${attempt + 1}/${maxRetries}):`, error);
-        lastError = error;
-        // Exponential backoff
-        await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 500));
-      }
-    }
-    throw lastError;
   };
 
   // Submit handler
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!razorpayLoaded) {
+      toast({
+        title: 'Payment Error',
+        description: 'Payment gateway is not available. Please refresh the page.',
+        variant: 'destructive'
+      });
+      return;
+    }
+    
+    if (isSubmitting || isPaymentProcessing) {
+      return;
+    }
+    
+    // Validate form
+    if (!validateForm()) {
+      trackFormError('checkout', 'checkout-form', 'Validation errors in form');
+      toast({
+        title: 'Form Error',
+        description: 'Please fix the errors in the form before continuing.',
+        variant: 'destructive'
+      });
+      return;
+    }
+    
+    trackFormCompletion('checkout', 'checkout-form');
     setIsSubmitting(true);
-    setOrderError(null);
-
+    
     try {
-      // Validate form
-      if (!validateForm()) {
-        setIsSubmitting(false);
-        return;
-      }
-
-      console.log('Starting order creation process...');
+      // Create shipping address string
+      const addressString = `${formData.address}, ${formData.city}, ${formData.state} ${formData.zipCode}`;
       
-      // Ensure user is authenticated
-      if (!user || !pocketbase.authStore.isValid) {
-        console.error('User not authenticated');
-        setOrderError('Authentication error. Please log in again.');
-        setIsSubmitting(false);
-        return;
-      }
-
-      // Prepare order data
+      // Final calculations
+      const { finalTotal, calculatedShippingCost } = calculateFinalTotal();
+      
+      // Track add shipping info
+      trackAddShippingInfo(
+        cartItemsToProductItems(items), 
+        finalTotal, 
+        'standard', 
+        appliedCoupon?.code
+      );
+      
+      // Create order in PocketBase
       const orderData = {
-        user: user.id,
+        user: user?.id,
         customer_name: formData.name,
         customer_email: formData.email,
-        customer_phone: formData.phone,
-        shipping_address: `${formData.address}, ${formData.city}, ${formData.state} ${formData.zipCode}`,
+        customer_phone: formData.phone, // Include phone number
+        shipping_address: addressString,
+        shipping_address_text: JSON.stringify({
+          street: formData.address,
+          city: formData.city,
+          state: formData.state,
+          postalCode: formData.zipCode
+        }),
         products: items.map(item => ({
           productId: item.productId,
+          product: {
+            id: item.productId,
+            name: item.product.name,
+            price: item.product.price,
+            images: item.product.images
+          },
           quantity: item.quantity,
-          color: item.color || null,
-          price: Number(item.product.price) || 0,
-          name: item.product.name
+          color: item.color || undefined
         })),
+        products_json: JSON.stringify(items),
         subtotal: subtotal,
-        shipping_cost: calculateFinalTotal().calculatedShippingCost,
-        total: calculateFinalTotal().finalTotal,
+        shipping_cost: calculatedShippingCost,
+        total: finalTotal,
         status: 'pending',
         payment_status: 'pending',
         coupon: appliedCoupon ? appliedCoupon.couponId : null,
         discount_amount: appliedCoupon ? appliedCoupon.discountAmount : 0
       };
-
-      console.log('Order data prepared:', JSON.stringify(orderData));
-
-      // Create order with retry logic
-      const createOrderWithRetry = async (retries = 3, delay = 1000) => {
-        for (let attempt = 0; attempt < retries; attempt++) {
-          try {
-            console.log(`Creating order (attempt ${attempt + 1}/${retries})`);
-            
-            // Create order record
-            const order = await pocketbase.collection('orders').create(orderData);
-            console.log('Order created successfully:', order.id);
-            return order;
-          } catch (error: any) {
-            console.error(`Order creation failed (attempt ${attempt + 1}/${retries}):`, error);
-            
-            // If this is a 400 error, log more details
-            if (error.status === 400) {
-              console.error('Validation error details:', error.data);
-            }
-            
-            // If we have more retries, wait before trying again
-            if (attempt < retries - 1) {
-              // Exponential backoff
-              const backoffDelay = delay * Math.pow(2, attempt);
-              console.log(`Retrying in ${backoffDelay}ms...`);
-              await new Promise(resolve => setTimeout(resolve, backoffDelay));
-            } else {
-              throw error; // Re-throw the last error
-            }
-          }
-        }
-        throw new Error('Failed to create order after multiple attempts');
-      };
-
-      // Create the order
-      const order = await createOrderWithRetry();
-
+      
+      // Create order record
+      const order = await pocketbase.collection('orders').create(orderData);
+      console.log('Order created:', order);
+      
       // Track payment start
-      trackPaymentStart(order.id, calculateFinalTotal().finalTotal, 'Razorpay');
+      trackPaymentStart(order.id, finalTotal, 'Razorpay');
       
       // Track add payment info
       trackAddPaymentInfo(
         cartItemsToProductItems(items), 
-        calculateFinalTotal().finalTotal, 
+        finalTotal, 
         'Razorpay', 
         appliedCoupon?.code
       );
@@ -522,7 +500,7 @@ export default function CheckoutPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          amount: Math.round(calculateFinalTotal().finalTotal * 100), // Amount in currency's smallest unit (paise)
+          amount: Math.round(finalTotal), // Amount in currency's smallest unit
           receipt: order.id,
           notes: {
             order_id: order.id,
@@ -567,7 +545,7 @@ export default function CheckoutPage() {
             setIsSubmitting(false);
             
             // Track payment failure on dismissal
-            trackPaymentFailure(order.id, calculateFinalTotal().finalTotal, 'Razorpay', 'modal_dismissed');
+            trackPaymentFailure(order.id, finalTotal, 'Razorpay', 'modal_dismissed');
             
             toast({
               title: 'Payment Cancelled',
@@ -585,7 +563,7 @@ export default function CheckoutPage() {
         console.error('Payment failed:', response.error);
         
         // Track payment failure
-        trackPaymentFailure(order.id, calculateFinalTotal().finalTotal, 'Razorpay', response.error?.description || 'payment_failed');
+        trackPaymentFailure(order.id, finalTotal, 'Razorpay', response.error?.description || 'payment_failed');
         
         toast({
           title: 'Payment Failed',
@@ -598,24 +576,15 @@ export default function CheckoutPage() {
       
       // Open payment modal
       rzp.open();
-    } catch (error: any) {
-      console.error('Checkout error:', error);
+    } catch (error) {
+      console.error('Error during checkout:', error);
       
-      // Provide more detailed error messages
-      let errorMessage = 'An error occurred during checkout. Please try again.';
+      toast({
+        title: 'Checkout Error',
+        description: error instanceof Error ? error.message : 'An error occurred during checkout',
+        variant: 'destructive'
+      });
       
-      if (error.status === 400) {
-        errorMessage = 'Invalid order data. Please check your information and try again.';
-        console.error('Validation error details:', error.data);
-      } else if (error.status === 401) {
-        errorMessage = 'Authentication error. Please log in again.';
-      } else if (error.status === 429) {
-        errorMessage = 'Too many requests. Please wait a moment and try again.';
-      } else if (error.message) {
-        errorMessage = error.message;
-      }
-      
-      setOrderError(errorMessage);
       setIsSubmitting(false);
     }
   };
