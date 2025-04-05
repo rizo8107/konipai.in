@@ -1,4 +1,4 @@
-# Build stage
+# Build stage optimized for EasyPanel
 FROM node:18-alpine as builder
 
 # Define build arguments
@@ -34,18 +34,34 @@ ENV VITE_POCKETBASE_URL=$VITE_POCKETBASE_URL \
     SMTP_USER=$SMTP_USER \
     SMTP_PASSWORD=$SMTP_PASSWORD \
     GIT_SHA=$GIT_SHA \
-    NODE_OPTIONS="--max-old-space-size=512" \
+    NODE_OPTIONS="--max-old-space-size=768" \
     NODE_ENV=production
 
 # Set working directory
 WORKDIR /app
 
-# Copy entire app for simplicity
+# Copy package files first (better caching)
+COPY package.json package-lock.json ./
+
+# Install dependencies with memory-saving options
+RUN npm config set loglevel error && \
+    npm config set progress false && \
+    npm ci --prefer-offline --no-audit --no-fund && \
+    npm cache clean --force
+
+# Copy source files
 COPY . .
 
-# Install dependencies and build with memory optimizations
-RUN npm ci && \
-    npm run build
+# Create .env file explicitly
+RUN echo "VITE_POCKETBASE_URL=$VITE_POCKETBASE_URL" > .env && \
+    echo "VITE_RAZORPAY_KEY_ID=$VITE_RAZORPAY_KEY_ID" >> .env && \
+    echo "VITE_RAZORPAY_PROXY_URL=$VITE_RAZORPAY_PROXY_URL" >> .env && \
+    echo "VITE_RAZORPAY_PROXY_KEY=$VITE_RAZORPAY_PROXY_KEY" >> .env && \
+    echo "VITE_SITE_TITLE=$VITE_SITE_TITLE" >> .env && \
+    echo "VITE_SITE_LOGO=$VITE_SITE_LOGO" >> .env
+
+# Build with memory optimizations
+RUN NODE_OPTIONS="--max-old-space-size=768" npm run build
 
 # Production stage
 FROM nginx:alpine
