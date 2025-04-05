@@ -20,7 +20,7 @@ interface AnalyticsEvent {
   [key: string]: unknown;
 }
 
-interface ProductItem {
+export interface ProductItem {
   item_id: string;
   item_name: string;
   price: number;
@@ -84,12 +84,29 @@ const clearEcommerceObject = (): void => {
   });
 };
 
+// Ensure values are safe for analytics
+function sanitizeValue(value: unknown): string {
+  if (value === null || value === undefined) {
+    return '';
+  }
+  
+  if (typeof value === 'string') {
+    return value;
+  }
+  
+  if (typeof value === 'number') {
+    return value.toString();
+  }
+  
+  return String(value);
+}
+
 // User engagement and flow tracking
 export const trackPageView = (pageTitle: string, pagePath: string): void => {
   pushToDataLayer({
     event: 'page_view',
-    page_title: pageTitle,
-    page_path: pagePath,
+    page_title: sanitizeValue(pageTitle),
+    page_path: sanitizeValue(pagePath),
     timestamp: new Date().toISOString()
   });
 };
@@ -97,8 +114,8 @@ export const trackPageView = (pageTitle: string, pagePath: string): void => {
 export const trackUserLogin = (userId: string, method: string): void => {
   pushToDataLayer({
     event: 'login',
-    user_id: userId,
-    method: method,
+    user_id: sanitizeValue(userId),
+    method: sanitizeValue(method),
     timestamp: new Date().toISOString()
   });
 };
@@ -106,8 +123,8 @@ export const trackUserLogin = (userId: string, method: string): void => {
 export const trackUserSignup = (userId: string, method: string): void => {
   pushToDataLayer({
     event: 'sign_up',
-    user_id: userId,
-    method: method,
+    user_id: sanitizeValue(userId),
+    method: sanitizeValue(method),
     timestamp: new Date().toISOString()
   });
 };
@@ -123,8 +140,8 @@ export const trackProductImpression = (
     ecommerce: {
       items: items.map((item, index) => ({
         ...item,
-        item_list_name: listName,
-        item_list_id: `list-${listName.toLowerCase().replace(/\s+/g, '-')}`,
+        item_list_name: sanitizeValue(listName),
+        item_list_id: `list-${sanitizeValue(listName).toLowerCase().replace(/\s+/g, '-')}`,
         index: index + 1,
       }))
     },
@@ -270,8 +287,8 @@ export const trackAddShippingInfo = (
     ecommerce: {
       currency: 'INR',
       value: value,
-      shipping_tier: shippingTier,
-      coupon: coupon,
+      shipping_tier: sanitizeValue(shippingTier),
+      coupon: sanitizeValue(coupon),
       items: products
     },
     timestamp: new Date().toISOString()
@@ -290,8 +307,8 @@ export const trackAddPaymentInfo = (
     ecommerce: {
       currency: 'INR',
       value: value,
-      payment_type: paymentType,
-      coupon: coupon,
+      payment_type: sanitizeValue(paymentType),
+      coupon: sanitizeValue(coupon),
       items: products
     },
     timestamp: new Date().toISOString()
@@ -328,13 +345,13 @@ export const trackPurchase = async (
   pushToDataLayer({
     event: 'purchase',
     ecommerce: {
-      transaction_id: transactionId,
-      affiliation: affiliation,
+      transaction_id: sanitizeValue(transactionId),
+      affiliation: sanitizeValue(affiliation),
       value: value,
       tax: tax,
       shipping: shipping,
       currency: 'INR',
-      coupon: coupon,
+      coupon: sanitizeValue(coupon),
       revenue: revenue,
       items: products
     },
@@ -346,7 +363,7 @@ export const trackPurchase = async (
   pushToDataLayer({
     event: 'conversion',
     send_to: 'AW-CONVERSION_ID/CONVERSION_LABEL',
-    transaction_id: transactionId,
+    transaction_id: sanitizeValue(transactionId),
     value: value,
     currency: 'INR'
   });
@@ -360,10 +377,10 @@ export const trackPurchase = async (
     products.reduce((sum, product) => sum + product.quantity, 0),
     {
       content_type: 'product',
-      transaction_id: transactionId,
+      transaction_id: sanitizeValue(transactionId),
       tax: tax,
       shipping: shipping,
-      coupon: coupon
+      coupon: sanitizeValue(coupon)
     }
   );
 
@@ -395,13 +412,13 @@ export const trackDynamicConversion = (conversionData: ConversionEvent): void =>
   
   // Create the base ecommerce object
   const ecommerceData = {
-    transaction_id: conversionData.transaction_id,
-    affiliation: conversionData.affiliation || 'Konipai Web Store',
+    transaction_id: sanitizeValue(conversionData.transaction_id),
+    affiliation: sanitizeValue(conversionData.affiliation || 'Konipai Web Store'),
     value: conversionData.value,
     tax: conversionData.tax,
     shipping: conversionData.shipping,
     currency: conversionData.currency || 'INR',
-    coupon: conversionData.coupon,
+    coupon: sanitizeValue(conversionData.coupon),
     revenue: revenue,
     items: conversionData.items
   };
@@ -428,7 +445,7 @@ export const trackDynamicConversion = (conversionData: ConversionEvent): void =>
   pushToDataLayer({
     event: 'conversion',
     send_to: sendTo,
-    transaction_id: conversionData.transaction_id,
+    transaction_id: sanitizeValue(conversionData.transaction_id),
     value: conversionData.value,
     currency: conversionData.currency || 'INR'
   });
@@ -438,8 +455,8 @@ export const trackDynamicConversion = (conversionData: ConversionEvent): void =>
 export const trackMonetizationStart = (contentId: string, contentType: string, price: number): void => {
   pushToDataLayer({
     event: 'monetization_start',
-    content_id: contentId,
-    content_type: contentType,
+    content_id: sanitizeValue(contentId),
+    content_type: sanitizeValue(contentType),
     price: price,
     currency: 'INR',
     timestamp: new Date().toISOString()
@@ -449,8 +466,8 @@ export const trackMonetizationStart = (contentId: string, contentType: string, p
 export const trackMonetizationComplete = (contentId: string, contentType: string, price: number): void => {
   pushToDataLayer({
     event: 'monetization_complete',
-    content_id: contentId,
-    content_type: contentType,
+    content_id: sanitizeValue(contentId),
+    content_type: sanitizeValue(contentType),
     price: price,
     currency: 'INR',
     timestamp: new Date().toISOString()
@@ -465,8 +482,8 @@ export const trackSubscriptionStart = (
 ): void => {
   pushToDataLayer({
     event: 'subscription_start',
-    subscription_id: subscriptionId,
-    plan: plan,
+    subscription_id: sanitizeValue(subscriptionId),
+    plan: sanitizeValue(plan),
     price: price,
     billing_cycle: billing,
     currency: 'INR',
@@ -482,8 +499,8 @@ export const trackSubscriptionRenew = (
 ): void => {
   pushToDataLayer({
     event: 'subscription_renew',
-    subscription_id: subscriptionId,
-    plan: plan,
+    subscription_id: sanitizeValue(subscriptionId),
+    plan: sanitizeValue(plan),
     price: price,
     billing_cycle: billing,
     currency: 'INR',
@@ -498,9 +515,9 @@ export const trackSubscriptionCancel = (
 ): void => {
   pushToDataLayer({
     event: 'subscription_cancel',
-    subscription_id: subscriptionId,
-    plan: plan,
-    cancel_reason: reason,
+    subscription_id: sanitizeValue(subscriptionId),
+    plan: sanitizeValue(plan),
+    cancel_reason: sanitizeValue(reason),
     timestamp: new Date().toISOString()
   });
 };
@@ -509,9 +526,9 @@ export const trackSubscriptionCancel = (
 export const trackButtonClick = (buttonName: string, buttonText: string, pagePath: string): void => {
   pushToDataLayer({
     event: 'button_click',
-    button_name: buttonName,
-    button_text: buttonText,
-    page_path: pagePath,
+    button_name: sanitizeValue(buttonName),
+    button_text: sanitizeValue(buttonText),
+    page_path: sanitizeValue(pagePath),
     timestamp: new Date().toISOString()
   });
 };
@@ -520,8 +537,8 @@ export const trackButtonClick = (buttonName: string, buttonText: string, pagePat
 export const trackFormStart = (formName: string, formId: string): void => {
   pushToDataLayer({
     event: 'form_start',
-    form_name: formName,
-    form_id: formId,
+    form_name: sanitizeValue(formName),
+    form_id: sanitizeValue(formId),
     timestamp: new Date().toISOString()
   });
 };
@@ -544,21 +561,21 @@ export const trackFormCompletion = async (
   // Track in Google Analytics
   pushToDataLayer({
     event: 'form_complete',
-    form_name: formName,
-    form_id: formId,
+    form_name: sanitizeValue(formName),
+    form_id: sanitizeValue(formId),
     timestamp: new Date().toISOString()
   });
 
   // Track in Facebook Pixel
   trackPixelEvent(pixelEvents.LEAD, {
-    content_name: formName,
+    content_name: sanitizeValue(formName),
     content_category: 'form_submission'
   });
 
   // Track as lead in Facebook CAPI if user data is available
   if (userData) {
     await trackLeadConversion(userData, {
-      contentName: formName,
+      contentName: sanitizeValue(formName),
       contentCategory: 'form_submission'
     });
   }
@@ -567,9 +584,9 @@ export const trackFormCompletion = async (
 export const trackFormError = (formName: string, formId: string, errorMessage: string): void => {
   pushToDataLayer({
     event: 'form_error',
-    form_name: formName,
-    form_id: formId,
-    error_message: errorMessage,
+    form_name: sanitizeValue(formName),
+    form_id: sanitizeValue(formId),
+    error_message: sanitizeValue(errorMessage),
     timestamp: new Date().toISOString()
   });
 };
@@ -578,10 +595,10 @@ export const trackFormError = (formName: string, formId: string, errorMessage: s
 export const trackPaymentStart = (orderId: string, amount: number, paymentMethod: string): void => {
   pushToDataLayer({
     event: 'payment_start',
-    order_id: orderId,
+    order_id: sanitizeValue(orderId),
     value: amount,
     currency: 'INR',
-    payment_method: paymentMethod,
+    payment_method: sanitizeValue(paymentMethod),
     timestamp: new Date().toISOString()
   });
 };
@@ -594,11 +611,11 @@ export const trackPaymentSuccess = (
 ): void => {
   pushToDataLayer({
     event: 'payment_success',
-    order_id: orderId,
-    transaction_id: transactionId,
+    order_id: sanitizeValue(orderId),
+    transaction_id: sanitizeValue(transactionId),
     value: amount,
     currency: 'INR',
-    payment_method: paymentMethod,
+    payment_method: sanitizeValue(paymentMethod),
     timestamp: new Date().toISOString()
   });
 };
@@ -611,11 +628,11 @@ export const trackPaymentFailure = (
 ): void => {
   pushToDataLayer({
     event: 'payment_failure',
-    order_id: orderId,
+    order_id: sanitizeValue(orderId),
     value: amount,
     currency: 'INR',
-    payment_method: paymentMethod,
-    error_message: errorMessage,
+    payment_method: sanitizeValue(paymentMethod),
+    error_message: sanitizeValue(errorMessage),
     timestamp: new Date().toISOString()
   });
 };

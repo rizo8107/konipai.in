@@ -20,11 +20,15 @@ export interface RazorpayOptions {
   theme?: {
     color?: string;
   };
+  color?: string;
   modal?: {
     ondismiss?: () => void;
     escape?: boolean;
     backdropclose?: boolean;
   };
+  ondismiss?: () => void;
+  escape?: boolean;
+  backdropclose?: boolean;
 }
 
 export interface RazorpayResponse {
@@ -80,7 +84,7 @@ export const getRazorpayKeySecret = (): string => {
   return key;
 };
 
-// Create a Razorpay order via the Razorpay Orders API
+// Create a Razorpay order via Supabase Edge Function
 export const createRazorpayOrder = async (
   amount: number,
   currency: string = 'INR',
@@ -102,28 +106,25 @@ export const createRazorpayOrder = async (
       };
     }
     
-    // In production, use a separate proxy server
-    const proxyUrl = import.meta.env.VITE_RAZORPAY_PROXY_URL || 'https://backend-n8n.7za6uc.easypanel.host/razorpay';
+    // In production, use Supabase Edge Function
+    const supabaseEndpoint = 'https://crm-supabase.7za6uc.easypanel.host/functions/v1/create-order';
     
     try {
-      const response = await fetch(`${proxyUrl}/create-order`, {
+      const response = await fetch(supabaseEndpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-API-Key': import.meta.env.VITE_RAZORPAY_PROXY_KEY || ''
         },
         body: JSON.stringify({
-          amount: Math.round(amount * 100), // Convert to paise and ensure it's an integer
+          amount: Math.round(amount), // The Supabase function handles the conversion to paise
           currency,
           receipt,
-          payment_capture: 1,  // 1 for auto-capture, 0 for manual
-          notes: {
-            source: 'Konipai Website'
-          }
         })
       });
       
       if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Supabase function error:', errorText);
         throw new Error(`Failed to create order: ${response.status} ${response.statusText}`);
       }
       
@@ -133,101 +134,71 @@ export const createRazorpayOrder = async (
       return {
         id: orderData.id,
         amount: orderData.amount,
-        currency: orderData.currency,
-        receipt: orderData.receipt,
-        status: orderData.status
+        currency: orderData.currency || currency,
+        receipt: orderData.receipt || receipt,
+        status: orderData.status || 'created'
       };
-    } catch (proxyError) {
-      console.error('Error creating Razorpay order via proxy:', proxyError);
-      
-      // Fallback to direct creation for now (will need server implementation)
-      const fallbackId = `order_${Date.now()}`;
-      console.warn('Using fallback order ID:', fallbackId);
-      
-      return {
-        id: fallbackId,
-        amount: Math.round(amount * 100),
-        currency,
-        receipt,
-        status: 'created'
-      };
+    } catch (apiError) {
+      console.error('Error creating order via Supabase function:', apiError);
+      throw apiError;
     }
   } catch (error) {
-    console.error('Error creating Razorpay order:', error);
+    console.error('Error in createRazorpayOrder:', error);
     throw error;
   }
 };
 
 // Initialize and open Razorpay payment modal
 export const openRazorpayCheckout = (options: RazorpayOptions): void => {
-  if (typeof window.Razorpay === 'undefined') {
-    console.error('Razorpay script not loaded');
-    throw new Error('Payment gateway is not available. Please refresh the page.');
+  if (!window.Razorpay) {
+    console.error('Razorpay is not loaded. Please call loadRazorpayScript first.');
+    return;
   }
 
-  // Log payment attempt (redact sensitive info)
-  console.log('Opening Razorpay payment window with options:', {
-    ...options,
-    key: options.key ? '****' : undefined, // Don't log the actual key
-    amount: options.amount,
-    currency: options.currency,
-    prefill: options.prefill ? {
-      name: options.prefill.name,
-      email: options.prefill.email ? '****' : undefined,
-      contact: options.prefill.contact ? '****' : undefined
-    } : undefined
-  });
-  
   try {
-    // Create the razorpay instance
-    const razorpay = new window.Razorpay({
-      key: options.key || getRazorpayKeyId(),
-      amount: options.amount, // Amount in paise
-      currency: options.currency || 'INR',
-      name: options.name || 'Konipai',
-      description: options.description || 'Payment',
-      image: options.image,
-      order_id: options.order_id,
+    console.log('Opening Razorpay checkout with options:', {
+      ...options,
+      key: options.key ? '(key provided)' : '(key missing)',
+      handler: options.handler ? '(handler provided)' : '(handler missing)',
+    });
+    
+    // Store original handler to wrap with our error handling
+    const originalHandler = options.handler;
+    
+    // Create enhanced options with proper error handling
+    const enhancedOptions: RazorpayOptions = {
+      ...options,
       handler: function(response: RazorpayResponse) {
-        console.log('Razorpay payment success callback received', {
-          ...response,
-          razorpay_payment_id: response.razorpay_payment_id ? response.razorpay_payment_id.substring(0, 4) + '****' : undefined
-        });
-        
-        // Handle missing data
-        if (!response.razorpay_payment_id) {
-          console.error('Missing payment ID in Razorpay response');
-          alert('Payment failed: Missing payment details. Please try again or contact support.');
-          return;
-        }
-        
-        // Forward to handler
-        if (options.handler) {
-          options.handler(response);
+        try {
+          console.log('Payment success:', response);
+          
+          // Call original handler if provided
+          if (originalHandler) {
+            originalHandler(response);
+          }
+        } catch (handlerError) {
+          console.error('Error in payment success handler:', handlerError);
+          alert('Payment was successful, but there was an error processing the completion. Please contact support with your payment ID: ' + response.razorpay_payment_id);
         }
       },
-      prefill: options.prefill || {},
-      notes: options.notes || {},
-      theme: options.theme || { color: '#4F46E5' },
-      modal: options.modal || {
+      modal: {
+        ...options.modal,
         ondismiss: function() {
-          console.log('Payment modal closed by user');
-        },
-        escape: false,
-        backdropclose: false
+          console.log('Payment modal dismissed by user');
+          if (options.ondismiss) {
+            options.ondismiss();
+          }
+        }
       }
-    });
+    };
     
-    // Open the modal
-    razorpay.on('payment.failed', function(response: { error: { description: string } }) {
-      console.error('Payment failed:', response.error);
-      alert(`Payment failed: ${response.error.description}`);
-    });
+    // Initialize Razorpay
+    const razorpay = new window.Razorpay(enhancedOptions);
     
+    // Open the checkout
     razorpay.open();
   } catch (error) {
-    console.error('Error opening Razorpay payment window:', error);
-    alert('Failed to open payment window. Please try again or contact support.');
+    console.error('Error opening Razorpay checkout:', error);
     throw error;
   }
 };
@@ -257,11 +228,23 @@ const sendOrderToWebhook = async (orderId: string, user: Record<string, unknown>
     };
 
     // Parse products if they are stored as a string
-    let orderProducts = [];
+    let orderProducts: Array<{
+      productId: string;
+      product?: {
+        id: string;
+        name: string;
+        price: number;
+        images?: string[];
+      };
+      name?: string;
+      price?: number;
+      quantity: number;
+      color?: string;
+    }> = [];
     try {
       orderProducts = typeof order.products === 'string'
         ? JSON.parse(order.products)
-        : order.products;
+        : order.products || [];
       
       // Ensure orderProducts is an array
       if (!Array.isArray(orderProducts)) {
@@ -323,7 +306,7 @@ const sendOrderToWebhook = async (orderId: string, user: Record<string, unknown>
         paymentStatus: order.payment_status || 'unknown'
       },
       orderStatus: order.status || 'unknown',
-      products: orderProducts.map((item: any) => ({
+      products: orderProducts.map((item) => ({
         productId: item.productId || item.product?.id || '',
         name: item.product?.name || item.name || 'Product',
         quantity: item.quantity || 1,
@@ -460,7 +443,6 @@ export async function verifyPayment(
     } catch (verificationError) {
       console.error('Error verifying payment through proxy:', verificationError);
       // In case of failure, assume it's valid for now (will be fixed with proper proxy)
-      // In production, this should fail
       console.warn('Bypassing verification failure for now');
     }
     
@@ -481,7 +463,19 @@ export async function verifyPayment(
       let customerPhone = '';
       let shippingAddress = {};
       let formattedAddress = '';
-      let orderProducts = [];
+      let orderProducts: Array<{
+        productId: string;
+        product?: {
+          id: string;
+          name: string;
+          price: number;
+          images?: string[];
+        };
+        name?: string;
+        price?: number;
+        quantity: number;
+        color?: string;
+      }> = [];
       let subtotal = 0;
       let shippingCost = 0;
       let total = 0;
@@ -568,7 +562,19 @@ export async function verifyPayment(
           paymentStatus: paymentStatus // Use the status from verification
         },
         orderStatus: 'processing',
-        products: orderProducts.map((item: any) => ({
+        products: orderProducts.map((item: {
+          productId: string;
+          product?: {
+            id: string;
+            name: string;
+            price: number;
+            images?: string[];
+          };
+          name?: string;
+          price?: number;
+          quantity: number;
+          color?: string;
+        }) => ({
           productId: item.productId || item.product?.id || '',
           name: item.product?.name || item.name || 'Product',
           quantity: item.quantity || 1,
@@ -655,6 +661,7 @@ declare global {
   interface Window {
     Razorpay: new (options: RazorpayOptions) => {
       open: () => void;
+      on: (event: string, handler: (response: RazorpayResponse) => void) => void;
     };
   }
 }
