@@ -74,9 +74,21 @@ const ProductCard = ({ product }: ProductCardProps) => {
           {product.name}
         </h3>
         <div className="flex items-center justify-between">
-          <p className="text-base font-medium">
-            ₹{typeof product.price === 'number' ? product.price.toFixed(2) : '0.00'}
-          </p>
+          <div className="flex items-center gap-1.5">
+            <p className="text-base font-medium">
+              ₹{typeof product.price === 'number' ? product.price.toFixed(2) : '0.00'}
+            </p>
+            {product.original_price && product.original_price > product.price && (
+              <>
+                <p className="text-sm text-gray-500 line-through">
+                  ₹{product.original_price.toFixed(2)}
+                </p>
+                <span className="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded">
+                  {Math.round((1 - product.price / product.original_price) * 100)}% OFF
+                </span>
+              </>
+            )}
+          </div>
           {product.colors?.length > 0 && (
             <div className="flex -space-x-1">
               {product.colors.map((color) => (
