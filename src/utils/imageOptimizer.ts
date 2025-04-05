@@ -32,19 +32,19 @@ const imageDimensionCache = new Map<string, ImageDimensions>();
 
 /**
  * Builds and caches PocketBase image URLs with optimization parameters
+ * Uses the local Nginx proxy for better caching and performance
+ * 
  * @param url - The partial URL (recordId/filename format)
  * @param collection - The PocketBase collection name
  * @param size - The desired image size preset
  * @param format - The desired image format (avif is recommended for best compression)
- * @param baseUrl - The base URL for the PocketBase instance
  * @returns The full image URL with optimization parameters
  */
 export function getPocketBaseImageUrl(
   url: string,
   collection: string,
   size: ImageSize = "medium",
-  format: ImageFormat = "avif",
-  baseUrl: string = 'https://backend-pocketbase.7za6uc.easypanel.host'
+  format: ImageFormat = "avif"
 ): string {
   // Create a cache key that includes size and format
   const cacheKey = `${url}-${size}-${format}`;
@@ -61,8 +61,9 @@ export function getPocketBaseImageUrl(
       throw new Error('Invalid image URL format');
     }
 
-    // Build base URL
-    let fullUrl = `${baseUrl.replace(/\/$/, '')}/api/files/${collection}/${recordId}/${filename}`;
+    // Use local Nginx proxy for better caching and performance
+    // This routes through the Nginx proxy we set up that handles caching
+    let fullUrl = `/api/files/${collection}/${recordId}/${filename}`;
     
     // Add optimization parameters if not original format
     if (format !== "original") {
@@ -78,7 +79,7 @@ export function getPocketBaseImageUrl(
       params.append('quality', sizeConfig.quality.toString());
       
       // Add cache control hints to maximize caching
-      const cacheVersion = '2'; // Increment this when image processing changes
+      const cacheVersion = '3'; // Increment this when image processing changes
       params.append('v', `${cacheVersion}-${size}-${format}`);
       
       if (params.toString()) {
