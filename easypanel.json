@@ -1,7 +1,7 @@
 {
   "name": "konipai",
   "type": "web",
-  "image": "easypanel/konipai:latest",
+  "image": "ghcr.io/konipai/konipai:latest",
   "domains": [
     "konipai.in",
     "www.konipai.in"
@@ -19,6 +19,14 @@
       "value": "production"
     },
     {
+      "name": "EASYPANEL_BUILD",
+      "value": "true"
+    },
+    {
+      "name": "SKIP_IMAGE_OPTIMIZATION",
+      "value": "true"
+    },
+    {
       "name": "VITE_POCKETBASE_URL",
       "value": "https://backend-pocketbase.7za6uc.easypanel.host/"
     },
@@ -31,7 +39,7 @@
       "value": "https://konipai-server.7za6uc.easypanel.host"
     },
     {
-      "name": "VITE_RAZORPAY_PROXY_KEY",
+      "name": "VITE_RAZORPAY_PROXY_KEY", 
       "value": "5cfd34e6-ef3b-4121-bfce-945d96a178d9"
     },
     {
@@ -56,7 +64,7 @@
       "cpuShares": 4,
       "buildkit": true,
       "platform": "linux/amd64",
-      "noCache": true
+      "noCache": false
     }
   },
   "healthcheck": {
@@ -67,4 +75,4 @@
   },
   "restartPolicy": "always",
   "networks": ["default"]
-}
+} 
