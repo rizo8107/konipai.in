@@ -1,4 +1,4 @@
-# Build stage with extreme memory optimizations for EasyPanel
+# Build stage
 FROM node:18-alpine as builder
 
 # Define build arguments
@@ -37,37 +37,18 @@ ENV VITE_POCKETBASE_URL=$VITE_POCKETBASE_URL \
     NODE_OPTIONS="--max-old-space-size=512" \
     NODE_ENV=production
 
+# Set working directory
 WORKDIR /app
 
-# Copy package files first to leverage Docker caching
-COPY package.json package-lock.json ./
-COPY vite.config.ts tsconfig.json index.html ./
+# Copy entire app for simplicity
+COPY . .
 
-# Install dependencies with memory optimizations
-RUN npm config set loglevel error && \
-    npm config set progress false && \
-    # Use npm ci for deterministic installs
-    npm ci --no-fund --prefer-offline && \
-    # Clean cache to free up space
-    npm cache clean --force
+# Install dependencies and build with memory optimizations
+RUN npm ci && \
+    npm run build
 
-# Create a minimal .env file with the build arguments
-RUN echo "VITE_POCKETBASE_URL=$VITE_POCKETBASE_URL" > .env && \
-    echo "VITE_RAZORPAY_KEY_ID=$VITE_RAZORPAY_KEY_ID" >> .env && \
-    echo "VITE_RAZORPAY_PROXY_URL=$VITE_RAZORPAY_PROXY_URL" >> .env && \
-    echo "VITE_RAZORPAY_PROXY_KEY=$VITE_RAZORPAY_PROXY_KEY" >> .env && \
-    echo "VITE_SITE_TITLE=$VITE_SITE_TITLE" >> .env && \
-    echo "VITE_SITE_LOGO=$VITE_SITE_LOGO" >> .env
-
-# Copy source code
-COPY public ./public/
-COPY src ./src/
-
-# Build with memory optimizations
-RUN NODE_OPTIONS="--max-old-space-size=512" npm run build
-
-# Production stage - use the smallest possible nginx image
-FROM nginx:alpine-slim
+# Production stage
+FROM nginx:alpine
 
 # Copy only the built assets from builder stage
 COPY --from=builder /app/dist /usr/share/nginx/html
