@@ -12,12 +12,15 @@ import { Loader2, ShoppingBag, CheckCircle, XCircle } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { 
   loadRazorpayScript, 
-  getRazorpayKeyId, 
-  createRazorpayOrder, 
-  openRazorpayCheckout,
-  verifyPayment,
+  getRazorpayKeyId,
   RazorpayResponse
 } from '@/lib/razorpay';
+import {
+  createRazorpayOrder,
+  verifyRazorpayPayment,
+  captureRazorpayPayment,
+  openRazorpayCheckout
+} from '@/lib/razorpay-client';
 import { trackEcommerceEvent } from '@/utils/analytics';
 import { 
   trackBeginCheckout, 
@@ -62,17 +65,15 @@ interface OrderData {
   customer_name: string;
   customer_email: string;
   customer_phone: string;
-  shipping_address: string;
-  products: Array<{
-    productId: string;
-    product: {
-      name: string;
-      price: number;
-      images?: string[];
-    };
-    quantity: number;
-    color?: string;
-  }>;
+  shipping_address: string; // ID of the address record in addresses collection
+  products: string; // JSON string of products array
+  payment_id?: string;
+  razorpay_order_id?: string;
+  razorpay_payment_id?: string;
+  razorpay_signature?: string;
+  coupon_code?: string;
+  discount_amount?: number;
+  notes?: string;
 }
 
 export default function CheckoutPage() {
@@ -344,149 +345,158 @@ export default function CheckoutPage() {
 
       console.log('Payment success, raw response:', response);
       
-      // The response might be coming directly from Razorpay as an object with different structure
-      // Extract payment details from response, handling both possible formats
+      // Extract payment details from response
       const paymentId = response.razorpay_payment_id || response.paymentId;
+      const razorpayOrderId = response.razorpay_order_id || response.orderId;
+      const signature = response.razorpay_signature || response.signature;
       
       if (!paymentId) {
-        console.error('Missing payment ID in response:', response);
-        trackPaymentFailure(orderId, 0, 'Razorpay', 'Missing payment ID from Razorpay');
         throw new Error('Missing payment ID from Razorpay');
       }
 
-      // First try to update the order record
-      try {
-        // Prepare minimal data for update to avoid conflicts
-        const orderUpdateData: {
-          payment_status: string;
-          status: string;
-          payment_id: string;
-          payment_signature?: string;
-          payment_order_id?: string;
-        } = {
-          payment_status: 'paid',
-          status: 'processing',
-          payment_id: paymentId
-        };
+      // First verify payment with Razorpay (this is handled by our backend function)
+      const verificationResult = await verifyRazorpayPayment(
+        paymentId || '',
+        razorpayOrderId || '',
+        signature || ''
+      );
 
-        // Only add optional fields if they exist
-        if (response.razorpay_signature || response.signature) {
-          orderUpdateData.payment_signature = response.razorpay_signature || response.signature;
-        }
-        
-        if (response.razorpay_order_id || response.orderId) {
-          orderUpdateData.payment_order_id = response.razorpay_order_id || response.orderId;
-        }
+      console.log('Payment verification result:', verificationResult);
+      
+      if (!verificationResult.success) {
+        throw new Error('Payment verification failed. Please contact support.');
+      }
 
-        console.log('Updating order with data:', orderUpdateData);
-        
-        // Update order status directly without verification
-        await pocketbase.collection('orders').update(orderId, orderUpdateData);
-        
-        // Get the updated order for tracking purposes
-        const updatedOrder = await pocketbase.collection('orders').getOne(orderId);
-        
-        // Trigger payment verification to send webhook
-        try {
-          const signature = response.razorpay_signature || response.signature || '';
-          console.log('Calling verifyPayment to trigger webhook...');
-          await verifyPayment(orderId, paymentId, signature);
-        } catch (verifyError) {
-          console.error('Error sending webhook notification:', verifyError);
-          // Continue with order processing even if webhook fails
-        }
-        
-        // Track payment success with enhanced data
-        trackPaymentSuccess(
-          orderId,
-          paymentId,
-          updatedOrder.total || 0,
-          'Razorpay'
-        );
-
-        // Use the new dynamic conversion tracking with additional metadata
-        trackDynamicConversion({
-          transaction_id: orderId,
-          value: updatedOrder.total || 0,
-          shipping: updatedOrder.shipping_cost || 0,
-          items: items.map(item => ({
-            item_id: item.productId,
-            item_name: item.product.name,
-            price: Number(item.product.price) || 0,
-            quantity: item.quantity,
-            item_variant: item.color || undefined,
-            discount: appliedCoupon ? (appliedCoupon.discountAmount / items.length) : 0,
-            coupon: appliedCoupon?.code
-          })),
-          coupon: appliedCoupon?.code,
-          conversion_type: 'Sale'
-        });
-
-        // Payment verified successfully
-        toast({
-          title: "Payment Successful",
-          description: "Your order has been placed successfully!",
-        });
-
-        // Track purchase event
-        trackEcommerceEvent('purchase', 
-          items.map(item => ({
-            item_id: item.productId,
-            item_name: item.product.name,
-            price: Number(item.product.price) || 0,
-            quantity: item.quantity,
-            item_variant: item.color || undefined
-          })),
-          'INR',
-          calculateFinalTotal().finalTotal
-        );
-
-        // Clear cart
-        clearCart();
-        
-        // Redirect to order confirmation page
-        navigate(`/order-confirmation/${orderId}`);
-      } catch (updateError) {
-        console.error('Failed to update order status:', updateError);
-        
-        // Track payment failure
-        trackPaymentFailure(
-          orderId,
-          0,
-          'Razorpay',
-          'Failed to update order after payment'
-        );
-        
-        // Show a user-friendly error but still consider payment successful
+      // Immediately capture the payment to avoid auto-refund
+      console.log('Attempting to capture payment with ID:', paymentId);
+      const captureResult = await captureRazorpayPayment(paymentId);
+      console.log('Payment capture result:', captureResult);
+      
+      if (!captureResult.success) {
+        console.error('Failed to capture payment:', captureResult.error);
         toast({
           variant: "destructive",
-          title: "Order Update Failed",
-          description: "Payment was successful, but we couldn't update your order. Please contact support.",
+          title: "Payment Capture Failed",
+          description: "Your payment was authorized but couldn't be captured. Please contact support.",
         });
-        
-        // Still redirect to confirmation with payment pending status
-        navigate(`/order-confirmation/${orderId}?status=payment_pending`);
+        // Still continue with order processing, but note the capture failure
       }
+
+      // Update order in PocketBase
+      const orderUpdateData = {
+        payment_status: captureResult.success ? 'captured' : 'authorized',
+        status: 'processing',
+        payment_id: paymentId,
+        razorpay_order_id: razorpayOrderId,
+        razorpay_payment_id: paymentId,
+        razorpay_signature: signature,
+        notes: `Payment received via Razorpay. Payment ID: ${paymentId}. Verified: ${verificationResult.success ? 'Yes' : 'No'}. Captured: ${captureResult.success ? 'Yes' : 'Pending'}`,
+        updated: new Date().toISOString()
+      };
+
+      console.log('Updating order with data:', orderUpdateData);
+      
+      // Update order in PocketBase
+      await pocketbase.collection('orders').update(orderId, orderUpdateData);
+      
+      // Get updated order
+      const updatedOrder = await pocketbase.collection('orders').getOne(orderId);
+
+      // Send webhook to n8n
+      try {
+        const webhookData = {
+          event: "payment.captured",
+          payload: {
+            payment: {
+              entity: {
+                id: paymentId,
+                order_id: razorpayOrderId,
+                amount: updatedOrder.total * 100, // Convert to paise
+                currency: "INR",
+                status: "captured",
+                captured: true
+              }
+            },
+            metadata: {
+              pocketbase_order_id: orderId,
+              razorpay_order_id: razorpayOrderId,
+              razorpay_payment_id: paymentId,
+              verified: verificationResult.success,
+              manually_captured: captureResult.success
+            }
+          }
+        };
+
+        // Send to n8n webhook with correct credentials
+        const webhookResponse = await fetch('https://backend-n8n.7za6uc.easypanel.host/webhook/razorpay', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Basic ' + btoa('nnirmal7107@gmail.com:Kamala@7107')
+          },
+          body: JSON.stringify(webhookData)
+        });
+
+        console.log('Webhook response:', await webhookResponse.text());
+        
+        if (!webhookResponse.ok) {
+          console.error('Failed to send webhook:', webhookResponse.statusText);
+        }
+        
+        // Also update Razorpay payment with notes
+        try {
+          const razorpayUpdateResponse = await fetch(`https://api.razorpay.com/v1/payments/${paymentId}/notes`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Basic ' + btoa(`${getRazorpayKeyId()}:${getRazorpayKeySecret()}`)
+            },
+            body: JSON.stringify({
+              'pocketbase_order_id': orderId,
+              'order_status': 'processing',
+              'webhook_sent': 'true',
+              'customer_email': updatedOrder.email || '',
+              'customer_name': updatedOrder.name || ''
+            })
+          });
+          
+          console.log('Razorpay update response:', await razorpayUpdateResponse.text());
+        } catch (razorpayError) {
+          console.error('Error updating Razorpay payment:', razorpayError);
+        }
+      } catch (webhookError) {
+        console.error('Error sending webhook:', webhookError);
+        // Don't throw error here, continue with order processing
+      }
+      
+      // Track successful payment
+      trackPaymentSuccess(orderId, calculateFinalTotal().finalTotal, 'Razorpay', 'Online');
+      
+      // Clear cart after successful payment
+      clearCart();
+
+      // Navigate to success page
+      navigate(`/order-confirmation/${orderId}?status=success`);
+      
+      toast({
+        title: "Payment Successful!",
+        description: "Your order has been confirmed.",
+      });
+
     } catch (error) {
-      console.error('Payment verification error:', error);
+      console.error('Payment processing error:', error);
       
       // Track payment failure
-      trackPaymentFailure(
-        orderId,
-        0,
-        'Razorpay',
-        error instanceof Error ? error.message : 'Payment verification failed'
-      );
+      trackPaymentFailure(orderId, calculateFinalTotal().finalTotal, 'Razorpay', 
+        error instanceof Error ? error.message : 'Unknown payment error');
       
-      // Show a user-friendly error
       toast({
         variant: "destructive",
         title: "Payment Error",
-        description: "There was an issue processing your payment. Your order has been recorded but payment verification failed.",
+        description: "There was an issue processing your payment. Please contact support.",
       });
       
-      // Still redirect to order confirmation, they may need to try payment again
-      navigate(`/order-confirmation/${orderId}?status=payment_pending`);
+      navigate(`/order-confirmation/${orderId}?status=payment_error`);
     } finally {
       setIsPaymentProcessing(false);
     }
@@ -631,31 +641,50 @@ export default function CheckoutPage() {
       );
 
       // Create or update address
-      let addressData;
+      let addressId;
       try {
-        addressData = {
+        // Prepare address data
+        const addressData = {
+          user: user.id,
           street: formData.address,
           city: formData.city,
           state: formData.state,
           postalCode: formData.zipCode,
-          country: 'India'
+          country: 'India',
+          isDefault: true // Set as default address
         };
 
         console.log('Preparing shipping address data:', addressData);
+        
+        // Check if user already has an address
+        try {
+          const existingAddress = await pocketbase.collection('addresses')
+            .getFirstListItem(`user="${user.id}"`);
+          
+          if (existingAddress) {
+            // Update existing address
+            await pocketbase.collection('addresses').update(existingAddress.id, addressData);
+            addressId = existingAddress.id;
+            console.log('Updated existing address:', addressId);
+          }
+        } catch (addressError: any) {
+          // No existing address found, create new one
+          console.log('No existing address found, creating new one');
+          const newAddress = await pocketbase.collection('addresses').create(addressData);
+          addressId = newAddress.id;
+          console.log('Created new address:', addressId);
+        }
+        
+        if (!addressId) {
+          throw new Error('Failed to create or update address');
+        }
       } catch (error) {
         trackFormError('checkout_form', 'checkout-form', 'Failed to prepare shipping address');
         console.error('Error preparing address:', error);
         throw new Error('Failed to prepare shipping address. Please try again.');
       }
 
-      // Verify that we have valid address data
-      if (!addressData || !addressData.street || !addressData.city || !addressData.state || !addressData.postalCode) {
-        console.error('Invalid shipping address data');
-        trackFormError('checkout_form', 'checkout-form', 'Invalid address data');
-        throw new Error('Please fill in all required address fields.');
-      }
-
-      console.log(`Using shipping address data for order creation`);
+      console.log(`Using shipping address ID for order creation: ${addressId}`);
 
       // Create order in PocketBase
       const orderData = {
@@ -663,20 +692,25 @@ export default function CheckoutPage() {
         customer_name: formData.name,
         customer_email: formData.email,
         customer_phone: validatedPhone,
-        shipping_address_text: JSON.stringify(addressData), // Store as JSON string
-        products: items.map(item => ({
+        shipping_address: addressId, // Use the address ID instead of the address data
+        products: JSON.stringify(items.map(item => ({
           productId: item.productId,
           product: item.product,
           quantity: item.quantity,
           color: item.color
-        })),
+        }))),
         subtotal: subtotal,
         shipping_cost: calculateFinalTotal().shipping_cost,
         total: calculateFinalTotal().finalTotal,
         status: 'pending',
         payment_status: 'pending',
-        coupon_code: appliedCoupon?.code,
-        discount_amount: appliedCoupon?.discountAmount || 0
+        coupon_code: appliedCoupon?.code || null,
+        discount_amount: appliedCoupon?.discountAmount || 0,
+        notes: 'Order created, awaiting payment',
+        payment_id: '',
+        razorpay_order_id: '',
+        razorpay_payment_id: '',
+        razorpay_signature: '',
       };
 
       console.log('Creating order with data:', {
@@ -739,6 +773,7 @@ export default function CheckoutPage() {
     // Open Razorpay payment form
     openRazorpayCheckout({
       key: getRazorpayKeyId(),
+      order_id: razorpayOrderResponse.id,
       amount: order.total * 100, // Razorpay expects amount in paise
       currency: 'INR',
       name: 'Konipai',

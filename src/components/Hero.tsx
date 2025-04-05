@@ -201,6 +201,8 @@ const Hero = () => {
                     alt={slide.title || 'Slider image'}
                     className="w-full h-full object-cover"
                     loading="eager"
+                    width="1200"
+                    height="600"
                   />
                 </div>
               )}
@@ -211,6 +213,8 @@ const Hero = () => {
                 alt={slide.title || 'Slider image'}
                 className="w-full h-full object-cover"
                 loading={isCurrentImage ? "eager" : "lazy"}
+                width="1200"
+                height="600"
                 onLoad={(e) => {
                   // Once the high quality image loads, fade out the blurry one
                   const target = e.target as HTMLImageElement;

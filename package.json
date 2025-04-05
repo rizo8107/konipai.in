@@ -23,7 +23,11 @@
     "send:test-email": "tsx scripts/send-test-email.ts",
     "optimize:images": "node scripts/optimize-images.js",
     "send:orders-webhook": "tsx scripts/send-order-webhook.ts",
-    "update-products": "node --loader ts-node/esm scripts/updateProducts.ts"
+    "update-products": "node --loader ts-node/esm scripts/updateProducts.ts",
+    "build:server": "tsc -p tsconfig.server.json",
+    "start:server": "tsx src/server/index.ts",
+    "dev:server": "tsx watch src/server/index.ts",
+    "dev:all": "concurrently \"npm run dev\" \"npm run dev:server\""
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
@@ -69,6 +73,7 @@
     "next-themes": "^0.3.0",
     "nodemailer": "^6.10.0",
     "pocketbase": "^0.25.2",
+    "razorpay": "^2.9.6",
     "react": "^18.3.1",
     "react-day-picker": "^8.10.1",
     "react-dom": "^18.3.1",
@@ -86,12 +91,15 @@
   "devDependencies": {
     "@eslint/js": "^9.9.0",
     "@tailwindcss/typography": "^0.5.15",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.1",
     "@types/google.maps": "^3.58.1",
     "@types/node": "^22.13.10",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react-swc": "^3.5.0",
     "autoprefixer": "^10.4.20",
+    "concurrently": "^9.1.2",
     "dotenv": "^16.4.7",
     "eslint": "^9.9.0",
     "eslint-plugin-react-hooks": "^5.1.0-rc.0",

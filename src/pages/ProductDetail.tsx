@@ -45,6 +45,7 @@ import {
 } from '@/lib/analytics';
 import { ProductReviews } from '@/components/ProductReviews';
 import { ProductDetails } from '@/components/ProductDetails';
+import { Breadcrumbs, BreadcrumbItem } from '@/components/Breadcrumbs';
 
 // Generate a very low-res placeholder
 const generatePlaceholder = (color = '#f3f4f6') => {
@@ -531,17 +532,34 @@ const ProductDetail = () => {
     }
   };
   
+  // Generate breadcrumb items
+  const breadcrumbItems: BreadcrumbItem[] = [
+    {
+      label: 'Shop',
+      href: '/shop',
+    }
+  ];
+  
+  // Add category if available
+  if (product?.category) {
+    breadcrumbItems.push({
+      label: product.category.charAt(0).toUpperCase() + product.category.slice(1),
+      href: `/shop?category=${product.category}`,
+    });
+  }
+  
+  // Current product is always last
+  if (product?.name) {
+    breadcrumbItems.push({
+      label: product.name,
+    });
+  }
+  
   return (
     <div className="pb-32">
       <div className="konipai-container py-8">
         {/* Breadcrumb */}
-        <div className="flex items-center gap-2 text-sm text-muted-foreground mb-8">
-          <Link to="/shop" className="hover:text-primary">Shop</Link>
-          <span>/</span>
-          <Link to={`/shop/${product.category}`} className="hover:text-primary capitalize">{product.category}</Link>
-          <span>/</span>
-          <span className="text-foreground">{product.name}</span>
-        </div>
+        <Breadcrumbs items={breadcrumbItems} isLoading={loading} />
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
           {/* Product Images - Enhanced Gallery */}
@@ -632,9 +650,21 @@ const ProductDetail = () => {
             {/* Title and Price */}
             <h1 className="text-3xl font-bold mb-2">{product.name}</h1>
             <div className="flex items-center gap-4 mb-6">
-              <p className="text-2xl font-medium text-primary">
-                ₹{typeof product.price === 'number' ? product.price.toFixed(2) : '0.00'}
-              </p>
+              <div className="flex items-center gap-2">
+                <p className="text-2xl font-medium text-primary">
+                  ₹{typeof product.price === 'number' ? product.price.toFixed(2) : '0.00'}
+                </p>
+                {product.original_price && product.original_price > product.price && (
+                  <>
+                    <p className="text-lg text-gray-500 line-through">
+                      ₹{product.original_price.toFixed(2)}
+                    </p>
+                    <span className="text-sm bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-medium">
+                      {Math.round((1 - product.price / product.original_price) * 100)}% OFF
+                    </span>
+                  </>
+                )}
+              </div>
               <div className="flex items-center gap-1">
                 {product.reviews && product.reviews > 0 ? (
                   <div className="flex items-center gap-1 text-yellow-400">
@@ -765,6 +795,8 @@ const ProductDetail = () => {
                     onClick={decreaseQuantity}
                     className="p-2 hover:bg-gray-100 transition-colors"
                     disabled={quantity <= 1}
+                    title="Decrease quantity"
+                    aria-label="Decrease quantity"
                   >
                     <Minus className="h-4 w-4" />
                   </button>
@@ -772,6 +804,8 @@ const ProductDetail = () => {
                   <button
                     onClick={increaseQuantity}
                     className="p-2 hover:bg-gray-100 transition-colors"
+                    title="Increase quantity"
+                    aria-label="Increase quantity"
                   >
                     <Plus className="h-4 w-4" />
                   </button>

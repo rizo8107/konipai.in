@@ -27,3 +27,29 @@ export function formatCurrency(amount: number | string | null | undefined, inPai
     maximumFractionDigits: 2
   }).format(rupeeAmount);
 }
+
+/**
+ * Loads a script dynamically and returns a promise
+ * @param src - The script source URL
+ * @param id - The ID to assign to the script tag
+ * @returns Promise that resolves when the script is loaded
+ */
+export function loadScript(src: string, id: string): Promise<boolean> {
+  return new Promise((resolve, reject) => {
+    // Check if script is already loaded
+    if (document.getElementById(id)) {
+      resolve(true);
+      return;
+    }
+    
+    const script = document.createElement('script');
+    script.src = src;
+    script.id = id;
+    script.async = true;
+    
+    script.onload = () => resolve(true);
+    script.onerror = () => reject(new Error(`Failed to load script: ${src}`));
+    
+    document.body.appendChild(script);
+  });
+}

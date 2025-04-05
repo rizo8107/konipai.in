@@ -147,11 +147,23 @@ async function convertToWebP(filePath) {
       return;
     }
     
-    await sharp(filePath)
-      .webp({ quality: 80 })
-      .toFile(outputPath);
-    
-    console.log(`Created WebP: ${outputPath}`);
+    // Check if the file is a valid image before processing
+    try {
+      const metadata = await sharp(filePath).metadata();
+      if (!metadata || !metadata.format) {
+        console.log(`Skipping ${filePath}: Not a valid image or unsupported format`);
+        return;
+      }
+      
+      await sharp(filePath)
+        .webp({ quality: 80 })
+        .toFile(outputPath);
+      
+      console.log(`Created WebP: ${outputPath}`);
+    } catch (sharpError) {
+      // If sharp fails to process the image, log it and continue
+      console.log(`Skipping ${filePath}: ${sharpError.message}`);
+    }
   } catch (error) {
     console.warn(`Error converting ${filePath} to WebP:`, error.message);
   }

@@ -8,6 +8,13 @@ export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
     port: 8080,
+    proxy: {
+      '/api/razorpay': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+        secure: false,
+      }
+    }
   },
   plugins: [
     react(),
@@ -45,6 +52,26 @@ export default defineConfig(({ mode }) => ({
           if (id.includes('node_modules/@radix-ui/react-')) {
             return 'ui';
           }
+          
+          // Handle PDF generation libraries
+          if (id.includes('node_modules/html2pdf.js') || 
+              id.includes('node_modules/html2canvas') || 
+              id.includes('node_modules/jspdf')) {
+            return 'pdf-generation';
+          }
+          
+          // Handle form libraries
+          if (id.includes('node_modules/react-hook-form') || 
+              id.includes('node_modules/@hookform') || 
+              id.includes('node_modules/zod')) {
+            return 'form';
+          }
+          
+          // Handle date libraries
+          if (id.includes('node_modules/date-fns') || 
+              id.includes('node_modules/react-day-picker')) {
+            return 'date-utils';
+          }
         },
         // Configure code splitting
         chunkFileNames: 'assets/[name]-[hash].js',
@@ -67,5 +94,12 @@ export default defineConfig(({ mode }) => ({
   preview: {
     host: "::",
     port: 8080,
+    proxy: {
+      '/api/razorpay': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+        secure: false,
+      }
+    }
   },
 }));

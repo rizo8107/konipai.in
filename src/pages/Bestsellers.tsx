@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { getProducts } from '@/lib/pocketbase';
 import ProductGrid from '@/components/ProductGrid';
 import { Product } from '@/types/product';
+import { Breadcrumbs } from '@/components/Breadcrumbs';
 
 const Bestsellers = () => {
   const [bestsellers, setBestsellers] = useState<Product[]>([]);
@@ -43,14 +44,28 @@ const Bestsellers = () => {
   }
   
   return (
-    <div className="konipai-container py-8">
-      <h1 className="text-3xl font-bold mb-8 text-center">Our Bestsellers</h1>
-      <p className="text-center max-w-2xl mx-auto mb-10">
-        Discover our most popular tote bags that our customers love. 
-        Each design is crafted with care and made to last.
-      </p>
-      
-      <ProductGrid products={bestsellers} loading={loading} />
+    <div className="konipai-container py-12">
+      {/* Breadcrumbs */}
+      <Breadcrumbs
+        items={[
+          { label: 'Shop', href: '/shop' },
+          { label: 'Bestsellers' }
+        ]}
+        className="mb-6"
+      />
+
+      <div className="space-y-8">
+        <div className="text-center max-w-3xl mx-auto mb-12">
+          <h1 className="text-4xl font-bold mb-4">Bestsellers</h1>
+          <p className="text-gray-600">Our most popular products, loved by customers.</p>
+        </div>
+
+        {loading ? (
+          <ProductGrid loading={true} products={[]} />
+        ) : (
+          <ProductGrid products={bestsellers} loading={false} />
+        )}
+      </div>
     </div>
   );
 };
