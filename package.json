@@ -7,7 +7,7 @@
     "dev": "vite",
     "prebuild": "npm run optimize:images",
     "build": "vite build",
-    "build:easypanel": "vite build --mode production",
+    "build:easypanel": "vite build --mode production --no-prebuild --no-postbuild",
     "build:prod": "VITE_RAZORPAY_KEY_ID=rzp_live_YOUR_LIVE_KEY_HERE vite build --mode production",
     "postbuild": "node scripts/optimize-build.js",
     "build:dev": "vite build --mode development",

@@ -6,9 +6,9 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Clean install dependencies
+# Clean install dependencies using modern syntax
 RUN npm cache clean --force && \
-    npm ci --production=false
+    npm ci --omit=prod
 
 # Copy source code
 COPY . .
