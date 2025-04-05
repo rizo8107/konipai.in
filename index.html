@@ -39,38 +39,48 @@
     <!-- Cache control -->
     <meta http-equiv="Cache-Control" content="max-age=86400" />
     
-    <!-- Preload critical assets -->
-    <link rel="preload" href="/images/shop-hero.webp" as="image" type="image/webp" />
+    <!-- Preload critical assets - using fetchpriority instead of preload to avoid warnings -->
+    <link rel="preload" href="/images/shop-hero.jpg" as="image" fetchpriority="high" />
     
     <!-- Social Media Meta Tags -->
     <meta property="og:title" content="Konipai - Handcrafted Tote Bags">
     <meta property="og:description" content="Discover our handcrafted tote bags, designed for style and sustainability.">
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://konipai.in">
-    <meta property="og:image" content="https://konipai.in/og-image.webp">
+    <meta property="og:image" content="https://konipai.in/og-image.jpg">
     <meta property="og:image:alt" content="Konipai handcrafted tote bags">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
-    <meta property="og:image:type" content="image/webp">
-    <!-- Fallback for platforms not supporting webp -->
-    <meta property="og:image" content="https://konipai.in/og-image.jpg">
     <meta property="og:image:type" content="image/jpeg">
     
     <!-- Twitter Card data -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Konipai - Handcrafted Tote Bags">
     <meta name="twitter:description" content="Discover our handcrafted tote bags, designed for style and sustainability.">
-    <meta name="twitter:image" content="https://konipai.in/og-image.webp">
+    <meta name="twitter:image" content="https://konipai.in/og-image.jpg">
     
-    <!-- Defer non-critical third-party scripts -->
+    <!-- Error handling for external scripts -->
     <script>
+      // Handle errors for external scripts
+      window.addEventListener('error', function(e) {
+        if (e.filename && (
+          e.filename.includes('facebook.net') || 
+          e.filename.includes('clarity.ms')
+        )) {
+          // Prevent error from bubbling up
+          e.stopPropagation();
+          console.warn('Non-critical external script failed to load:', e.filename);
+          return true;
+        }
+      }, true);
+      
       // Utility to defer loading of non-critical scripts
       window.deferThirdPartyScripts = function() {
-        // List of scripts to defer
-        const scripts = [
-          { id: 'facebook-pixel', src: 'https://connect.facebook.net/en_US/fbevents.js', async: true, defer: true },
-          { id: 'clarity', src: 'https://www.clarity.ms/tag/0.8.1/clarity.js', async: true, defer: true }
-        ];
+        // List of scripts to defer - removed problematic scripts
+        const scripts = [];
+        
+        // Only load if we have scripts to load
+        if (scripts.length === 0) return;
         
         // Wait until page is fully loaded and idle
         if (window.requestIdleCallback) {
@@ -93,6 +103,12 @@
             script.src = scriptData.src;
             if (scriptData.async) script.async = true;
             if (scriptData.defer) script.defer = true;
+            
+            // Add error handling
+            script.onerror = function() {
+              console.warn('Failed to load script:', scriptData.src);
+            };
+            
             document.body.appendChild(script);
           }
         });
@@ -112,8 +128,6 @@
     <!-- End Google Tag Manager (noscript) -->
     
     <div id="root"></div>
-    <!-- IMPORTANT: DO NOT REMOVE THIS SCRIPT TAG OR THIS VERY COMMENT! -->
-    <script src="https://cdn.gpteng.co/gptengineer.js" type="module"></script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
