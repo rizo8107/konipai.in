@@ -19,6 +19,10 @@
   ],
   "env": [
     {
+      "name": "NODE_ENV",
+      "value": "production"
+    },
+    {
       "name": "VITE_POCKETBASE_URL",
       "value": "https://backend-pocketbase.7za6uc.easypanel.host/"
     },
@@ -36,8 +40,8 @@
     }
   ],
   "resources": {
-    "cpu": "100m",
-    "memory": "256Mi"
+    "cpu": "500m",
+    "memory": "512Mi"
   },
   "healthcheck": {
     "path": "/",
@@ -48,4 +52,4 @@
   },
   "restartPolicy": "always",
   "networks": ["default"]
-} 
+}

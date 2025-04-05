@@ -1,4 +1,4 @@
-# Build stage
+# Build stage with extreme memory optimizations for EasyPanel
 FROM node:18-alpine as builder
 
 # Define build arguments
@@ -34,21 +34,24 @@ ENV VITE_POCKETBASE_URL=$VITE_POCKETBASE_URL \
     SMTP_USER=$SMTP_USER \
     SMTP_PASSWORD=$SMTP_PASSWORD \
     GIT_SHA=$GIT_SHA \
-    NODE_OPTIONS="--max-old-space-size=2048"
+    NODE_OPTIONS="--max-old-space-size=512" \
+    NODE_ENV=production
 
 WORKDIR /app
 
-# Copy package files
-COPY package*.json ./
+# Copy only essential files first to optimize layer caching
+COPY package.json ./
+COPY vite.easypanel.config.js ./vite.config.js
+COPY tsconfig.json index.html ./
+COPY scripts/optimize-build.js ./scripts/
 
-# Install dependencies with memory optimizations
-RUN npm cache clean --force && \
-    npm ci --production=false --no-audit --no-fund
+# Install only minimal dependencies with extreme memory optimizations
+RUN npm config set loglevel error && \
+    npm config set progress false && \
+    npm i --no-package-lock --no-save react react-dom react-router-dom @vitejs/plugin-react-swc vite esbuild && \
+    npm cache clean --force
 
-# Copy source code
-COPY . .
-
-# Create a .env file with the build arguments
+# Create a minimal .env file with the build arguments
 RUN echo "VITE_POCKETBASE_URL=$VITE_POCKETBASE_URL" > .env && \
     echo "VITE_RAZORPAY_KEY_ID=$VITE_RAZORPAY_KEY_ID" >> .env && \
     echo "VITE_RAZORPAY_PROXY_URL=$VITE_RAZORPAY_PROXY_URL" >> .env && \
@@ -56,13 +59,19 @@ RUN echo "VITE_POCKETBASE_URL=$VITE_POCKETBASE_URL" > .env && \
     echo "VITE_SITE_TITLE=$VITE_SITE_TITLE" >> .env && \
     echo "VITE_SITE_LOGO=$VITE_SITE_LOGO" >> .env
 
-# Build the application with memory optimizations
-RUN npm run build
+# Copy source code in stages to reduce memory usage
+COPY public ./public/
+COPY src ./src/
 
-# Production stage
-FROM nginx:alpine
+# Build in stages with minimal memory usage
+RUN mkdir -p dist && \
+    # Use the ultra-lightweight build config
+    NODE_OPTIONS="--max-old-space-size=512" npx vite build --config vite.config.js --outDir=dist --emptyOutDir
 
-# Copy built assets from builder stage
+# Production stage - use the smallest possible nginx image
+FROM nginx:alpine-slim
+
+# Copy only the built assets from builder stage
 COPY --from=builder /app/dist /usr/share/nginx/html
 
 # Copy nginx configuration
