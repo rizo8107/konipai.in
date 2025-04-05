@@ -88,7 +88,7 @@ export async function createRazorpayOrder(
     // 4. Razorpay displays correct amount (₹1.00)
     
     // Convert rupees to paise (1 rupee = 100 paise)
-    const amountInPaise = Math.round(amount * 100);
+    const amountInPaise = Math.round(amount);
     console.log(`Converting ₹${amount} to ${amountInPaise} paise for Razorpay`);
     
     // Log the exact payload we're sending to the CRM endpoint
