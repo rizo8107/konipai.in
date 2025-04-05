@@ -16,6 +16,7 @@ COPY . .
 # Set memory limit and build the application using EasyPanel-specific build script
 # Use the nopre version to bypass the prebuild step that optimizes images
 ENV NODE_OPTIONS="--max-old-space-size=2048"
+ENV SKIP_IMAGE_OPTIMIZATION="true"
 RUN npm run build:easypanel:nopre
 
 # Production stage

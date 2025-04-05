@@ -20,16 +20,22 @@ const rootDir = path.resolve(__dirname, '..');
 const distDir = path.join(rootDir, 'dist');
 const publicDir = path.join(rootDir, 'public');
 
-// Make sure sharp is installed
-try {
-  const sharp = await import('sharp');
-} catch (e) {
-  console.log('Installing sharp...');
-  execSync('npm install sharp --save-dev', { stdio: 'inherit' });
-}
+// Check if optimizations should be skipped (for memory-constrained environments)
+const skipOptimizations = process.env.SKIP_IMAGE_OPTIMIZATION === 'true';
 
-// Import after potential installation
-const sharp = (await import('sharp')).default;
+// Make sure sharp is installed
+let sharp;
+try {
+  if (!skipOptimizations) {
+    sharp = await import('sharp');
+  }
+} catch (e) {
+  if (!skipOptimizations) {
+    console.log('Installing sharp...');
+    execSync('npm install sharp --save-dev', { stdio: 'inherit' });
+    sharp = (await import('sharp')).default;
+  }
+}
 
 /**
  * Main optimization function
@@ -47,13 +53,18 @@ async function optimizeBuild() {
     // 2. Optimize HTML
     await optimizeHTML();
     
-    // 3. Generate WebP versions of all images in dist
-    await optimizeImages();
+    // 3. Generate WebP versions of all images in dist (if not skipped)
+    if (!skipOptimizations) {
+      await optimizeImages();
+    } else {
+      console.log('Image optimization skipped due to SKIP_IMAGE_OPTIMIZATION environment variable');
+    }
     
     console.log('Build optimization completed successfully!');
   } catch (error) {
     console.error('Build optimization failed:', error);
-    process.exit(1);
+    // Continue with the build even if optimizations fail
+    // Don't exit with error code to avoid breaking the build process
   }
 }
 

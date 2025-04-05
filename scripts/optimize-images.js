@@ -117,36 +117,49 @@ async function optimizeImage(filePath) {
   console.log(`Optimizing: ${filePath}`);
   
   try {
-    // Get image metadata for dimensions
-    const metadata = await sharp(filePath).metadata();
+    // Check if the file exists and is readable
+    if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
+      console.log(`Skipping ${filePath}: File does not exist or is not a file`);
+      return;
+    }
     
-    // Create AVIF version (best compression but not universal support)
-    await sharp(filePath)
-      .avif({ quality: 70 })
-      .toFile(outputAvif);
-    
-    // Create WebP version (good compression and good support)
-    await sharp(filePath)
-      .webp({ quality: 80 })
-      .toFile(outputWebP);
+    // Validate image format first
+    try {
+      const metadata = await sharp(filePath).metadata();
       
-    console.log(`Created WebP: ${outputWebP}`);
-    console.log(`Created AVIF: ${outputAvif}`);
-    
-    // If it's a large image (>1MB), also create optimized versions in original format
-    const fileSize = fs.statSync(filePath).size;
-    if (fileSize > 1024 * 1024) {
-      const outputOptimized = path.join(fileInfo.dir, `${fileInfo.name}.optimized${fileInfo.ext}`);
+      // If we get metadata successfully, proceed with optimization
       
-      // Resize and optimize large images
+      // Create WebP version (good compression and good support)
       await sharp(filePath)
-        .resize(1200, null, { fit: 'inside', withoutEnlargement: true })
-        .toFormat(fileInfo.ext.replace('.', ''), { quality: 85 })
-        .toFile(outputOptimized);
+        .webp({ quality: 80 })
+        .toFile(outputWebP);
+      console.log(`Created WebP: ${outputWebP}`);
       
-      // Replace original with optimized version
-      fs.renameSync(outputOptimized, filePath);
-      console.log(`Optimized original: ${filePath}`);
+      // Create AVIF version (best compression but not universal support)
+      await sharp(filePath)
+        .avif({ quality: 70 })
+        .toFile(outputAvif);
+      console.log(`Created AVIF: ${outputAvif}`);
+      
+      // If it's a large image (>1MB), also create optimized versions in original format
+      const fileSize = fs.statSync(filePath).size;
+      if (fileSize > 1024 * 1024) {
+        const outputOptimized = path.join(fileInfo.dir, `${fileInfo.name}.optimized${fileInfo.ext}`);
+        
+        // Resize and optimize large images
+        await sharp(filePath)
+          .resize(1200, null, { fit: 'inside', withoutEnlargement: true })
+          .toFormat(fileInfo.ext.replace('.', ''), { quality: 85 })
+          .toFile(outputOptimized);
+        
+        // Replace original with optimized version
+        fs.renameSync(outputOptimized, filePath);
+        console.log(`Optimized original: ${filePath}`);
+      }
+    } catch (metadataError) {
+      // Handle unsupported image format gracefully
+      console.warn(`Skipping ${filePath}: Unsupported image format or corrupt file`);
+      return;
     }
   } catch (error) {
     console.error(`Error optimizing image ${filePath}:`, error);
@@ -201,6 +214,12 @@ async function optimizeOgImage() {
 
 // Main function
 async function main() {
+  // Check if optimization should be skipped (for memory-constrained environments)
+  if (process.env.SKIP_IMAGE_OPTIMIZATION === 'true') {
+    console.log('Image optimization skipped due to SKIP_IMAGE_OPTIMIZATION environment variable');
+    return;
+  }
+  
   try {
     // Optimize hero image first
     await optimizeHeroImage();
