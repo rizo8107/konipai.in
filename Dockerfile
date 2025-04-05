@@ -13,8 +13,10 @@ RUN npm cache clean --force && \
 # Copy source code
 COPY . .
 
-# Build the application using EasyPanel-specific build script
-RUN npm run build:easypanel
+# Set memory limit and build the application using EasyPanel-specific build script
+# Use the nopre version to bypass the prebuild step that optimizes images
+ENV NODE_OPTIONS="--max-old-space-size=2048"
+RUN npm run build:easypanel:nopre
 
 # Production stage
 FROM nginx:alpine

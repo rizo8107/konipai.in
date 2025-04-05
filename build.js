@@ -1,5 +1,5 @@
 // Custom build script with increased memory allocation
-const { execSync } = require('child_process');
+import { execSync } from 'child_process';
 
 console.log('Starting optimized build process with increased memory limit...');
 
