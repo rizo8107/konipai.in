@@ -20,49 +20,28 @@ export default defineConfig(({ mode }) => ({
     },
   },
   build: {
-    // Generate sourcemaps for debugging in production
-    sourcemap: false, // Disable sourcemaps to reduce memory usage
+    // Disable sourcemaps to reduce memory usage
+    sourcemap: false,
     // Optimize chunks to improve caching
     rollupOptions: {
       output: {
-        // Limit the number of chunks to reduce memory usage
-        manualChunks: (id) => {
-          // Group all node_modules together
-          if (id.includes('node_modules')) {
-            // Handle react and related packages
-            if (id.includes('/react') || id.includes('/react-dom') || id.includes('/react-router')) {
-              return 'vendor-react';
-            }
-            
-            // Handle UI libraries
-            if (id.includes('@radix-ui') || id.includes('@shadcn') || id.includes('lucide-react')) {
-              return 'vendor-ui';
-            }
-            
-            // All other dependencies
-            return 'vendor';
-          }
-          
-          // Group app code by main directories to reduce chunk count
-          if (id.includes('/src/components/')) {
-            return 'components';
-          }
-          
-          if (id.includes('/src/pages/')) {
-            return 'pages';
-          }
+        // Ensure React is bundled properly
+        manualChunks: {
+          // Keep React and React DOM together
+          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+          // UI libraries
+          'ui-vendor': ['@radix-ui/react-dialog', '@radix-ui/react-dropdown-menu', '@radix-ui/react-label', '@radix-ui/react-slot', '@radix-ui/react-toast', 'lucide-react'],
+          // Other common dependencies
+          'utils-vendor': ['pocketbase', 'clsx', 'tailwind-merge']
         },
-        // Configure code splitting with fewer chunks
+        // Configure code splitting
         chunkFileNames: 'assets/[name]-[hash].js',
         assetFileNames: 'assets/[name]-[hash].[ext]',
-        // Limit the number of entry points processed concurrently
         entryFileNames: 'assets/[name]-[hash].js',
       }
     },
     // Use esbuild for faster builds with less memory
     minify: 'esbuild',
-    // Disable CSS code splitting to reduce the number of generated files
-    cssCodeSplit: false,
     // Improve chunk loading
     target: 'esnext',
     assetsInlineLimit: 8192, // Inline more assets to reduce file count
