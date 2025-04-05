@@ -13,8 +13,8 @@ RUN npm cache clean --force && \
 # Copy source code
 COPY . .
 
-# Build the application
-RUN npm run build
+# Build the application using EasyPanel-specific build script
+RUN npm run build:easypanel
 
 # Production stage
 FROM nginx:alpine
