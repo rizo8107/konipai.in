@@ -40,16 +40,20 @@ ENV VITE_POCKETBASE_URL=$VITE_POCKETBASE_URL \
 # Set working directory
 WORKDIR /app
 
+# Install dependencies required for Sharp image processing
+RUN apk add --no-cache python3 make g++
+
 # Copy package files first (better caching)
 COPY package.json package-lock.json ./
 
-# Install dependencies with memory-saving options
+# Install dependencies with memory-saving options - ensure sharp is installed
 RUN npm config set loglevel error && \
     npm config set progress false && \
     npm ci --prefer-offline --no-audit --no-fund && \
+    npm install sharp && \
     npm cache clean --force
 
-# Copy source files
+# Copy source code
 COPY . .
 
 # Create .env file explicitly
@@ -60,8 +64,12 @@ RUN echo "VITE_POCKETBASE_URL=$VITE_POCKETBASE_URL" > .env && \
     echo "VITE_SITE_TITLE=$VITE_SITE_TITLE" >> .env && \
     echo "VITE_SITE_LOGO=$VITE_SITE_LOGO" >> .env
 
-# Build with memory optimizations
-RUN NODE_OPTIONS="--max-old-space-size=768" npm run build
+# Create a custom build script that skips image optimization
+RUN echo "#!/bin/sh\nNODE_OPTIONS=\"--max-old-space-size=768\" npx vite build" > build.sh && \
+    chmod +x build.sh
+
+# Build with memory optimizations - skip the image optimization step
+RUN ./build.sh
 
 # Production stage
 FROM nginx:alpine
