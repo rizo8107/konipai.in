@@ -175,11 +175,40 @@ const getPaymentStatusBadge = (status: Order['payment_status']) => {
 // Order card component for better organization
 const OrderCard = ({ order }: { order: Order }) => {
   // Parse products from JSON string if needed
-  const products = Array.isArray(order.products) 
-    ? order.products 
-    : (typeof order.products === 'string' && order.products.trim() !== '') 
-      ? JSON.parse(order.products) 
-      : [];
+  let products: OrderProduct[] = [];
+  try {
+    products = Array.isArray(order.products) 
+      ? order.products 
+      : (typeof order.products === 'string' && order.products.trim() !== '') 
+        ? JSON.parse(order.products) 
+        : [];
+    
+    // Ensure all products have valid structure
+    products = products.map(item => {
+      // If product is undefined or null, provide default empty object
+      if (!item.product) {
+        return {
+          ...item,
+          product: {
+            id: item.productId || 'unknown',
+            name: 'Product unavailable',
+            price: 0,
+            images: []
+          }
+        };
+      }
+      
+      // Ensure product has images array
+      if (!item.product.images) {
+        item.product.images = [];
+      }
+      
+      return item;
+    });
+  } catch (error) {
+    console.error('Error parsing order products:', error);
+    products = [];
+  }
   
   // Format date for display
   const orderDate = isValid(new Date(order.created))
@@ -221,10 +250,10 @@ const OrderCard = ({ order }: { order: Order }) => {
             <div key={index} className="flex items-center justify-between py-1">
               <div className="flex items-center gap-3">
                 <div className="relative h-12 w-12 overflow-hidden rounded-md border bg-muted">
-                  {item.product.images && item.product.images.length > 0 ? (
+                  {item.product && item.product.images && item.product.images.length > 0 ? (
                     <img
                       src={getOptimizedImageUrl('pbc_4092854851', item.product.id, item.product.images[0].split('/').pop() || '')}
-                      alt={item.product.name}
+                      alt={item.product.name || 'Product image'}
                       className="h-full w-full object-cover"
                       loading="lazy"
                       width={48}
@@ -250,7 +279,7 @@ const OrderCard = ({ order }: { order: Order }) => {
                   )}
                 </div>
                 <div>
-                  <div className="font-medium text-sm">{item.product.name}</div>
+                  <div className="font-medium text-sm">{item.product ? item.product.name : 'Product unavailable'}</div>
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
                     <span>Qty: {item.quantity}</span>
                     {item.color && (
@@ -263,7 +292,7 @@ const OrderCard = ({ order }: { order: Order }) => {
                 </div>
               </div>
               <div className="font-medium text-sm">
-                {formatCurrency(item.product.price * item.quantity)}
+                {formatCurrency(item.product && item.product.price ? item.product.price * item.quantity : 0)}
               </div>
             </div>
           ))}
