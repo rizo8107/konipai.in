@@ -6,15 +6,15 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Clean install dependencies using modern syntax
+# Clean install dependencies
 RUN npm cache clean --force && \
-    npm ci --omit=prod
+    npm ci --production=false
 
 # Copy source code
 COPY . .
 
-# Build the application using EasyPanel-specific build script
-RUN npm run build:easypanel
+# Build the application
+RUN npm run build
 
 # Production stage
 FROM nginx:alpine

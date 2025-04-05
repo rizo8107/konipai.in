@@ -20,8 +20,6 @@ interface CartContextType {
   clearCart: () => void;
   getItem: (productId: string, color?: string) => CartItem | undefined;
   isLoading: boolean;
-  isSyncing: boolean;
-  lastSynced: Date | null;
   subtotal: number;
   total: number;
   itemCount: number;
@@ -38,8 +36,6 @@ const SHIPPING_COST = 10;
 export function CartProvider({ children }: { children: React.ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [lastSynced, setLastSynced] = useState<Date | null>(null);
   const { toast } = useToast();
   const { user, loading: authLoading } = useAuth();
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -111,211 +107,199 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
                 console.warn('Failed to parse server cart items:', parseError);
               }
             }
-          } catch (error) {
-            console.warn('Error fetching cart from server:', error);
-          }
-          
-          // If we get here, either there was no server cart or it was invalid
-          // Use local items and sync to server
-          if (localItems.length > 0) {
-            try {
-              await syncCart();
-            } catch (syncError) {
-              console.warn('Failed to sync local cart to server:', syncError);
-            }
+          } catch (serverError) {
+            // Handle error but continue with local cart
+            console.warn('Error fetching server cart:', serverError);
           }
         }
-        
-        // If we get here, use local items
+
+        // If we get here, either:
+        // 1. User is not authenticated
+        // 2. Server cart fetch failed
+        // 3. Server cart was empty or invalid
+        // Use the local items we loaded earlier
         setItems(localItems);
       } catch (error) {
         console.error('Error loading cart:', error);
-        // Fallback to empty cart
-        setItems([]);
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: "Failed to load your cart. Please try refreshing the page.",
+        });
+        
+        // Attempt to use local storage cart as fallback
+        try {
+          const savedCart = localStorage.getItem(CART_STORAGE_KEY);
+          if (savedCart) {
+            const parsedCart = JSON.parse(savedCart);
+            if (Array.isArray(parsedCart)) {
+              setItems(parsedCart);
+            }
+          }
+        } catch (e) {
+          console.error('Could not load fallback cart:', e);
+          // Initialize empty cart when all else fails
+          setItems([]);
+        }
       } finally {
+        // Always set loading to false to prevent UI from being stuck in loading state
         setIsLoading(false);
       }
     };
 
+    // Execute cart loading
     loadCart();
-  }, [user, authLoading]);
+  }, [user, authLoading, toast]);
 
-  // Calculate totals
   const calculateTotals = (cartItems: CartItem[]) => {
-    const subtotal = cartItems.reduce(
-      (sum, item) => sum + (Number(item.product.price) || 0) * (Number(item.quantity) || 0),
-      0
-    );
-    
-    // Add shipping if below threshold
+    const subtotal = cartItems.reduce((sum, item) => {
+      const price = Number(item.product.price) || 0;
+      const quantity = Number(item.quantity) || 0;
+      return sum + (price * quantity);
+    }, 0);
+
     const shipping = subtotal >= SHIPPING_THRESHOLD ? 0 : SHIPPING_COST;
     const total = subtotal + shipping;
-    
+
     return { subtotal, shipping, total };
   };
 
-  // Sync cart with server whenever items change
+  // Sync cart with server whenever it changes
   useEffect(() => {
-    if (isLoading || authLoading) return;
-    syncCart();
-  }, [items, user, isLoading, authLoading]);
+    // Don't sync while loading auth state
+    if (authLoading) return;
 
-  // Sync cart to server
-  const syncCart = async () => {
-    if (!user) {
-      console.log('No user, skipping cart sync');
-      return;
-    }
+    const syncCart = async () => {
+      // Validate and clean cart items
+      const validItems = items.filter(isValidCartItem);
 
-    if (!pocketbase.authStore.isValid) {
-      console.warn('Auth token invalid, skipping cart sync');
-      return;
-    }
-
-    try {
-      setIsSyncing(true);
-      console.log('Starting cart sync for user:', user.id);
-
-      // Prepare cart data for API
-      const cartData = items.map(item => ({
-        productId: item.productId,
-        quantity: item.quantity,
-        color: item.color || null
-      }));
-
-      // Check if user already has a cart
-      let existingCart = null;
+      // Deduplicate items before saving
+      const deduplicatedItems = deduplicateCartItems(validItems);
+      
+      // Always update local storage
       try {
-        const cartRecords = await pocketbase.collection('carts').getList(1, 1, {
-          filter: `user="${user.id}"`,
-        });
-        
-        if (cartRecords.items.length > 0) {
-          existingCart = cartRecords.items[0];
-          console.log('Found existing cart:', existingCart.id);
+        localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(deduplicatedItems));
+      } catch (error) {
+        console.warn('Failed to save cart to local storage:', error);
+      }
+
+      // Only attempt to sync if user is authenticated
+      if (!user?.id) return;
+
+      try {
+        // Prepare cart items for server storage
+        const cartData = {
+          items: JSON.stringify(deduplicatedItems.map(item => ({
+            productId: item.productId,
+            product: {
+              id: item.product.id,
+              name: item.product.name,
+              price: item.product.price,
+              images: item.product.images,
+            },
+            quantity: item.quantity,
+            color: item.color,
+          }))),
+          user: user.id,
+        };
+
+        // Add unique request key to prevent request cancellation issues
+        const requestOptions = {
+          $autoCancel: false,
+          requestKey: `syncCart_${Date.now()}`
+        };
+
+        // First check if the user has a cart - use the catch method to handle 404 cleanly
+        const userCart = await pocketbase
+          .collection('carts')
+          .getFirstListItem(`user="${user.id}"`, requestOptions)
+          .catch(() => null);
+
+        if (!userCart) {
+          // No cart exists, create a new one with retry logic
+          let retryCount = 0;
+          const maxRetries = 3;
+          
+          const createCartWithRetry = async () => {
+            try {
+              await pocketbase.collection('carts').create(cartData, requestOptions);
+              console.log('Created new cart for user');
+            } catch (createError) {
+              console.warn(`Unable to create cart (attempt ${retryCount + 1}/${maxRetries}):`, createError);
+              
+              if (retryCount < maxRetries - 1) {
+                retryCount++;
+                // Wait a bit before retrying (exponential backoff)
+                await new Promise(resolve => setTimeout(resolve, 500 * Math.pow(2, retryCount)));
+                return createCartWithRetry();
+              }
+            }
+          };
+          
+          await createCartWithRetry();
+        } else if (userCart.id) {
+          // Cart exists, update it with retry logic
+          let retryCount = 0;
+          const maxRetries = 3;
+          
+          const updateCartWithRetry = async () => {
+            try {
+              await pocketbase.collection('carts').update(userCart.id, cartData, requestOptions);
+              console.log('Updated existing cart');
+            } catch (updateError) {
+              console.warn(`Unable to update cart (attempt ${retryCount + 1}/${maxRetries}):`, updateError);
+              
+              if (retryCount < maxRetries - 1) {
+                retryCount++;
+                // Wait a bit before retrying (exponential backoff)
+                await new Promise(resolve => setTimeout(resolve, 500 * Math.pow(2, retryCount)));
+                return updateCartWithRetry();
+              }
+            }
+          };
+          
+          await updateCartWithRetry();
         }
       } catch (error) {
-        console.warn('Error checking for existing cart:', error);
-        // Continue with creation flow if we couldn't check for existing cart
+        console.warn('Error syncing cart with server:', error);
       }
+    };
 
-      // Create a new cart with retry logic
-      const createCartWithRetry = async (retries = 3, delay = 1000) => {
-        // Ensure user is still authenticated
-        if (!pocketbase.authStore.isValid) {
-          console.warn('Auth token invalid, skipping cart creation');
-          return null;
-        }
+    // Debounce the sync to avoid too many requests
+    const timeoutId = setTimeout(syncCart, 1000);
+    return () => clearTimeout(timeoutId);
+  }, [items, user, authLoading]);
 
-        for (let attempt = 0; attempt < retries; attempt++) {
-          try {
-            console.log(`Creating new cart (attempt ${attempt + 1}/${retries})`);
-            
-            // Create a new cart record
-            return await pocketbase.collection('carts').create({
-              user: user.id,
-              items: cartData
-            });
-          } catch (error: any) {
-            console.error(`Cart creation failed (attempt ${attempt + 1}/${retries}):`, error);
-            
-            // If this is a 400 error, log more details
-            if (error.status === 400) {
-              console.error('Validation error details:', error.data);
-            }
-            
-            // If we have more retries, wait before trying again
-            if (attempt < retries - 1) {
-              // Exponential backoff
-              const backoffDelay = delay * Math.pow(2, attempt);
-              console.log(`Retrying in ${backoffDelay}ms...`);
-              await new Promise(resolve => setTimeout(resolve, backoffDelay));
-            } else {
-              throw error; // Re-throw the last error
-            }
-          }
-        }
-        return null; // Should never reach here due to throw above
-      };
-
-      // Update existing cart with retry logic
-      const updateCartWithRetry = async (cartId: string, retries = 3, delay = 1000) => {
-        // Ensure user is still authenticated
-        if (!pocketbase.authStore.isValid) {
-          console.warn('Auth token invalid, skipping cart update');
-          return null;
-        }
-
-        for (let attempt = 0; attempt < retries; attempt++) {
-          try {
-            console.log(`Updating cart ${cartId} (attempt ${attempt + 1}/${retries})`);
-            
-            // Update the existing cart
-            return await pocketbase.collection('carts').update(cartId, {
-              items: cartData
-            });
-          } catch (error: any) {
-            console.error(`Cart update failed (attempt ${attempt + 1}/${retries}):`, error);
-            
-            // If this is a 400 error, log more details
-            if (error.status === 400) {
-              console.error('Validation error details:', error.data);
-            }
-            
-            // If we have more retries, wait before trying again
-            if (attempt < retries - 1) {
-              // Exponential backoff
-              const backoffDelay = delay * Math.pow(2, attempt);
-              console.log(`Retrying in ${backoffDelay}ms...`);
-              await new Promise(resolve => setTimeout(resolve, backoffDelay));
-            } else {
-              throw error; // Re-throw the last error
-            }
-          }
-        }
-        return null; // Should never reach here due to throw above
-      };
-
-      // Either update existing cart or create a new one
-      if (existingCart) {
-        await updateCartWithRetry(existingCart.id);
-        console.log('Cart updated successfully');
-      } else {
-        await createCartWithRetry();
-        console.log('New cart created successfully');
-      }
-
-      setIsSyncing(false);
-      setLastSynced(new Date());
-    } catch (error) {
-      console.error('Failed to sync cart:', error);
-      setIsSyncing(false);
-      
-      // Don't show error toast for network issues in production
-      // as it can be annoying for users with intermittent connections
-      if (import.meta.env.MODE !== 'production') {
-        toast({
-          title: 'Cart Sync Error',
-          description: 'Failed to sync your cart with the server. Your items are saved locally.',
-          variant: 'destructive',
-        });
-      }
-    }
-  };
-
-  // Add item to cart
   const addItem = (product: Product, quantity: number, color: string) => {
+    if (!product || !product.id) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Could not add product to cart. Invalid product.",
+      });
+      return;
+    }
+
+    if (typeof quantity !== 'number' || quantity < 1) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Please select a valid quantity.",
+      });
+      return;
+    }
+
     setItems((currentItems) => {
-      // Create a copy of the current items
-      let newItems = [...currentItems];
-      
-      // Check if item already exists in cart
-      const existingItemIndex = newItems.findIndex(
+      // Check if item already exists in cart with same color
+      const existingItemIndex = currentItems.findIndex(
         (item) => item.productId === product.id && item.color === color
       );
-      
-      if (existingItemIndex !== -1) {
+
+      let newItems;
+
+      if (existingItemIndex >= 0) {
         // Update quantity if item exists
+        newItems = [...currentItems];
         newItems[existingItemIndex] = {
           ...newItems[existingItemIndex],
           quantity: newItems[existingItemIndex].quantity + quantity,
@@ -441,8 +425,6 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     clearCart,
     getItem,
     isLoading,
-    isSyncing,
-    lastSynced,
     subtotal,
     total,
     itemCount,

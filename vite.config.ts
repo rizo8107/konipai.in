@@ -20,37 +20,48 @@ export default defineConfig(({ mode }) => ({
     },
   },
   build: {
-    // Disable sourcemaps to reduce memory usage
-    sourcemap: false,
+    // Generate sourcemaps for debugging in production
+    sourcemap: mode === 'development',
     // Optimize chunks to improve caching
     rollupOptions: {
       output: {
-        // Ensure React is bundled properly
-        manualChunks: {
-          // Keep React and React DOM together
-          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
-          // UI libraries
-          'ui-vendor': ['@radix-ui/react-dialog', '@radix-ui/react-dropdown-menu', '@radix-ui/react-label', '@radix-ui/react-slot', '@radix-ui/react-toast', 'lucide-react'],
-          // Other common dependencies
-          'utils-vendor': ['pocketbase', 'clsx', 'tailwind-merge']
+        manualChunks: (id) => {
+          // Handle react and react-dom
+          if (id.includes('node_modules/react/') || id.includes('node_modules/react-dom/')) {
+            return 'react';
+          }
+          
+          // Handle react-router-dom
+          if (id.includes('node_modules/react-router-dom/')) {
+            return 'router';
+          }
+          
+          // Handle react-intersection-observer specifically
+          if (id.includes('node_modules/react-intersection-observer/')) {
+            return 'utils';
+          }
+          
+          // Handle all radix UI components
+          if (id.includes('node_modules/@radix-ui/react-')) {
+            return 'ui';
+          }
         },
         // Configure code splitting
         chunkFileNames: 'assets/[name]-[hash].js',
         assetFileNames: 'assets/[name]-[hash].[ext]',
-        entryFileNames: 'assets/[name]-[hash].js',
       }
     },
-    // Use esbuild for faster builds with less memory
-    minify: 'esbuild',
+    // Optimize minification
+    minify: 'terser',
+    terserOptions: {
+      compress: {
+        drop_console: mode === 'production',
+        drop_debugger: mode === 'production',
+      },
+    },
     // Improve chunk loading
     target: 'esnext',
-    assetsInlineLimit: 8192, // Inline more assets to reduce file count
-    // Chunk size warnings threshold - increase to reduce noise
-    chunkSizeWarningLimit: 1000,
-    assetsInclude: ['**/*.png', '**/*.jpg', '**/*.jpeg', '**/*.gif', '**/*.svg'],
-  },
-  optimizeDeps: {
-    exclude: ['lovable-tagger'] // Exclude the image optimizer
+    assetsInlineLimit: 4096, // Inline small assets to reduce HTTP requests
   },
   // Enable brotli compression for even better compression (when supported by the server)
   preview: {
