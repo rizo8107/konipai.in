@@ -416,9 +416,31 @@ export default function Shop() {
                     <h3 className="font-medium text-sm sm:text-base mb-1 truncate">
                       {product.name}
                     </h3>
-                    <p className="text-sm sm:text-base font-medium">
-                      ₹{typeof product.price === 'number' ? product.price.toFixed(2) : '0.00'}
-                    </p>
+                    <div className="flex flex-col">
+                      <div className="flex items-center gap-2">
+                        <p className={cn(
+                          "text-sm sm:text-base font-medium",
+                          product.original_price && product.original_price > product.price ? "text-[#219898]" : ""
+                        )}>
+                          ₹{typeof product.price === 'number' ? product.price.toFixed(2) : '0.00'}
+                        </p>
+                        {product.original_price && product.original_price > product.price && (
+                          <p className="text-sm text-gray-500 line-through">
+                            ₹{product.original_price.toFixed(2)}
+                          </p>
+                        )}
+                      </div>
+                      {product.original_price && product.original_price > product.price && (
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className="text-xs font-medium text-[#219898]">
+                            Save ₹{(product.original_price - product.price).toFixed(2)}
+                          </span>
+                          <span className="text-xs font-medium text-black">
+                            ({Math.round((1 - product.price / product.original_price) * 100)}% OFF)
+                          </span>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </Link>
               ))}

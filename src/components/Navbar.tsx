@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { ShoppingBag, Menu } from "lucide-react"
+import { ShoppingBag, Menu, Award, Sparkles, Info, Package, Heart, Settings, LogOut } from "lucide-react"
 import { Sheet, SheetClose, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { Cart } from "./Cart"
 import { Logo } from '@/components/Logo'
@@ -30,59 +30,126 @@ export default function Navbar() {
               <span className="sr-only">Toggle menu</span>
             </Button>
           </SheetTrigger>
-          <SheetContent side="left" className="w-[300px] sm:w-[400px]">
-            <nav className="flex flex-col gap-4">
-              <SheetClose asChild>
-                <Link to="/" className="flex items-center gap-2">
-                  <Logo className="h-6" />
-                </Link>
-              </SheetClose>
-              <SheetClose asChild>
-                <Link to="/shop" className="text-lg font-semibold">
-                  Shop
-                </Link>
-              </SheetClose>
-              <SheetClose asChild>
-                <Link to="/bestsellers" className="text-lg font-semibold">
-                  Bestsellers
-                </Link>
-              </SheetClose>
-              <SheetClose asChild>
-                <Link to="/new-arrivals" className="text-lg font-semibold">
-                  New Arrivals
-                </Link>
-              </SheetClose>
-              <SheetClose asChild>
-                <Link to="/about" className="text-lg font-semibold">
-                  About
-                </Link>
-              </SheetClose>
+          <SheetContent side="left" className="w-[300px] sm:w-[400px] p-0">
+            <nav className="flex flex-col h-full bg-white">
+              {/* Header */}
+              <div className="border-b p-6">
+                <SheetClose asChild>
+                  <Link to="/" className="flex items-center gap-2">
+                    <Logo className="h-6" />
+                  </Link>
+                </SheetClose>
+              </div>
               
-              {/* Add authenticated user links for mobile */}
-              {user && (
-                <>
-                  <div className="h-px bg-border my-2" />
+              {/* Menu Items */}
+              <div className="flex-1 overflow-y-auto">
+                <div className="flex flex-col gap-1 p-4">
                   <SheetClose asChild>
-                    <Link to="/profile" className="text-lg font-semibold">
-                      Profile
-                    </Link>
-                  </SheetClose>
-                  <SheetClose asChild>
-                    <Link to="/orders" className="text-lg font-semibold">
-                      Orders
-                    </Link>
-                  </SheetClose>
-                  <SheetClose asChild>
-                    <Button 
-                      variant="ghost" 
-                      className="text-lg font-semibold justify-start px-0 hover:bg-transparent"
-                      onClick={() => signOut()}
+                    <Link 
+                      to="/shop" 
+                      className="flex items-center gap-2 px-4 py-3 text-base font-medium rounded-lg transition-colors hover:bg-gray-100"
                     >
-                      Log out
-                    </Button>
+                      <ShoppingBag className="h-5 w-5 text-gray-500" />
+                      Shop
+                    </Link>
                   </SheetClose>
-                </>
-              )}
+                  <SheetClose asChild>
+                    <Link 
+                      to="/bestsellers" 
+                      className="flex items-center gap-2 px-4 py-3 text-base font-medium rounded-lg transition-colors hover:bg-gray-100"
+                    >
+                      <Award className="h-5 w-5 text-gray-500" />
+                      Bestsellers
+                    </Link>
+                  </SheetClose>
+                  <SheetClose asChild>
+                    <Link 
+                      to="/new-arrivals" 
+                      className="flex items-center gap-2 px-4 py-3 text-base font-medium rounded-lg transition-colors hover:bg-gray-100"
+                    >
+                      <Sparkles className="h-5 w-5 text-gray-500" />
+                      New Arrivals
+                    </Link>
+                  </SheetClose>
+                  <SheetClose asChild>
+                    <Link 
+                      to="/about" 
+                      className="flex items-center gap-2 px-4 py-3 text-base font-medium rounded-lg transition-colors hover:bg-gray-100"
+                    >
+                      <Info className="h-5 w-5 text-gray-500" />
+                      About
+                    </Link>
+                  </SheetClose>
+                </div>
+              </div>
+              
+              {/* Footer */}
+              <div className="border-t p-6">
+                <div className="flex flex-col gap-4">
+                  {user ? (
+                    <>
+                      <div className="flex items-center gap-4 mb-2">
+                        <Avatar>
+                          <AvatarImage src={user.avatar} />
+                          <AvatarFallback>{user.name?.charAt(0)}</AvatarFallback>
+                        </Avatar>
+                        <div>
+                          <p className="font-medium">{user.name}</p>
+                          <p className="text-sm text-gray-500">{user.email}</p>
+                        </div>
+                      </div>
+                      <SheetClose asChild>
+                        <Link 
+                          to="/orders" 
+                          className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors hover:bg-gray-100"
+                        >
+                          <Package className="h-4 w-4 text-gray-500" />
+                          My Orders
+                        </Link>
+                      </SheetClose>
+                      <SheetClose asChild>
+                        <Link 
+                          to="/wishlist" 
+                          className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors hover:bg-gray-100"
+                        >
+                          <Heart className="h-4 w-4 text-gray-500" />
+                          Wishlist
+                        </Link>
+                      </SheetClose>
+                      <SheetClose asChild>
+                        <Link 
+                          to="/settings" 
+                          className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors hover:bg-gray-100"
+                        >
+                          <Settings className="h-4 w-4 text-gray-500" />
+                          Settings
+                        </Link>
+                      </SheetClose>
+                      <Button 
+                        variant="outline" 
+                        className="w-full mt-2"
+                        onClick={() => signOut()}
+                      >
+                        <LogOut className="h-4 w-4 mr-2" />
+                        Sign Out
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <SheetClose asChild>
+                        <Button asChild className="w-full">
+                          <Link to="/login">Sign In</Link>
+                        </Button>
+                      </SheetClose>
+                      <SheetClose asChild>
+                        <Button asChild variant="outline" className="w-full">
+                          <Link to="/register">Create Account</Link>
+                        </Button>
+                      </SheetClose>
+                    </>
+                  )}
+                </div>
+              </div>
             </nav>
           </SheetContent>
         </Sheet>

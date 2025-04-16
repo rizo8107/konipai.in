@@ -1,7 +1,10 @@
 import * as React from "react"
 import { Slot } from "@radix-ui/react-slot"
 import { VariantProps, cva } from "class-variance-authority"
-import { PanelLeft } from "lucide-react"
+import { PanelLeft, ShoppingBag, Award, Sparkles, Info, Package, Heart, Settings, LogOut } from "lucide-react"
+import { Link } from "react-router-dom"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Logo } from "@/components/ui/logo"
 
 import { useIsMobile } from "@/hooks/use-mobile"
 import { cn } from "@/lib/utils"
@@ -160,6 +163,12 @@ const Sidebar = React.forwardRef<
     side?: "left" | "right"
     variant?: "sidebar" | "floating" | "inset"
     collapsible?: "offcanvas" | "icon" | "none"
+    user?: {
+      name: string
+      email: string
+      avatar?: string
+    }
+    onSignOut?: () => void
   }
 >(
   (
@@ -168,6 +177,8 @@ const Sidebar = React.forwardRef<
       variant = "sidebar",
       collapsible = "offcanvas",
       className,
+      user,
+      onSignOut,
       children,
       ...props
     },
@@ -204,7 +215,107 @@ const Sidebar = React.forwardRef<
             }
             side={side}
           >
-            <div className="flex h-full w-full flex-col">{children}</div>
+            <div className="flex h-full w-full flex-col">
+              <div className="space-y-4 py-4">
+                <div className="px-6 py-2">
+                  <Link to="/" className="flex items-center gap-2">
+                    <Logo className="h-6" />
+                  </Link>
+                </div>
+                <div className="px-3">
+                  <div className="space-y-1">
+                    <Link
+                      to="/shop"
+                      className="flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-lg transition-colors hover:bg-gray-100"
+                    >
+                      <ShoppingBag className="h-5 w-5 text-gray-500" />
+                      Shop
+                    </Link>
+                    <Link
+                      to="/bestsellers"
+                      className="flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-lg transition-colors hover:bg-gray-100"
+                    >
+                      <Award className="h-5 w-5 text-gray-500" />
+                      Bestsellers
+                    </Link>
+                    <Link
+                      to="/new-arrivals"
+                      className="flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-lg transition-colors hover:bg-gray-100"
+                    >
+                      <Sparkles className="h-5 w-5 text-gray-500" />
+                      New Arrivals
+                    </Link>
+                    <Link
+                      to="/about"
+                      className="flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-lg transition-colors hover:bg-gray-100"
+                    >
+                      <Info className="h-5 w-5 text-gray-500" />
+                      About
+                    </Link>
+                  </div>
+                </div>
+                
+                {/* User Section */}
+                <div className="px-3 py-2">
+                  <div className="mt-auto space-y-4">
+                    {user ? (
+                      <>
+                        <div className="flex items-center gap-4 px-4 py-3">
+                          <Avatar>
+                            <AvatarImage src={user.avatar} />
+                            <AvatarFallback>{user.name?.charAt(0)}</AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <p className="font-medium text-sm">{user.name}</p>
+                            <p className="text-xs text-gray-500">{user.email}</p>
+                          </div>
+                        </div>
+                        <div className="space-y-1">
+                          <Link
+                            to="/orders"
+                            className="flex items-center gap-3 px-4 py-2 text-sm font-medium rounded-lg transition-colors hover:bg-gray-100"
+                          >
+                            <Package className="h-4 w-4 text-gray-500" />
+                            My Orders
+                          </Link>
+                          <Link
+                            to="/wishlist"
+                            className="flex items-center gap-3 px-4 py-2 text-sm font-medium rounded-lg transition-colors hover:bg-gray-100"
+                          >
+                            <Heart className="h-4 w-4 text-gray-500" />
+                            Wishlist
+                          </Link>
+                          <Link
+                            to="/settings"
+                            className="flex items-center gap-3 px-4 py-2 text-sm font-medium rounded-lg transition-colors hover:bg-gray-100"
+                          >
+                            <Settings className="h-4 w-4 text-gray-500" />
+                            Settings
+                          </Link>
+                          <Button
+                            variant="outline"
+                            className="w-full mt-4"
+                            onClick={onSignOut}
+                          >
+                            <LogOut className="h-4 w-4 mr-2" />
+                            Sign Out
+                          </Button>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="space-y-2 px-4">
+                        <Button asChild className="w-full">
+                          <Link to="/login">Sign In</Link>
+                        </Button>
+                        <Button asChild variant="outline" className="w-full">
+                          <Link to="/register">Create Account</Link>
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
           </SheetContent>
         </Sheet>
       )
