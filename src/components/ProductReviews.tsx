@@ -6,7 +6,8 @@ import {
   createReview, 
   addReviewComment, 
   voteReview,
-  type Review 
+  type Review,
+  pocketbase 
 } from '@/lib/pocketbase';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -95,22 +96,40 @@ export const ProductReviews = ({ productId, initialReviewCount = 0, onReviewAdde
       return;
     }
     
+    if (!content.trim()) {
+      toast({
+        variant: "destructive",
+        title: "Review Required",
+        description: "Please write your review before submitting.",
+      });
+      return;
+    }
+
     try {
       setSubmitting(true);
+      
+      // Check if user has purchased the product
+      const verifiedPurchase = await checkVerifiedPurchase(productId);
+      
+      // Create the review
       await createReview(
         productId,
         rating,
-        title,
-        content,
-        selectedImages
+        title.trim() || 'Product Review', // Use default title if empty
+        content.trim(),
+        selectedImages,
+        verifiedPurchase
       );
       
       // Reset form
       setRating(5);
       setTitle('');
       setContent('');
-      setSelectedImages([]);
+      
+      // Cleanup preview URLs
+      imagePreviewUrls.forEach(url => URL.revokeObjectURL(url));
       setImagePreviewUrls([]);
+      setSelectedImages([]);
       setShowReviewForm(false);
       
       // Reload reviews
@@ -130,10 +149,25 @@ export const ProductReviews = ({ productId, initialReviewCount = 0, onReviewAdde
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Failed to submit review. Please try again later.",
+        description: error instanceof Error ? error.message : "Failed to submit review. Please try again later.",
       });
     } finally {
       setSubmitting(false);
+    }
+  };
+  
+  // Add helper function to check if user has purchased the product
+  const checkVerifiedPurchase = async (productId: string): Promise<boolean> => {
+    if (!user?.id) return false;
+    
+    try {
+      const response = await pocketbase.collection('orders').getList(1, 1, {
+        filter: `user = "${user.id}" && products.productId = "${productId}" && status = "delivered"`,
+      });
+      return response.totalItems > 0;
+    } catch (error) {
+      console.error('Error checking purchase verification:', error);
+      return false;
     }
   };
   

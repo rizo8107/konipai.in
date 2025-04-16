@@ -2,13 +2,8 @@ import PocketBase, { RecordModel } from 'pocketbase';
 
 console.log('Initializing PocketBase client with URL:', import.meta.env.VITE_POCKETBASE_URL);
 
-// Initialize PocketBase client with proper fallback URL
-const pb = new PocketBase(
-    import.meta.env.VITE_POCKETBASE_URL || 'https://backend-pocketbase.7za6uc.easypanel.host'
-);
-
-// Export the client instance
-export const pocketbase = pb;
+// Initialize PocketBase instance
+export const pocketbase = new PocketBase('https://backend-pocketbase.7za6uc.easypanel.host');
 
 // Export collection names as constants
 export enum Collections {
@@ -199,14 +194,14 @@ interface ListOptions {
 
 // Auth functions
 export async function signIn(email: string, password: string) {
-    const authData = await pb.collection('users').authWithPassword(email, password);
+    const authData = await pocketbase.collection('users').authWithPassword(email, password);
     return authData;
 }
 
 export async function signInWithGoogle() {
     try {
         // Get the OAuth2 URL for Google
-        const authData = await pb.collection('users').authWithOAuth2({ 
+        const authData = await pocketbase.collection('users').authWithOAuth2({ 
             provider: 'google',
             // Use simpler configuration with fewer options to avoid issues
             createData: {
@@ -231,7 +226,7 @@ export async function signInWithGoogle() {
 }
 
 export async function signUp(email: string, password: string, name: string) {
-    const user = await pb.collection('users').create({
+    const user = await pocketbase.collection('users').create({
         email,
         password,
         passwordConfirm: password,
@@ -241,7 +236,7 @@ export async function signUp(email: string, password: string, name: string) {
 }
 
 export async function signOut() {
-    pb.authStore.clear();
+    pocketbase.authStore.clear();
 }
 
 // Product functions
@@ -280,7 +275,7 @@ export async function getProducts(filter?: ProductFilter, signal?: AbortSignal):
         }
 
         console.log('Fetching products with options:', options);
-        const records = await pb.collection(Collections.PRODUCTS).getList(1, 100, options);
+        const records = await pocketbase.collection(Collections.PRODUCTS).getList(1, 100, options);
         console.log(`Successfully fetched ${records.items.length} products`);
 
         // Process products even if reviews fail
@@ -303,7 +298,7 @@ export async function getProducts(filter?: ProductFilter, signal?: AbortSignal):
         try {
             const reviewCounts = await Promise.all(
                 records.items.map(record => 
-                    pb.collection('reviews').getList(1, 1, {
+                    pocketbase.collection('reviews').getList(1, 1, {
                         filter: `product = "${record.id}"`,
                         fields: 'id',
                         $autoCancel: false,
@@ -379,65 +374,65 @@ export async function getProduct(id: string) {
 
 // Address functions
 export async function getAddresses() {
-    if (!pb.authStore.model?.id) return [];
-    return await pb.collection('addresses').getFullList<Address>({
-        filter: `user = "${pb.authStore.model.id}"`,
+    if (!pocketbase.authStore.model?.id) return [];
+    return await pocketbase.collection('addresses').getFullList<Address>({
+        filter: `user = "${pocketbase.authStore.model.id}"`,
     });
 }
 
 export async function createAddress(address: Omit<Address, keyof RecordModel>) {
-    if (!pb.authStore.model?.id) throw new Error('Not authenticated');
-    return await pb.collection('addresses').create({
+    if (!pocketbase.authStore.model?.id) throw new Error('Not authenticated');
+    return await pocketbase.collection('addresses').create({
         ...address,
-        user: pb.authStore.model.id,
+        user: pocketbase.authStore.model.id,
     });
 }
 
 export async function updateAddress(id: string, address: Partial<Omit<Address, keyof RecordModel>>) {
-    return await pb.collection('addresses').update(id, address);
+    return await pocketbase.collection('addresses').update(id, address);
 }
 
 export async function deleteAddress(id: string) {
-    return await pb.collection('addresses').delete(id);
+    return await pocketbase.collection('addresses').delete(id);
 }
 
 // Order functions
 export async function getOrders() {
-    if (!pb.authStore.model?.id) return [];
-    return await pb.collection('orders').getFullList<Order>({
-        filter: `user = "${pb.authStore.model.id}"`,
+    if (!pocketbase.authStore.model?.id) return [];
+    return await pocketbase.collection('orders').getFullList<Order>({
+        filter: `user = "${pocketbase.authStore.model.id}"`,
         expand: 'shippingAddress',
     });
 }
 
 export async function createOrder(order: Omit<Order, keyof RecordModel>) {
-    if (!pb.authStore.model?.id) throw new Error('Not authenticated');
-    return await pb.collection('orders').create({
+    if (!pocketbase.authStore.model?.id) throw new Error('Not authenticated');
+    return await pocketbase.collection('orders').create({
         ...order,
-        user: pb.authStore.model.id,
+        user: pocketbase.authStore.model.id,
     });
 }
 
 // Profile functions
 export async function updateProfile(data: Partial<Omit<User, keyof RecordModel>>) {
-    if (!pb.authStore.model?.id) throw new Error('Not authenticated');
-    return await pb.collection('users').update(pb.authStore.model.id, data);
+    if (!pocketbase.authStore.model?.id) throw new Error('Not authenticated');
+    return await pocketbase.collection('users').update(pocketbase.authStore.model.id, data);
 }
 
 export async function uploadAvatar(file: File) {
-    if (!pb.authStore.model?.id) throw new Error('Not authenticated');
+    if (!pocketbase.authStore.model?.id) throw new Error('Not authenticated');
     const formData = new FormData();
     formData.append('avatar', file);
-    return await pb.collection('users').update(pb.authStore.model.id, formData);
+    return await pocketbase.collection('users').update(pocketbase.authStore.model.id, formData);
 }
 
 // Auth state
 export function isAuthenticated() {
-    return pb.authStore.isValid;
+    return pocketbase.authStore.isValid;
 }
 
 export function getCurrentUser(): User | null {
-    const model = pb.authStore.model;
+    const model = pocketbase.authStore.model;
     return model ? model as User : null;
 }
 
@@ -446,7 +441,7 @@ export function onAuthStateChange(callback: (isAuthenticated: boolean) => void) 
     console.log('Setting up auth state change listener');
     
     // Immediately trigger callback with current state to ensure proper initialization
-    const initialState = pb.authStore.isValid;
+    const initialState = pocketbase.authStore.isValid;
     console.log('Initial auth state:', initialState ? 'authenticated' : 'not authenticated');
     
     // Execute callback once on setup with the current state
@@ -455,7 +450,7 @@ export function onAuthStateChange(callback: (isAuthenticated: boolean) => void) 
     }, 0);
     
     // Set up the listener for future changes
-    pb.authStore.onChange((token, model) => {
+    pocketbase.authStore.onChange((token, model) => {
         const isAuth = !!token && !!model;
         console.log('Auth state changed:', isAuth ? 'authenticated' : 'not authenticated');
         callback(isAuth);
@@ -485,11 +480,11 @@ export async function getSliderImages(signal?: AbortSignal): Promise<SliderImage
             options.signal = signal;
         }
 
-        const records = await pb.collection(Collections.SLIDER_IMAGES).getList(1, 10, options);
+        const records = await pocketbase.collection(Collections.SLIDER_IMAGES).getList(1, 10, options);
 
         return records.items.map(record => ({
             ...record,
-            image: pb.files.getUrl(record, record.image)
+            image: pocketbase.files.getUrl(record, record.image)
         })) as SliderImage[];
     } catch (error) {
         if (error.name === 'AbortError') {
@@ -539,8 +534,12 @@ export const createReview = async (
     images: File[],
     verifiedPurchase: boolean = false
 ): Promise<Review> => {
+    if (!pocketbase.authStore.model?.id) {
+        throw new Error('User must be authenticated to create a review');
+    }
+
     const formData = new FormData();
-    formData.append('user', pocketbase.authStore.model?.id || '');
+    formData.append('user', pocketbase.authStore.model.id);
     formData.append('product', productId);
     formData.append('rating', rating.toString());
     formData.append('title', title);
@@ -548,20 +547,31 @@ export const createReview = async (
     formData.append('verified_purchase', verifiedPurchase.toString());
     formData.append('helpful_votes', '0');
     
+    // Add images if any
     images.forEach(image => {
         formData.append('images', image);
     });
 
-    // Create the review
-    const review = await pocketbase.collection('reviews').create(formData);
+    try {
+        // Create the review in the reviews collection
+        const review = await pocketbase.collection('reviews').create(formData);
+        
+        // Get the current review count
+        const reviewsCount = await pocketbase.collection('reviews').getList(1, 1, {
+            filter: `product = "${productId}"`,
+            $autoCancel: false
+        });
 
-    // Update the product's review count
-    const product = await pocketbase.collection('products').getOne(productId);
-    await pocketbase.collection('products').update(productId, {
-        reviews: (product.reviews || 0) + 1
-    });
+        // Update the reviews count in the product record
+        await pocketbase.collection('products').update(productId, {
+            'reviews': reviewsCount.totalItems
+        });
 
-    return review;
+        return review as unknown as Review;
+    } catch (error) {
+        console.error('Error creating review:', error);
+        throw new Error(error instanceof Error ? error.message : 'Failed to create review');
+    }
 };
 
 // Function to get reviews for a product
