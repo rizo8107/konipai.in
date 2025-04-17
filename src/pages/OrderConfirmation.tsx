@@ -271,11 +271,14 @@ export default function OrderConfirmation() {
                     <div className="w-16 h-16 rounded-md overflow-hidden mr-4 bg-gray-100 flex-shrink-0">
                       {item.product?.images && item.product.images.length > 0 ? (
                         <img
-                          src={item.product.images[0]}
+                          src={`${import.meta.env.VITE_POCKETBASE_URL.replace(/\/$/, '')}/api/files/pbc_4092854851/${item.product.id}/${item.product.images[0].split('/').pop()}`}
                           alt={item.product?.name || 'Product'}
                           className="w-full h-full object-cover"
+                          loading="eager"
+                          crossOrigin="anonymous"
                           onError={(e) => {
-                            (e.target as HTMLImageElement).src = '/placeholder-product.png';
+                            console.error('Image load error:', e.currentTarget.src);
+                            (e.target as HTMLImageElement).src = '/placeholder-product.jpg';
                           }}
                         />
                       ) : (

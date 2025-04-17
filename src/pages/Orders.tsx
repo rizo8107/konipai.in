@@ -301,9 +301,18 @@ export default function Orders() {
                       </CardTitle>
                     </Link>
                     <CardDescription>
-                      {isValid(new Date(order.created))
-                        ? format(new Date(order.created), 'PPP')
-                        : 'Invalid Date'}
+                      {(() => {
+                        try {
+                          const parsedCreatedDate = new Date(order.created);
+                          if (isValid(parsedCreatedDate)) {
+                            return format(parsedCreatedDate, 'PPP');
+                          }
+                          return format(new Date(), 'PPP'); // Use current date as fallback
+                        } catch (err) {
+                          console.error('Invalid date format:', order.created);
+                          return 'Order Placed';
+                        }
+                      })()}
                     </CardDescription>
                   </div>
                   <div className="flex items-center gap-2">

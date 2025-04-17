@@ -54,6 +54,9 @@ const SERVER_URL = '/api/razorpay';
 // New CRM Supabase endpoint for order creation
 const CRM_ORDER_ENDPOINT = import.meta.env.VITE_CRM_ORDER_ENDPOINT || 'https://crm-supabase.7za6uc.easypanel.host/functions/v1/create-order';
 
+// New CRM Supabase endpoint for payment verification
+const CRM_VERIFY_ENDPOINT = import.meta.env.VITE_CRM_VERIFY_ENDPOINT || 'https://crm-supabase.7za6uc.easypanel.host/functions/v1/verify-payment';
+
 // Get Razorpay Key ID from environment
 export function getRazorpayKeyId(): string {
   return import.meta.env.VITE_RAZORPAY_KEY_ID || 'rzp_test_1DP5mmOlF5G5ag';
@@ -156,10 +159,20 @@ export function openRazorpayCheckout(options: RazorpayOptions): Promise<Razorpay
         key: options.key.substring(0, 8) + '...' // Log partial key for security
       });
       
+      // Store the original handler to call it later
+      const originalHandler = options.handler;
+      
       const razorpay = new (window as any).Razorpay({
         ...options,
         handler: function (response: RazorpaySuccessResponse) {
           console.log('Payment successful, response:', response);
+          
+          // Call the original handler if it exists
+          if (typeof originalHandler === 'function') {
+            originalHandler(response);
+          }
+          
+          // Resolve the promise
           resolve(response);
         },
       });
@@ -190,7 +203,9 @@ export async function verifyRazorpayPayment(
   signature: string
 ): Promise<RazorpayPaymentResponse> {
   try {
-    const response = await fetch(`${SERVER_URL}/verify-payment`, {
+    console.log(`Verifying payment with CRM endpoint: ${CRM_VERIFY_ENDPOINT}`);
+    
+    const response = await fetch(CRM_VERIFY_ENDPOINT, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -202,12 +217,27 @@ export async function verifyRazorpayPayment(
       }),
     });
 
+    console.log('Verification response status:', response.status);
+    
     if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || 'Payment verification failed');
+      const errorText = await response.text();
+      console.error('Verification server response:', errorText);
+      try {
+        const errorData = JSON.parse(errorText);
+        throw new Error(errorData.error || `Payment verification failed: ${response.status}`);
+      } catch (e) {
+        throw new Error(`Payment verification failed: ${response.status} - ${errorText.substring(0, 100)}`);
+      }
     }
 
-    return await response.json();
+    const responseData = await response.json();
+    console.log('Verification result:', responseData);
+    
+    return {
+      success: responseData.verified === true,
+      payment: responseData.payment,
+      error: responseData.error || null,
+    };
   } catch (error) {
     console.error('Error verifying Razorpay payment:', error);
     return {
