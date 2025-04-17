@@ -720,7 +720,14 @@ export default function CheckoutPage() {
         customer_name: formData.name,
         customer_email: formData.email,
         customer_phone: validatedPhone,
-        shipping_address: addressId, // Use the address ID instead of the address data
+        shipping_address: addressId, // Confirmed: This is the correct field name matching PocketBase schema
+        shipping_address_text: JSON.stringify({
+          street: formData.address,
+          city: formData.city,
+          state: formData.state,
+          postalCode: formData.zipCode,
+          country: 'India'
+        }), // Add a text backup of the address data
         products: JSON.stringify(items.map(item => ({
           productId: item.productId,
           product: item.product,
