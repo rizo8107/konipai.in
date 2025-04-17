@@ -406,6 +406,115 @@ export default function CheckoutPage() {
 
       // Send webhook to n8n
       try {
+        // First get the complete order details with expanded products
+        const orderDetails = await pocketbase.collection('orders').getOne(orderId);
+        
+        // Parse the products from the order
+        let orderProducts: any[] = [];
+        try {
+          if (typeof orderDetails.products === 'string') {
+            orderProducts = JSON.parse(orderDetails.products);
+          } else {
+            orderProducts = orderDetails.products;
+          }
+        } catch (parseError) {
+          console.error('Error parsing order products:', parseError);
+          orderProducts = [];
+        }
+        
+        // Get the shipping address
+        let shippingAddress: Record<string, any> = {};
+        try {
+          if (orderDetails.shipping_address_text) {
+            shippingAddress = JSON.parse(orderDetails.shipping_address_text);
+          } else if (orderDetails.shipping_address) {
+            // Try to fetch the address
+            try {
+              const addressRecord = await pocketbase.collection('addresses').getOne(orderDetails.shipping_address);
+              shippingAddress = {
+                street: addressRecord.street,
+                city: addressRecord.city,
+                state: addressRecord.state,
+                postalCode: addressRecord.postalCode,
+                country: addressRecord.country
+              };
+            } catch (addressError) {
+              console.error('Error fetching shipping address:', addressError);
+            }
+          }
+        } catch (addressParseError) {
+          console.error('Error parsing shipping address:', addressParseError);
+        }
+        
+        // Prepare product details with image URLs
+        const productsWithImages = orderProducts.map((product: any) => {
+          // Construct image URLs for each product
+          let imageUrls: string[] = [];
+          if (product.product && product.product.images) {
+            imageUrls = product.product.images.map((img: string) => {
+              // Use the exact PocketBase URL format provided
+              // The product ID should only be included once in the URL
+              return `https://backend-pocketbase.7za6uc.easypanel.host/api/files/pbc_4092854851/${img}`;
+            });
+          }
+          
+          return {
+            id: product.productId,
+            name: product.product?.name || 'Unknown Product',
+            price: product.product?.price || 0,
+            quantity: product.quantity,
+            color: product.color || 'Default',
+            images: imageUrls,
+            imageUrl: imageUrls[0] || '' // First image as the main image
+          };
+        });
+        
+        // Prepare the webhook data
+        const n8nWebhookData = {
+          event: "order.payment_success",
+          order: {
+            id: orderId,
+            order_link: `https://konipai.in/orders/${orderId}`,
+            customer: {
+              name: orderDetails.customer_name,
+              email: orderDetails.customer_email,
+              phone: orderDetails.customer_phone
+            },
+            payment: {
+              id: paymentId,
+              status: captureSuccess ? "captured" : "authorized",
+              method: "Razorpay"
+            },
+            shipping_address: shippingAddress,
+            products: productsWithImages,
+            totals: {
+              subtotal: orderDetails.subtotal,
+              shipping: orderDetails.shipping_cost,
+              discount: orderDetails.discount_amount || 0,
+              total: orderDetails.total
+            },
+            created_at: orderDetails.created,
+            status: orderDetails.status
+          }
+        };
+
+        // Send to the n8n webhook
+        console.log('Sending order details to n8n webhook:', n8nWebhookData);
+        const n8nWebhookResponse = await fetch('https://backend-n8n.7za6uc.easypanel.host/webhook/e09ff5b4-57f4-4549-91ea-18f9cee355c7', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(n8nWebhookData)
+        });
+
+        if (n8nWebhookResponse.ok) {
+          console.log('Successfully sent order details to n8n webhook');
+        } else {
+          console.error('Failed to send order details to n8n webhook:', await n8nWebhookResponse.text());
+        }
+        
+        // Original webhook code continues below
         const webhookData = {
           event: captureSuccess ? "payment.captured" : "payment.authorized",
           payload: {

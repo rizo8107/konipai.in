@@ -44,8 +44,9 @@ interface Order {
   updated: string;
   coupon_code?: string;
   discount_amount?: number;
+  shipping_address_text?: string;
   expand?: {
-    shippingAddress?: {
+    shipping_address?: {
       street: string;
       city: string;
       state: string;
@@ -136,7 +137,7 @@ export default function OrderDetail() {
       
       // Fetch the order details
       const orderData = await pocketbase.collection('orders').getOne(orderId, {
-        expand: 'shippingAddress',
+        expand: 'shipping_address',
       });
 
       // Security check: only allow users to view their own orders
@@ -250,6 +251,32 @@ export default function OrderDetail() {
     }
   } catch (err) {
     products = [];
+  }
+
+  // Try to parse shipping address from text field if expand didn't work
+  if (!order.expand?.shipping_address && order.shipping_address_text) {
+    try {
+      console.log('Attempting to parse shipping_address_text:', order.shipping_address_text);
+      const parsedAddress = JSON.parse(order.shipping_address_text);
+      console.log('Parsed address:', parsedAddress);
+      
+      if (parsedAddress) {
+        // Clean up the parsed address to remove metadata fields
+        const cleanAddress = {
+          street: parsedAddress.street || '',
+          city: parsedAddress.city || '',
+          state: parsedAddress.state || '',
+          postalCode: parsedAddress.postalCode || '',
+          country: parsedAddress.country || 'India'
+        };
+        
+        console.log('Clean address object:', cleanAddress);
+        order.expand = order.expand || {};
+        order.expand.shipping_address = cleanAddress;
+      }
+    } catch (err) {
+      console.error('Failed to parse shipping address text:', err);
+    }
   }
 
   // Safely parse dates with validation
@@ -427,13 +454,31 @@ export default function OrderDetail() {
                   <div className="flex items-start gap-2">
                     <MapPin className="h-3.5 w-3.5 text-muted-foreground mt-0.5" />
                     <div className="text-sm">
-                      {order.expand?.shippingAddress ? (
+                      {order.expand?.shipping_address ? (
                         <>
-                          <p>{order.expand.shippingAddress.street}</p>
+                          <p>{order.expand.shipping_address.street}</p>
                           <p>
-                            {order.expand.shippingAddress.city}, {order.expand.shippingAddress.state} {order.expand.shippingAddress.postalCode}
+                            {order.expand.shipping_address.city}, {order.expand.shipping_address.state} {order.expand.shipping_address.postalCode}
                           </p>
-                          <p>{order.expand.shippingAddress.country}</p>
+                          <p>{order.expand.shipping_address.country}</p>
+                        </>
+                      ) : order.shipping_address_text ? (
+                        <>
+                          <p>Using address from text backup:</p>
+                          {(() => {
+                            try {
+                              const addr = JSON.parse(order.shipping_address_text);
+                              return (
+                                <>
+                                  <p>{addr.street}</p>
+                                  <p>{addr.city}, {addr.state} {addr.postalCode}</p>
+                                  <p>{addr.country}</p>
+                                </>
+                              );
+                            } catch (e) {
+                              return <p>{order.shipping_address_text}</p>;
+                            }
+                          })()}
                         </>
                       ) : (
                         <p className="text-muted-foreground">Address details not available</p>

@@ -140,26 +140,61 @@ export default function Orders() {
       
       try {
         // First try to get orders directly by user ID
-        const userOrders = await pocketbase.collection('orders').getList(1, 50, {
-          filter: `user = "${userId}"`,
-          sort: '-created',
-          expand: 'shippingAddress'
-        });
+        const orders = await pocketbase.collection('orders')
+          .getList(1, 50, {
+            filter: `user="${userId}"`,
+            sort: '-created',
+          });
         
-        console.log('Orders found with user ID:', userOrders.items.length);
+        console.log('Orders found with user ID:', orders.items.length);
         
-        if (userOrders.items.length > 0) {
-          setOrders(userOrders.items as unknown as Order[]);
+        if (orders.items.length > 0) {
+          // Process orders to include parsed shipping address from text
+          const processedOrders = orders.items.map(order => {
+            // Parse shipping address from text if available
+            if (order.shipping_address_text) {
+              try {
+                const parsedAddress = JSON.parse(order.shipping_address_text);
+                order.expand = order.expand || {};
+                order.expand.shippingAddress = parsedAddress;
+              } catch (addressError) {
+                console.error('Failed to parse shipping address for order:', order.id, addressError);
+              }
+            }
+            return order;
+          });
+          
+          setOrders(processedOrders as unknown as Order[]);
         } else {
           // If no orders found by user ID, try with email as fallback
           const allOrders = await pocketbase.collection('orders').getList(1, 50, {
             filter: `customer_email = "${userEmail}"`,
             sort: '-created',
-            expand: 'shippingAddress'
           });
           
           console.log('Orders found with email:', allOrders.items.length);
-          setOrders(allOrders.items as unknown as Order[]);
+          // Process orders to include parsed shipping address from text
+          const processedOrders = allOrders.items.map(order => {
+            // Parse shipping address from text if available
+            if (order.shipping_address_text) {
+              try {
+                const parsedAddress = JSON.parse(order.shipping_address_text);
+                order.expand = order.expand || {};
+                order.expand.shippingAddress = parsedAddress;
+              } catch (addressError) {
+                console.error('Failed to parse shipping address for order:', order.id, addressError);
+              }
+            }
+            return order;
+          });
+          
+          // Filter client-side for this user's ID or email
+          const userOrders = processedOrders.filter(order => 
+            order.user === userId || order.customer_email === userEmail
+          );
+          
+          console.log('Orders found with client-side filtering:', userOrders.length);
+          setOrders(userOrders as unknown as Order[]);
         }
       } catch (apiErr) {
         console.error('Error with API call:', apiErr);
@@ -168,11 +203,25 @@ export default function Orders() {
         try {
           const allOrders = await pocketbase.collection('orders').getList(1, 100, {
             sort: '-created',
-            expand: 'shippingAddress'
+          });
+          
+          // Process orders to include parsed shipping address from text
+          const processedOrders = allOrders.items.map(order => {
+            // Parse shipping address from text if available
+            if (order.shipping_address_text) {
+              try {
+                const parsedAddress = JSON.parse(order.shipping_address_text);
+                order.expand = order.expand || {};
+                order.expand.shippingAddress = parsedAddress;
+              } catch (addressError) {
+                console.error('Failed to parse shipping address for order:', order.id, addressError);
+              }
+            }
+            return order;
           });
           
           // Filter client-side for this user's ID or email
-          const userOrders = allOrders.items.filter(order => 
+          const userOrders = processedOrders.filter(order => 
             order.user === userId || order.customer_email === userEmail
           );
           
