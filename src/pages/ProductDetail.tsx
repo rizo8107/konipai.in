@@ -880,7 +880,10 @@ const ProductDetail = () => {
           </div>
         </div>
         
-        {/* Reviews Section - Moved up */}
+        {/* Product Details - Moved above reviews */}
+        {product && <ProductDetails product={product} />}
+        
+        {/* Reviews Section */}
         {id && (
           <ProductReviews 
             productId={id} 
@@ -914,9 +917,6 @@ const ProductDetail = () => {
             }} 
           />
         )}
-        
-        {/* Product Details */}
-        {product && <ProductDetails product={product} />}
         
         {/* Related Products */}
         {relatedProducts.length > 0 && (

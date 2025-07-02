@@ -9,12 +9,17 @@ interface VideoPlayerProps {
 
 export function VideoPlayer({ src, poster, onClose }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
-  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isFullscreenMode, setIsFullscreenMode] = useState(false);
+  const [videoRatio, setVideoRatio] = useState<number | null>(null);
+  
+  // Determine if we should use overlay mode based on onClose prop
+  const isOverlayMode = !!onClose;
 
   useEffect(() => {
     const video = videoRef.current;
@@ -29,6 +34,13 @@ export function VideoPlayer({ src, poster, onClose }: VideoPlayerProps) {
 
     const handleLoadedMetadata = () => {
       setDuration(video.duration);
+      
+      // Calculate and store video aspect ratio
+      if (video.videoWidth && video.videoHeight) {
+        const ratio = video.videoWidth / video.videoHeight;
+        setVideoRatio(ratio);
+        console.log(`Video dimensions: ${video.videoWidth}x${video.videoHeight}, ratio: ${ratio}`);
+      }
     };
 
     video.addEventListener('timeupdate', updateProgress);
@@ -87,10 +99,10 @@ export function VideoPlayer({ src, poster, onClose }: VideoPlayerProps) {
       videoContainer.requestFullscreen().catch(err => {
         console.error(`Error attempting to enable fullscreen: ${err.message}`);
       });
-      setIsFullscreen(true);
+      setIsFullscreenMode(true);
     } else {
       document.exitFullscreen();
-      setIsFullscreen(false);
+      setIsFullscreenMode(false);
     }
   };
 
@@ -114,85 +126,124 @@ export function VideoPlayer({ src, poster, onClose }: VideoPlayerProps) {
     };
   }, [progress, progressBarClass]);
   
+  // Determine container style based on video ratio
+  const getContainerStyle = () => {
+    if (!videoRatio) return {};
+    
+    // Portrait video (e.g., 9:16)
+    if (videoRatio < 1) {
+      return {
+        maxWidth: `${Math.min(80 * videoRatio, 100)}vh`, // Limit width based on height
+        width: '100%',
+        height: 'auto',
+        margin: '0 auto',
+        paddingBottom: '100px' // Add more padding at bottom for controls
+      };
+    }
+    // Landscape video (e.g., 16:9)
+    else {
+      return {
+        width: '100%',
+        maxHeight: '80vh',
+        height: 'auto',
+        paddingBottom: '100px' // Add more padding at bottom for controls
+      };
+    }
+  };
+
   return (
-    <div id="video-container" className="relative w-full h-full bg-black">
-      <video
-        ref={videoRef}
-        className="w-full h-full"
-        src={src}
-        poster={poster}
-        playsInline
-        preload="auto"
-        controlsList="nodownload"
-        disablePictureInPicture
-        muted={false}
-        autoPlay
-      />
-      
-      {/* Video Controls */}
-      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4">
-        {/* Progress Bar */}
-        <div 
-          className="w-full h-1 bg-gray-600 rounded-full cursor-pointer mb-2"
-          onClick={handleProgressClick}
-        >
-          <div 
-            className="h-full bg-primary rounded-full" 
-            style={{ width: `${progress}%` }}
-            role="progressbar"
-            aria-label="Video progress"
-            aria-valuenow={Math.round(progress)}
-            aria-valuemin={0}
-            aria-valuemax={100}
-          />
-        </div>
+    <div 
+      id="video-container" 
+      ref={containerRef}
+      className={isOverlayMode ? 
+        "fixed inset-0 z-[100] bg-black/95 flex items-center justify-center" : 
+        "relative w-full h-full bg-black flex items-center justify-center overflow-visible"}
+      style={{ isolation: 'isolate' }}
+    >
+      <div style={getContainerStyle()} className="relative w-full max-w-full">
+        <video
+          ref={videoRef}
+          className="w-full object-contain mx-auto"
+          src={src}
+          poster={poster}
+          playsInline
+          preload="auto"
+          controlsList="nodownload"
+          disablePictureInPicture
+          muted={false}
+          autoPlay
+        />
         
-        {/* Controls */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <button 
-              onClick={togglePlay}
-              className="text-white hover:text-primary transition-colors"
-              title={isPlaying ? "Pause" : "Play"}
-              aria-label={isPlaying ? "Pause video" : "Play video"}
-            >
-              {isPlaying ? <Pause size={20} /> : <Play size={20} />}
-            </button>
-            
-            <button 
-              onClick={toggleMute}
-              className="text-white hover:text-primary transition-colors"
-              title={isMuted ? "Unmute" : "Mute"}
-              aria-label={isMuted ? "Unmute video" : "Mute video"}
-            >
-              {isMuted ? <VolumeX size={20} /> : <Volume2 size={20} />}
-            </button>
-            
-            <span className="text-white text-sm">
-              {formatTime(currentTime)} / {formatTime(duration)}
-            </span>
+        {/* Video Controls */}
+        <div 
+          className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black to-transparent p-3 sm:p-4 z-[200]" 
+          style={{ 
+            marginBottom: isOverlayMode ? 0 : '60px',
+            transform: 'translateZ(10px)' // Force onto a new stacking context
+          }}>
+          {/* Progress Bar */}
+          <div 
+            className="w-full h-2 bg-gray-600 rounded-full cursor-pointer mb-3"
+            onClick={handleProgressClick}
+          >
+            <div 
+              className="h-full bg-primary rounded-full" 
+              style={{ width: `${progress}%` }}
+              role="progressbar"
+              aria-label="Video progress"
+              aria-valuenow={Math.round(progress)}
+              aria-valuemin={0}
+              aria-valuemax={100}
+            />
           </div>
           
-          <div className="flex items-center space-x-4">
-            <button 
-              onClick={toggleFullscreen}
-              className="text-white hover:text-primary transition-colors"
-              title="Fullscreen"
-              aria-label="Toggle fullscreen mode"
-            >
-              <Maximize size={20} />
-            </button>
-            
-            {onClose && (
+          {/* Controls */}
+          <div className="flex items-center justify-between mt-3">
+            <div className="flex items-center space-x-3 sm:space-x-5">
               <button 
-                onClick={onClose}
-                className="text-white hover:text-primary transition-colors"
-                title="Close"
-                aria-label="Close video player"
+                onClick={togglePlay}
+                className="text-white hover:text-primary transition-colors p-2 rounded-full bg-black/30"
+                title={isPlaying ? "Pause" : "Play"}
+                aria-label={isPlaying ? "Pause video" : "Play video"}
               >
-                <X size={20} />
+                {isPlaying ? <Pause size={20} /> : <Play size={20} />}
               </button>
-            )}
+              
+              <button 
+                onClick={toggleMute}
+                className="text-white hover:text-primary transition-colors p-2 rounded-full bg-black/30"
+                title={isMuted ? "Unmute" : "Mute"}
+                aria-label={isMuted ? "Unmute video" : "Mute video"}
+              >
+                {isMuted ? <VolumeX size={20} /> : <Volume2 size={20} />}
+              </button>
+              
+              <span className="text-white text-sm sm:text-base font-medium whitespace-nowrap bg-black/30 px-2 py-1 rounded">
+                {formatTime(currentTime)} / {formatTime(duration)}
+              </span>
+            </div>
+            
+            <div className="flex items-center space-x-3 sm:space-x-5">
+              <button 
+                onClick={toggleFullscreen}
+                className="text-white hover:text-primary transition-colors p-2 rounded-full bg-black/30"
+                title="Fullscreen"
+                aria-label="Toggle fullscreen mode"
+              >
+                <Maximize size={20} />
+              </button>
+              
+              {onClose && (
+                <button 
+                  onClick={onClose}
+                  className="text-white hover:text-primary transition-colors p-2 rounded-full bg-black/30"
+                  title="Close"
+                  aria-label="Close video player"
+                >
+                  <X size={20} />
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>
