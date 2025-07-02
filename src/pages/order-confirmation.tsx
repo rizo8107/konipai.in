@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
+import '@/styles/payment-status.css';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -156,6 +157,12 @@ export default function OrderConfirmation() {
           <p className="text-gray-600">
             Order #{order.id} has been successfully placed
           </p>
+          <div className={`mt-4 payment-status-badge ${order.payment_status === 'captured' ? 'payment-status-completed' : order.payment_status === 'authorized' ? 'payment-status-authorized' : 'payment-status-pending'}`}>
+            <span className="status-dot"></span>
+            Payment {order.payment_status === 'captured' ? 'Completed' : 
+                     order.payment_status === 'authorized' ? 'Authorized' : 
+                     'Pending'}
+          </div>
         </div>
 
         <div className="space-y-6">

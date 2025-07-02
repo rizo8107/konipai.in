@@ -3,12 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import { useCart } from '@/contexts/CartContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { pocketbase } from '@/lib/pocketbase';
+import { CountdownTimer } from '@/components/ui/countdown-timer';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/components/ui/use-toast';
-import { Loader2, ShoppingBag, CheckCircle, XCircle } from 'lucide-react';
+import { Loader2, ShoppingBag, LockIcon, CheckCircle } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { 
   loadRazorpayScript, 
@@ -84,6 +85,20 @@ export default function CheckoutPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isPaymentProcessing, setIsPaymentProcessing] = useState(false);
   const [razorpayLoaded, setRazorpayLoaded] = useState(false);
+  const [isFormValid, setIsFormValid] = useState(false);
+  
+  // Limited time offer settings
+  const [offerExpiryTime] = useState(() => {
+    // Set expiry time to 15 minutes from now
+    const expiry = new Date();
+    expiry.setMinutes(expiry.getMinutes() + 15);
+    return expiry;
+  });
+  const [showOffer, setShowOffer] = useState(true);
+  
+  // Offer details
+  const offerDiscount = 5; // 5% discount
+  
   const [formData, setFormData] = useState<CheckoutFormData>({
     name: user?.name || '',
     email: user?.email || '',
@@ -91,8 +106,9 @@ export default function CheckoutPage() {
     city: '',
     state: '',
     zipCode: '',
-    phone: user?.phone || '',
+    phone: user?.phone || ''
   });
+  
   const [couponCode, setCouponCode] = useState('');
   const [appliedCoupon, setAppliedCoupon] = useState<CouponData | null>(null);
   const [couponLoading, setCouponLoading] = useState(false);
@@ -168,10 +184,30 @@ export default function CheckoutPage() {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
+    setFormData(prev => ({ ...prev, [name]: value }));
+    
+    // Validate form after input change
+    validateForm({ ...formData, [name]: value });
+  };
+  
+  // Validate all required fields
+  const validateForm = (data: CheckoutFormData) => {
+    const requiredFields = ['name', 'email', 'address', 'city', 'state', 'zipCode', 'phone'];
+    const isValid = requiredFields.every(field => 
+      data[field as keyof CheckoutFormData] && data[field as keyof CheckoutFormData].trim() !== ''
+    );
+    
+    // Additional validation for email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const isEmailValid = emailRegex.test(data.email);
+    
+    // Phone validation for Indian numbers
+    const phoneRegex = /^[6-9]\d{9}$/;
+    const cleanPhone = data.phone.replace(/\D/g, '');
+    const formattedPhone = cleanPhone.replace(/^(\+?91)/, '');
+    const isPhoneValid = phoneRegex.test(formattedPhone);
+    
+    setIsFormValid(isValid && isEmailValid && isPhoneValid);
   };
 
   // New function to validate coupons directly in frontend
@@ -410,7 +446,19 @@ export default function CheckoutPage() {
         const orderDetails = await pocketbase.collection('orders').getOne(orderId);
         
         // Parse the products from the order
-        let orderProducts: any[] = [];
+        interface OrderProduct {
+          product: {
+            id: string;
+            name: string;
+            price: number;
+            images: string[];
+            [key: string]: unknown;
+          };
+          quantity: number;
+          price: number;
+          [key: string]: unknown;
+        }
+        let orderProducts: OrderProduct[] = [];
         try {
           if (typeof orderDetails.products === 'string') {
             orderProducts = JSON.parse(orderDetails.products);
@@ -423,7 +471,21 @@ export default function CheckoutPage() {
         }
         
         // Get the shipping address
-        let shippingAddress: Record<string, any> = {};
+        interface ShippingAddress {
+          street: string;
+          city: string;
+          state: string;
+          postalCode: string;
+          country: string;
+          [key: string]: string;
+        }
+        let shippingAddress: ShippingAddress = {
+          street: '',
+          city: '',
+          state: '',
+          postalCode: '',
+          country: ''
+        };
         try {
           if (orderDetails.shipping_address_text) {
             shippingAddress = JSON.parse(orderDetails.shipping_address_text);
@@ -447,7 +509,7 @@ export default function CheckoutPage() {
         }
         
         // Prepare product details with image URLs
-        const productsWithImages = orderProducts.map((product: any) => {
+        const productsWithImages = orderProducts.map((product: OrderProduct) => {
           // Construct image URLs for each product
           let imageUrls: string[] = [];
           if (product.product && product.product.images) {
@@ -640,19 +702,29 @@ export default function CheckoutPage() {
   };
 
   const calculateFinalTotal = () => {
-    const shipping_cost = subtotal >= 100 ? 0 : 10;
-    let finalTotal = subtotal + shipping_cost;
+    const finalSubtotal = subtotal;
+    let finalDiscount = 0;
     
-    // Apply coupon discount if available
     if (appliedCoupon) {
-      finalTotal -= appliedCoupon.discountAmount;
-      // Allow negative totals (minimum 0)
-      finalTotal = Math.max(finalTotal, 0);
+      finalDiscount = appliedCoupon.discountAmount;
     }
     
+    // Apply limited time offer discount if active
+    let offerDiscountAmount = 0;
+    if (showOffer) {
+      offerDiscountAmount = (finalSubtotal * offerDiscount) / 100;
+      finalDiscount += offerDiscountAmount;
+    }
+    
+    const shippingCost = subtotal >= 100 ? 0 : 10;
+    const finalTotal = finalSubtotal + shippingCost - finalDiscount;
+    
     return {
-      finalTotal,
-      shipping_cost
+      finalSubtotal,
+      finalDiscount,
+      offerDiscountAmount,
+      shippingCost,
+      finalTotal
     };
   };
 
@@ -663,6 +735,9 @@ export default function CheckoutPage() {
     if (items && items.length > 0) {
       trackFormStart('checkout_form', 'checkout-form');
     }
+    
+    // Validate form on initial load
+    validateForm(formData);
     
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
       if (isSubmitting || isPaymentProcessing) {
@@ -676,7 +751,21 @@ export default function CheckoutPage() {
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
-  }, [items, isSubmitting, isPaymentProcessing]);
+  }, [items, isSubmitting, isPaymentProcessing, formData]);
+  
+  // Re-validate form when user data changes
+  useEffect(() => {
+    if (user) {
+      const updatedFormData = {
+        ...formData,
+        name: formData.name || user.name || '',
+        email: formData.email || user.email || '',
+        phone: formData.phone || user.phone || ''
+      };
+      setFormData(updatedFormData);
+      validateForm(updatedFormData);
+    }
+  }, [user, formData]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -804,7 +893,7 @@ export default function CheckoutPage() {
             addressId = existingAddress.id;
             console.log('Updated existing address:', addressId);
           }
-        } catch (addressError: any) {
+        } catch (addressError: unknown) {
           // No existing address found, create new one
           console.log('No existing address found, creating new one');
           const newAddress = await pocketbase.collection('addresses').create(addressData);
@@ -844,7 +933,7 @@ export default function CheckoutPage() {
           color: item.color
         }))),
         subtotal: subtotal,
-        shipping_cost: calculateFinalTotal().shipping_cost,
+        shipping_cost: calculateFinalTotal().shippingCost,
         total: calculateFinalTotal().finalTotal,
         status: 'pending',
         payment_status: 'pending',
@@ -975,13 +1064,15 @@ export default function CheckoutPage() {
     postalCode: string;
     country: string;
   }) => {
-    setFormData(prev => ({
-      ...prev,
+    const updatedFormData = {
+      ...formData,
       address: address.street,
       city: address.city,
       state: address.state,
       zipCode: address.postalCode
-    }));
+    };
+    setFormData(updatedFormData);
+    validateForm(updatedFormData);
   };
 
   if (cartLoading) {
@@ -1007,12 +1098,58 @@ export default function CheckoutPage() {
   }
 
   return (
-    <div className="container max-w-2xl mx-auto px-4 py-8">
-      <h1 className="text-2xl font-bold mb-6">Checkout</h1>
-      
-      <form onSubmit={handleSubmit} className="space-y-6">
+    <div className="container mx-auto px-4 py-8">
+      <div className="max-w-6xl mx-auto">
+        {/* Checkout Header with Progress */}
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-center mb-6">Checkout</h1>
+          
+          {showOffer && (
+            <div className="bg-gradient-to-r from-amber-500 to-orange-500 text-white p-4 rounded-lg mb-6 shadow-lg">
+              <div className="flex flex-col md:flex-row justify-between items-center">
+                <div className="mb-3 md:mb-0">
+                  <h3 className="font-bold text-lg">⚡ Limited Time Offer!</h3>
+                  <p className="text-sm md:text-base">Complete your order in the next:</p>
+                </div>
+                <div className="flex flex-col items-center">
+                  <CountdownTimer 
+                    expiryTime={offerExpiryTime} 
+                    onExpire={() => setShowOffer(false)} 
+                    className="mb-2"
+                  />
+                  <p className="text-sm font-bold">Get {offerDiscount}% OFF your order!</p>
+                </div>
+              </div>
+            </div>
+          )}
+          <div className="flex justify-center items-center mb-8">
+            <div className="flex items-center w-full max-w-3xl">
+              <div className="flex flex-col items-center">
+                <div className="w-10 h-10 rounded-full bg-primary text-white flex items-center justify-center font-semibold">1</div>
+                <span className="text-sm mt-1">Information</span>
+              </div>
+              <div className="flex-1 h-1 mx-2 bg-primary"></div>
+              <div className="flex flex-col items-center">
+                <div className="w-10 h-10 rounded-full bg-primary text-white flex items-center justify-center font-semibold">2</div>
+                <span className="text-sm mt-1">Review</span>
+              </div>
+              <div className="flex-1 h-1 mx-2 bg-primary"></div>
+              <div className="flex flex-col items-center">
+                <div className="w-10 h-10 rounded-full bg-primary text-white flex items-center justify-center font-semibold">3</div>
+                <span className="text-sm mt-1">Payment</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="lg:col-span-2">
+            <form onSubmit={handleSubmit} className="space-y-8 bg-white p-6 rounded-lg shadow-sm border">
         <div className="space-y-4">
-          <h2 className="text-lg font-semibold">Contact Information</h2>
+          <h2 className="text-xl font-semibold flex items-center">
+            <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-primary text-white text-xs mr-2">1</span>
+            Contact Information
+          </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="name">Full Name</Label>
@@ -1022,7 +1159,11 @@ export default function CheckoutPage() {
                 value={formData.name}
                 onChange={handleInputChange}
                 required
+                className={!formData.name ? "border-red-300" : ""}
               />
+              {!formData.name && (
+                <p className="text-xs text-red-500">Full name is required</p>
+              )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
@@ -1033,7 +1174,13 @@ export default function CheckoutPage() {
                 value={formData.email}
                 onChange={handleInputChange}
                 required
+                className={!formData.email || (formData.email && !formData.email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) ? "border-red-300" : ""}
               />
+              {!formData.email ? (
+                <p className="text-xs text-red-500">Email is required</p>
+              ) : formData.email && !formData.email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/) ? (
+                <p className="text-xs text-red-500">Please enter a valid email address</p>
+              ) : null}
             </div>
           </div>
         </div>
@@ -1041,12 +1188,15 @@ export default function CheckoutPage() {
         <Separator />
 
         <div className="space-y-4">
-          <h2 className="text-lg font-semibold">Shipping Address</h2>
+          <h2 className="text-xl font-semibold flex items-center">
+            <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-primary text-white text-xs mr-2">2</span>
+            Shipping Address
+          </h2>
           <div className="space-y-4">
             <AddressAutocomplete
               onAddressSelect={handleAddressSelect}
               defaultValue={formData.address}
-              error={errors?.address}
+              error={errors?.address || (!formData.address ? "Address is required" : undefined)}
             />
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-2">
@@ -1057,11 +1207,13 @@ export default function CheckoutPage() {
                   value={formData.city}
                   onChange={handleInputChange}
                   required
-                  className={errors?.city ? "border-red-500" : ""}
+                  className={errors?.city || !formData.city ? "border-red-500" : ""}
                 />
-                {errors?.city && (
-                  <p className="text-sm text-red-500">{errors.city}</p>
-                )}
+                {errors?.city ? (
+                  <p className="text-xs text-red-500">{errors.city}</p>
+                ) : !formData.city ? (
+                  <p className="text-xs text-red-500">City is required</p>
+                ) : null}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="state">State</Label>
@@ -1071,11 +1223,13 @@ export default function CheckoutPage() {
                   value={formData.state}
                   onChange={handleInputChange}
                   required
-                  className={errors?.state ? "border-red-500" : ""}
+                  className={errors?.state || !formData.state ? "border-red-500" : ""}
                 />
-                {errors?.state && (
-                  <p className="text-sm text-red-500">{errors.state}</p>
-                )}
+                {errors?.state ? (
+                  <p className="text-xs text-red-500">{errors.state}</p>
+                ) : !formData.state ? (
+                  <p className="text-xs text-red-500">State is required</p>
+                ) : null}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="zipCode">ZIP Code</Label>
@@ -1085,11 +1239,13 @@ export default function CheckoutPage() {
                   value={formData.zipCode}
                   onChange={handleInputChange}
                   required
-                  className={errors?.zipCode ? "border-red-500" : ""}
+                  className={errors?.zipCode || !formData.zipCode ? "border-red-500" : ""}
                 />
-                {errors?.zipCode && (
-                  <p className="text-sm text-red-500">{errors.zipCode}</p>
-                )}
+                {errors?.zipCode ? (
+                  <p className="text-xs text-red-500">{errors.zipCode}</p>
+                ) : !formData.zipCode ? (
+                  <p className="text-xs text-red-500">ZIP code is required</p>
+                ) : null}
               </div>
             </div>
             <div className="space-y-2">
@@ -1101,11 +1257,15 @@ export default function CheckoutPage() {
                 value={formData.phone}
                 onChange={handleInputChange}
                 required
-                className={errors?.phone ? "border-red-500" : ""}
+                className={errors?.phone || !formData.phone ? "border-red-500" : ""}
+                placeholder="10-digit mobile number"
               />
-              {errors?.phone && (
-                <p className="text-sm text-red-500">{errors.phone}</p>
-              )}
+              {errors?.phone ? (
+                <p className="text-xs text-red-500">{errors.phone}</p>
+              ) : !formData.phone ? (
+                <p className="text-xs text-red-500">Phone number is required</p>
+              ) : null}
+              <p className="text-xs text-muted-foreground">Enter a 10-digit Indian mobile number</p>
             </div>
           </div>
         </div>
@@ -1113,7 +1273,10 @@ export default function CheckoutPage() {
         <Separator />
 
         <div className="space-y-4">
-          <h2 className="text-lg font-semibold">Order Summary</h2>
+          <h2 className="text-xl font-semibold flex items-center">
+            <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-primary text-white text-xs mr-2">3</span>
+            Order Summary
+          </h2>
           <div className="space-y-2">
             {items.map((item) => (
               <div key={`${item.productId}-${item.color}`} className="flex justify-between py-1">
@@ -1144,7 +1307,10 @@ export default function CheckoutPage() {
         </div>
 
         <div className="space-y-4">
-          <h2 className="text-lg font-semibold">Coupon Code</h2>
+          <h2 className="text-xl font-semibold flex items-center">
+            <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-primary text-white text-xs mr-2">4</span>
+            Coupon Code
+          </h2>
           <div className="flex items-center space-x-3">
             <Input
               id="couponCode"
@@ -1176,8 +1342,11 @@ export default function CheckoutPage() {
         </div>
 
         <div className="space-y-4">
-          <h2 className="text-lg font-semibold">Payment Method</h2>
-          <div className="flex items-center space-x-3 p-4 border rounded-md bg-gray-50">
+          <h2 className="text-xl font-semibold flex items-center">
+            <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-primary text-white text-xs mr-2">5</span>
+            Payment Method
+          </h2>
+          <div className="flex items-center space-x-3 p-6 border rounded-md bg-white shadow-sm hover:shadow-md transition-shadow duration-200">
             <img src="/razorpay-logo.svg" alt="Razorpay" className="h-8" onError={(e) => (e.currentTarget.src = 'https://razorpay.com/assets/razorpay-logo.svg')} />
             <div>
               <p className="font-medium">Pay with Razorpay</p>
@@ -1190,16 +1359,94 @@ export default function CheckoutPage() {
         </div>
 
         {isSubmitting || isPaymentProcessing ? (
-          <Button disabled className="w-full mt-3">
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          <Button disabled className="w-full mt-6 py-6 text-lg">
+            <Loader2 className="mr-3 h-5 w-5 animate-spin" />
             {isPaymentProcessing ? 'Processing Payment...' : 'Processing...'}
           </Button>
         ) : (
-          <Button type="submit" className="w-full mt-3">
-            {`Pay Now - ₹${calculateFinalTotal().finalTotal.toFixed(2)}`}
+          <Button 
+            type="submit" 
+            className="w-full mt-6 py-6 text-lg shadow-lg hover:shadow-xl transition-all duration-200" 
+            disabled={!isFormValid || items.length === 0}
+          >
+            {`Complete Purchase - ₹${calculateFinalTotal().finalTotal.toFixed(2)}`}
           </Button>
         )}
+        
+        <div className="flex items-center justify-center mt-4 text-sm text-muted-foreground">
+          <LockIcon className="h-4 w-4 mr-2" />
+          <span>Secure checkout powered by Razorpay</span>
+        </div>
       </form>
+          </div>
+          
+          {/* Order Summary Sidebar */}
+          <div className="lg:col-span-1">
+            <div className="bg-gray-50 p-6 rounded-lg border sticky top-8">
+              <h3 className="text-xl font-bold mb-4">Order Summary</h3>
+              
+              <div className="max-h-80 overflow-y-auto mb-4 pr-2">
+                {items.map((item) => (
+                  <div key={`${item.productId}-${item.color}`} className="flex items-start py-3 border-b last:border-b-0">
+                    {item.product.images && item.product.images.length > 0 && (
+                      <div className="w-16 h-16 rounded overflow-hidden mr-3 flex-shrink-0 bg-white border">
+                        <img 
+                          src={`https://backend-pocketbase.7za6uc.easypanel.host/api/files/pbc_4092854851/${item.product.images[0]}`}
+                          alt={item.product.name}
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src = 'https://placehold.co/100x100?text=Image';
+                          }}
+                        />
+                      </div>
+                    )}
+                    <div className="flex-grow">
+                      <p className="font-medium">{item.product.name}</p>
+                      <p className="text-sm text-gray-500">Color: {item.color} • Qty: {item.quantity}</p>
+                      <p className="font-medium mt-1">₹{(item.product.price * item.quantity).toFixed(2)}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              
+              <div className="space-y-2 py-3 border-t border-b">
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Subtotal</span>
+                  <span className="font-medium">₹{subtotal.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Shipping</span>
+                  <span className="font-medium">{subtotal >= 100 ? 'Free' : `₹${10.00.toFixed(2)}`}</span>
+                </div>
+                {appliedCoupon && (
+                  <div className="flex justify-between text-green-600">
+                    <span>Discount ({appliedCoupon.code})</span>
+                    <span>-₹{appliedCoupon.discountAmount.toFixed(2)}</span>
+                  </div>
+                )}
+                {showOffer && calculateFinalTotal().offerDiscountAmount > 0 && (
+                  <div className="flex justify-between text-green-600 font-medium">
+                    <span>Limited Time Offer ({offerDiscount}%)</span>
+                    <span>-₹{calculateFinalTotal().offerDiscountAmount.toFixed(2)}</span>
+                  </div>
+                )}
+              </div>
+              
+              <div className="flex justify-between py-3 text-lg font-bold">
+                <span>Total</span>
+                <span>₹{calculateFinalTotal().finalTotal.toFixed(2)}</span>
+              </div>
+              
+              <div className="mt-4 flex flex-wrap gap-2 justify-center">
+                <img src="/payment-icons/visa.svg" alt="Visa" className="h-6" onError={(e) => (e.currentTarget.src = 'https://placehold.co/40x24?text=Visa')} />
+                <img src="/payment-icons/mastercard.svg" alt="Mastercard" className="h-6" onError={(e) => (e.currentTarget.src = 'https://placehold.co/40x24?text=MC')} />
+                <img src="/payment-icons/rupay.svg" alt="RuPay" className="h-6" onError={(e) => (e.currentTarget.src = 'https://placehold.co/40x24?text=RuPay')} />
+                <img src="/payment-icons/upi.svg" alt="UPI" className="h-6" onError={(e) => (e.currentTarget.src = 'https://placehold.co/40x24?text=UPI')} />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
