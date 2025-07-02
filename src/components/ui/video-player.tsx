@@ -137,7 +137,8 @@ export function VideoPlayer({ src, poster, onClose }: VideoPlayerProps) {
         width: '100%',
         height: 'auto',
         margin: '0 auto',
-        paddingBottom: '100px' // Add more padding at bottom for controls
+        padding: '20px',
+        paddingBottom: '120px' // Add more padding at bottom for controls
       };
     }
     // Landscape video (e.g., 16:9)
@@ -146,7 +147,8 @@ export function VideoPlayer({ src, poster, onClose }: VideoPlayerProps) {
         width: '100%',
         maxHeight: '80vh',
         height: 'auto',
-        paddingBottom: '100px' // Add more padding at bottom for controls
+        padding: '20px',
+        paddingBottom: '120px' // Add more padding at bottom for controls
       };
     }
   };
@@ -160,7 +162,7 @@ export function VideoPlayer({ src, poster, onClose }: VideoPlayerProps) {
         "relative w-full h-full bg-black flex items-center justify-center overflow-visible"}
       style={{ isolation: 'isolate' }}
     >
-      <div style={getContainerStyle()} className="relative w-full max-w-full">
+      <div style={getContainerStyle()} className="relative w-full max-w-full rounded-lg overflow-hidden">
         <video
           ref={videoRef}
           className="w-full object-contain mx-auto"
@@ -176,10 +178,11 @@ export function VideoPlayer({ src, poster, onClose }: VideoPlayerProps) {
         
         {/* Video Controls */}
         <div 
-          className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black to-transparent p-3 sm:p-4 z-[200]" 
+          className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black to-transparent p-4 sm:p-6 z-[200]" 
           style={{ 
             marginBottom: isOverlayMode ? 0 : '60px',
-            transform: 'translateZ(10px)' // Force onto a new stacking context
+            transform: 'translateZ(10px)', // Force onto a new stacking context
+            paddingBottom: '20px'
           }}>
           {/* Progress Bar */}
           <div 
