@@ -107,6 +107,9 @@ export interface Product extends RecordModel {
     reviews?: number;
     createdAt?: string;
     updatedAt?: string;
+    videoUrl?: string;
+    videoThumbnail?: string;
+    videoDescription?: string;
     specifications: {
         material: string;
         dimensions: string;

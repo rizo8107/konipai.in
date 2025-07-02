@@ -1,17 +1,113 @@
-import { Check } from 'lucide-react';
+import { Check, Play } from 'lucide-react';
 import { type Product } from '@/lib/pocketbase';
+import { useState } from 'react';
+import { VideoPlayerFallback } from '@/components/ui/video-player-fallback';
+
+// Helper function to extract YouTube video ID from URL
+const getYouTubeVideoId = (url: string | undefined): string | null => {
+  if (!url) return null;
+  
+  // Match YouTube URL patterns
+  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
+  const match = url.match(regExp);
+  
+  if (match && match[2].length === 11) {
+    return match[2];
+  }
+  
+  return null;
+};
+
+// Helper function to check if URL is a YouTube video
+const isYouTubeUrl = (url: string | undefined): boolean => {
+  return !!getYouTubeVideoId(url);
+};
+
+// Helper function to get YouTube embed URL
+const getYouTubeEmbedUrl = (url: string | undefined): string => {
+  const videoId = getYouTubeVideoId(url);
+  if (videoId) {
+    return `https://www.youtube.com/embed/${videoId}`;
+  }
+  return '';
+};
+
+// Helper function to check if URL is a direct video file
+const isVideoFileUrl = (url: string | undefined): boolean => {
+  if (!url) return false;
+  
+  // Check for common video file extensions
+  const videoExtensions = ['.mp4', '.mov', '.webm', '.ogg', '.avi', '.wmv', '.m4v', '.mpg', '.mpeg'];
+  return videoExtensions.some(ext => url.toLowerCase().endsWith(ext));
+};
 
 interface ProductDetailsProps {
   product: Product;
 }
 
 export const ProductDetails = ({ product }: ProductDetailsProps) => {
+  const [isVideoPlaying, setIsVideoPlaying] = useState(false);
+
   if (!product) {
     return null;
   }
 
+  const handleVideoPlay = () => {
+    setIsVideoPlaying(true);
+  };
+
   return (
     <div className="mt-16 space-y-8">
+      {/* Product Video */}
+      {product.videoUrl && (
+        <div className="bg-gray-50 rounded-lg p-6">
+          <h3 className="text-lg font-semibold mb-4">Product Video</h3>
+          <div className="aspect-video w-full rounded-lg overflow-hidden bg-black relative">
+            {!isVideoPlaying ? (
+              <div 
+                className="absolute inset-0 flex items-center justify-center cursor-pointer group"
+                onClick={handleVideoPlay}
+              >
+                <div className="w-full h-full bg-gray-800 flex items-center justify-center">
+                  <span className="text-white text-lg">Product Video</span>
+                </div>
+                <div className="absolute inset-0 bg-black bg-opacity-30 flex items-center justify-center group-hover:bg-opacity-20 transition-all">
+                  <div className="w-16 h-16 rounded-full bg-white bg-opacity-80 flex items-center justify-center group-hover:bg-opacity-100 transition-all">
+                    <Play className="h-8 w-8 text-primary fill-primary ml-1" />
+                  </div>
+                </div>
+              </div>
+            ) : (
+              isYouTubeUrl(product.videoUrl) ? (
+                <iframe
+                  src={`${getYouTubeEmbedUrl(product.videoUrl)}${isVideoPlaying ? '?autoplay=1' : ''}`}
+                  title="YouTube video player"
+                  className="absolute top-0 left-0 w-full h-full"
+                  frameBorder="0"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                ></iframe>
+              ) : isVideoFileUrl(product.videoUrl) ? (
+                <div className="absolute top-0 left-0 w-full h-full">
+                  <VideoPlayerFallback 
+                    videoUrl={product.videoUrl} 
+                  />
+                </div>
+              ) : (
+                <iframe
+                  src={`${product.videoUrl}${product.videoUrl.includes('?') ? '&' : '?'}autoplay=1`}
+                  title="Product video"
+                  className="absolute top-0 left-0 w-full h-full"
+                  frameBorder="0"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                ></iframe>
+              )
+            )}
+          </div>
+          {/* Video description removed */}
+        </div>
+      )}
       {/* Product Specifications */}
       <div className="bg-gray-50 rounded-lg p-6">
         <h3 className="text-lg font-semibold mb-4">Product Specifications</h3>
