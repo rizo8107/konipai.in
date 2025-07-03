@@ -30,6 +30,8 @@
     "dev:all": "concurrently \"npm run dev\" \"npm run dev:server\""
   },
   "dependencies": {
+    "@builder.io/react": "^8.2.5",
+    "@builder.io/sdk": "^6.1.1",
     "@hookform/resolvers": "^3.9.0",
     "@radix-ui/react-accordion": "^1.2.0",
     "@radix-ui/react-alert-dialog": "^1.1.1",
