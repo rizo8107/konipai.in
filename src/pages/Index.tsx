@@ -14,6 +14,8 @@ import { ProductImage } from '@/components/ProductImage';
 import { Card } from '@/components/ui/card';
 import { trackButtonClick } from '@/lib/analytics';
 import UtmLink from '@/components/UtmLink';
+import { BuilderComponent } from "@/components/BuilderComponent";
+import { builder } from "@/lib/builder";
 
 const FeatureItem = ({ icon: Icon, title, description }: { icon: React.ElementType, title: string, description: string }) => (
   <div className="flex flex-col items-center text-center p-6 transition-all rounded-lg">
@@ -39,6 +41,8 @@ const Index = () => {
   const [newArrivals, setNewArrivals] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [featuredProducts, setFeaturedProducts] = useState<Product[]>([]);
+  const [heroContent, setHeroContent] = useState<any>(null);
+  const [featuresContent, setFeaturesContent] = useState<any>(null);
   
   // Simple refs without animation dependency
   const heroRef = useRef<HTMLDivElement>(null);
@@ -73,7 +77,31 @@ const Index = () => {
       }
     };
     
+    async function fetchBuilderContent() {
+      try {
+        // Fetch hero section content
+        const heroData = await builder
+          .get('home-hero', {
+            cachebust: true
+          })
+          .promise();
+          
+        // Fetch features section content
+        const featuresData = await builder
+          .get('home-features', {
+            cachebust: true
+          })
+          .promise();
+          
+        setHeroContent(heroData);
+        setFeaturesContent(featuresData);
+      } catch (error) {
+        console.error('Error fetching Builder.io content:', error);
+      }
+    }
+    
     fetchProducts();
+    fetchBuilderContent();
 
     return () => {
       controller.abort();
@@ -91,9 +119,16 @@ const Index = () => {
   
   return (
     <div className="flex flex-col bg-white">
-      {/* Hero Section */}
+      {/* Hero Section - Builder.io Editable */}
       <div ref={heroRef} className="relative">
-        <Hero />
+        {heroContent ? (
+          <BuilderComponent 
+            model="home-hero" 
+            content={heroContent}
+          />
+        ) : (
+          <Hero />
+        )}
       </div>
 
       {/* Featured Categories */}

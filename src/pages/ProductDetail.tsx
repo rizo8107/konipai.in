@@ -46,6 +46,8 @@ import {
 import { ProductReviews } from '@/components/ProductReviews';
 import { ProductDetails } from '@/components/ProductDetails';
 import { Breadcrumbs, BreadcrumbItem } from '@/components/Breadcrumbs';
+import { BuilderComponent } from "@/components/BuilderComponent";
+import { builder } from "@/lib/builder";
 
 // Generate a very low-res placeholder
 const generatePlaceholder = (color = '#f3f4f6') => {
@@ -62,6 +64,7 @@ const ProductDetail = () => {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [isWishlisted, setIsWishlisted] = useState(false);
   const [imagesPreloaded, setImagesPreloaded] = useState(false);
+  const [productDescription, setProductDescription] = useState<any>(null);
   
   const { addItem, items, getItem } = useCart();
   const [quantity, setQuantity] = useState(1);
@@ -881,7 +884,26 @@ const ProductDetail = () => {
         </div>
         
         {/* Product Details - Moved above reviews */}
-        {product && <ProductDetails product={product} />}
+        {product && (
+        <>
+          <ProductDetails product={product} />
+          
+          {/* Builder.io editable product description section */}
+          <div className="mt-8 border-t pt-8">
+            <h2 className="text-2xl font-bold mb-4">Product Description</h2>
+            {productDescription ? (
+              <BuilderComponent 
+                model="product-description" 
+                content={productDescription} 
+              />
+            ) : (
+              <div className="prose max-w-none">
+                <p>{product.description}</p>
+              </div>
+            )}
+          </div>
+        </>
+      )}
         
         {/* Reviews Section */}
         {id && (

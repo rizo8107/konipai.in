@@ -31,6 +31,10 @@ const OrderDetail = lazy(() => import("./pages/OrderDetail"))
 const OrderConfirmation = lazy(() => import("./pages/OrderConfirmation"))
 const Orders = lazy(() => import("./pages/Orders"))
 
+// Builder.io pages
+const BuilderPage = lazy(() => import("./pages/BuilderPage"))
+const BuilderExample = lazy(() => import("./pages/BuilderExample"))
+
 // Policy pages
 const ContactUs = lazy(() => import("./pages/ContactUs"))
 const ShippingPolicy = lazy(() => import("./pages/ShippingPolicy"))
@@ -40,6 +44,9 @@ const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"))
 
 // Add the webhook test page to the import
 const WebhookTest = lazy(() => import("./pages/WebhookTest"))
+
+// Import Builder.io initialization
+import "@/lib/builder"
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, loading } = useAuth()
@@ -87,16 +94,6 @@ function ScrollToTop() {
   }, [pathname]);
   
   return null;
-}
-
-// Add the webhook test route with the other pages
-function generateRoutes() {
-  const pages = [
-    // ... existing pages ...
-    { path: "/webhook-test", component: WebhookTest },
-  ];
-  
-  // ... rest of the function ...
 }
 
 export function Routes() {
@@ -170,6 +167,12 @@ export function Routes() {
                   }
                 />
                 <Route path="/webhook-test" element={<WebhookTest />} />
+                
+                {/* Builder.io routes */}
+                <Route path="/builder/*" element={<BuilderPage />} />
+                <Route path="/builder-preview/:path*" element={<BuilderPage />} />
+                <Route path="/builder-example" element={<BuilderExample />} />
+                
                 <Route path="*" element={<NotFound />} />
               </RouterRoutes>
             </Suspense>
