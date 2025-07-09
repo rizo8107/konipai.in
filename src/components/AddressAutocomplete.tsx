@@ -48,7 +48,9 @@ export function AddressAutocomplete({ onAddressSelect, defaultValue = '', error 
     
     const script = document.createElement('script');
     script.id = 'google-maps-script';
-    script.src = `https://maps.googleapis.com/maps/api/js?key=AIzaSyDwLXGIw4fEOt3kZtbVPn_bpaLi3i9GDBo&libraries=places`;
+    // Use environment variable for API key with fallback for development
+    const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
     script.async = true;
     script.defer = true;
     
