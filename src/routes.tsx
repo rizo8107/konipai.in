@@ -29,6 +29,7 @@ const ResetPasswordPage = lazy(() => import("./pages/auth/reset-password"))
 const ProfilePage = lazy(() => import("./pages/profile"))
 const OrderDetail = lazy(() => import("./pages/OrderDetail"))
 const OrderConfirmation = lazy(() => import("./pages/OrderConfirmation"))
+const OrderTracking = lazy(() => import("./pages/OrderTracking"))
 const Orders = lazy(() => import("./pages/Orders"))
 
 // Builder.io pages
@@ -124,19 +125,15 @@ export function Routes() {
                 
                 <Route
                   path="/checkout"
-                  element={
-                    <PrivateRoute>
-                      <Checkout />
-                    </PrivateRoute>
-                  }
+                  element={<Checkout />}
                 />
                 <Route
                   path="/order-confirmation/:orderId"
-                  element={
-                    <PrivateRoute>
-                      <OrderConfirmation />
-                    </PrivateRoute>
-                  }
+                  element={<OrderConfirmation />}
+                />
+                <Route
+                  path="/track-order"
+                  element={<OrderTracking />}
                 />
                 <Route
                   path="/orders"

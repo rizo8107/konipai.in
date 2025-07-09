@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/components/ui/use-toast';
-import { CheckCircle, ShoppingBag, Loader2, Package, Receipt } from 'lucide-react';
+import { ShoppingBag, CheckCircle, Package, Receipt, Loader2, Copy } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import { trackPurchase, trackPageView, trackDynamicConversion } from '@/lib/analytics';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -41,6 +41,7 @@ interface Order {
   customer_email?: string;
   coupon_code?: string;
   discount_amount?: number;
+  is_guest_order?: boolean;
   expand?: {
     shipping_address?: {
       street: string;
@@ -247,6 +248,32 @@ export default function OrderConfirmation() {
             : 'Your order has been placed but payment confirmation is pending.'}
         </p>
         <p className="font-medium mt-2">Order #{order.id}</p>
+        
+        {/* Show special message for guest checkout orders with order tracking info */}
+        {(order.is_guest_order || !order.expand?.user) && (
+          <div className="mt-4 p-3 bg-blue-50 text-blue-700 rounded-md">
+            <p>You completed this order as a guest. Order details have been sent to {order.customer_email}.</p>
+            <p className="text-sm mt-1">To track this order in the future, bookmark this page or save this link:</p>
+            <div className="mt-2 flex items-center justify-between bg-white p-2 rounded border">
+              <code className="text-xs sm:text-sm truncate">{window.location.href}</code>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="ml-2 flex-shrink-0"
+                onClick={() => {
+                  navigator.clipboard.writeText(window.location.href);
+                  toast({
+                    title: "Link Copied",
+                    description: "Order tracking link copied to clipboard"
+                  });
+                }}
+              >
+                <Copy className="h-4 w-4" />
+              </Button>
+            </div>
+            <p className="text-sm mt-3">Create an account to track all your orders in one place and get faster checkout next time.</p>
+          </div>
+        )}
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
@@ -373,14 +400,32 @@ export default function OrderConfirmation() {
         </TabsContent>
       </Tabs>
 
-      <div className="flex justify-center space-x-4 mt-8">
-        <Button asChild variant="outline" className="w-full">
-          <Link to="/orders">View All Orders</Link>
-        </Button>
-        <Button asChild>
-          <Link to="/shop">Continue Shopping</Link>
-        </Button>
+      <div className="flex flex-col space-y-4 mt-8">
+        <div className="flex justify-center space-x-4">
+          {/* Only show View All Orders button for logged-in users */}
+          {!order.is_guest_order && order.expand?.user ? (
+            <Button asChild variant="outline" className="w-full">
+              <Link to="/orders">View All Orders</Link>
+            </Button>
+          ) : (
+            <Button asChild variant="outline" className="w-full">
+              <Link to="/">Back to Home</Link>
+            </Button>
+          )}
+          <Button asChild>
+            <Link to="/shop">Continue Shopping</Link>
+          </Button>
+        </div>
+        
+        {/* Show track order link for guest users */}
+        {(order.is_guest_order || !order.expand?.user) && (
+          <div className="text-center">
+            <Link to="/track-order" className="text-primary hover:underline text-sm">
+              Need to track another order? Use our order tracking page
+            </Link>
+          </div>
+        )}
       </div>
     </div>
   );
-} 
+}

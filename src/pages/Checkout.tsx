@@ -79,13 +79,17 @@ interface OrderData {
 
 export default function CheckoutPage() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, signInWithGoogle } = useAuth();
   const { toast } = useToast();
   const { items, subtotal, total, clearCart, isLoading: cartLoading } = useCart();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isPaymentProcessing, setIsPaymentProcessing] = useState(false);
   const [razorpayLoaded, setRazorpayLoaded] = useState(false);
   const [isFormValid, setIsFormValid] = useState(false);
+  
+  // Guest checkout states
+  const [isGuestCheckout, setIsGuestCheckout] = useState<boolean>(false);
+  const [showLoginOptions, setShowLoginOptions] = useState<boolean>(!user);
   
   // Limited time offer settings
   const [offerExpiryTime] = useState(() => {
@@ -129,13 +133,7 @@ export default function CheckoutPage() {
   }, []);
 
   useEffect(() => {
-    // Redirect if not logged in
-    if (!user) {
-      navigate('/auth/login', { state: { from: '/checkout' } });
-      return;
-    }
-
-    // Redirect if cart is empty (after loading)
+    // Only redirect if cart is empty (after loading)
     if (!cartLoading && (!items || items.length === 0)) {
       toast({
         title: "Empty Cart",
@@ -143,6 +141,15 @@ export default function CheckoutPage() {
       });
       navigate('/shop');
       return;
+    }
+    
+    // If user logs in during checkout, update the form data
+    if (user) {
+      setShowLoginOptions(false);
+      setIsGuestCheckout(false);
+    } else {
+      // Make sure login options are shown when there's no user
+      setShowLoginOptions(true);
     }
 
     const loadUserAddress = async () => {
@@ -389,6 +396,16 @@ export default function CheckoutPage() {
       if (!paymentId) {
         throw new Error('Missing payment ID from Razorpay');
       }
+      
+      // Log whether this is a guest checkout or logged-in user
+      console.log(`Processing payment for ${isGuestCheckout ? 'guest checkout' : 'logged-in user'} order: ${orderId}`);
+      if (isGuestCheckout) {
+        console.log('Guest checkout information:', {
+          name: formData.name,
+          email: formData.email,
+          phone: formData.phone
+        });
+      }
 
       let verificationSuccess = false;
       let captureSuccess = false;
@@ -540,7 +557,9 @@ export default function CheckoutPage() {
             customer: {
               name: orderDetails.customer_name,
               email: orderDetails.customer_email,
-              phone: orderDetails.customer_phone
+              phone: orderDetails.customer_phone,
+              is_guest: orderDetails.is_guest_order || false,
+              user_id: orderDetails.user || 'guest'
             },
             payment: {
               id: paymentId,
@@ -556,7 +575,8 @@ export default function CheckoutPage() {
               total: orderDetails.total
             },
             created_at: orderDetails.created,
-            status: orderDetails.status
+            status: orderDetails.status,
+            is_guest_order: orderDetails.is_guest_order || false
           }
         };
 
@@ -661,12 +681,18 @@ export default function CheckoutPage() {
       clearCart();
 
       // Update UI and always redirect to order confirmation page
-      toast({
-        title: "Payment Received",
-        description: "Your order has been placed successfully.",
-      });
-
-      // Redirect to the order confirmation page
+      if (isGuestCheckout) {
+        toast({
+          title: "Payment Successful!",
+          description: `Your order has been placed successfully. Order details have been sent to ${formData.email}.`,
+        });
+      } else {
+        toast({
+          title: "Payment Successful!",
+          description: "Your order has been placed successfully. You can view your order in your account.",
+        });
+      }
+      
       navigate(`/order-confirmation/${orderId}`);
     } catch (error) {
       console.error('Payment processing error:', error);
@@ -764,8 +790,17 @@ export default function CheckoutPage() {
       };
       setFormData(updatedFormData);
       validateForm(updatedFormData);
+      
+      // If user logs in during checkout, hide login options
+      if (showLoginOptions) {
+        setShowLoginOptions(false);
+        toast({
+          title: "Logged in successfully",
+          description: "Continuing with checkout...",
+        });
+      }
     }
-  }, [user, formData]);
+  }, [user, formData, showLoginOptions]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -794,10 +829,8 @@ export default function CheckoutPage() {
     try {
       setIsSubmitting(true);
 
-      if (!user?.id) {
-        trackFormError('checkout_form', 'checkout-form', 'User not logged in');
-        throw new Error('Please login to complete your order');
-      }
+      // For guest checkout, we don't need to check for user.id
+      // We'll create a guest order or use the logged-in user information if available
 
       if (!items || items.length === 0) {
         trackFormError('checkout_form', 'checkout-form', 'Cart is empty');
@@ -824,9 +857,9 @@ export default function CheckoutPage() {
         throw new Error('Some items in your cart are invalid. Please try refreshing the page.');
       }
 
-      // Update user's phone number if it's different from what's stored
+      // Update user's phone number if logged in and different from what's stored
       let validatedPhone = formData.phone;
-      if (formData.phone && user.phone !== formData.phone) {
+      if (user && formData.phone && user.phone !== formData.phone) {
         try {
           // Basic validation for Indian phone numbers
           const phoneRegex = /^[6-9]\d{9}$/;
@@ -867,42 +900,57 @@ export default function CheckoutPage() {
       );
 
       // Create or update address
-      let addressId;
+      let addressId = null;
+      const addressText = JSON.stringify({
+        street: formData.address,
+        city: formData.city,
+        state: formData.state,
+        postalCode: formData.zipCode,
+        country: 'India'
+      });
+      
       try {
-        // Prepare address data
-        const addressData = {
-          user: user.id,
-          street: formData.address,
-          city: formData.city,
-          state: formData.state,
-          postalCode: formData.zipCode,
-          country: 'India',
-          isDefault: true // Set as default address
-        };
+        // For guest checkout, we don't create an address record in PocketBase
+        // We just store the address as text in the order
+        if (!isGuestCheckout && user) {
+          // Prepare address data for logged-in users
+          const addressData = {
+            user: user.id,
+            street: formData.address,
+            city: formData.city,
+            state: formData.state,
+            postalCode: formData.zipCode,
+            country: 'India',
+            isDefault: true
+          };
 
-        console.log('Preparing shipping address data:', addressData);
-        
-        // Check if user already has an address
-        try {
-          const existingAddress = await pocketbase.collection('addresses')
-            .getFirstListItem(`user="${user.id}"`);
+          console.log('Preparing shipping address data for logged-in user:', addressData);
           
-          if (existingAddress) {
-            // Update existing address
-            await pocketbase.collection('addresses').update(existingAddress.id, addressData);
-            addressId = existingAddress.id;
-            console.log('Updated existing address:', addressId);
+          // For logged-in users, check if they already have an address
+          try {
+            const existingAddress = await pocketbase.collection('addresses')
+              .getFirstListItem(`user="${user.id}"`);
+            
+            if (existingAddress) {
+              // Update existing address
+              await pocketbase.collection('addresses').update(existingAddress.id, addressData);
+              addressId = existingAddress.id;
+              console.log('Updated existing address:', addressId);
+            }
+          } catch (addressError: unknown) {
+            // No existing address found, create new one
+            console.log('No existing address found for user, creating new one');
+            const newAddress = await pocketbase.collection('addresses').create(addressData);
+            addressId = newAddress.id;
+            console.log('Created new address for user:', addressId);
           }
-        } catch (addressError: unknown) {
-          // No existing address found, create new one
-          console.log('No existing address found, creating new one');
-          const newAddress = await pocketbase.collection('addresses').create(addressData);
-          addressId = newAddress.id;
-          console.log('Created new address:', addressId);
-        }
-        
-        if (!addressId) {
-          throw new Error('Failed to create or update address');
+          
+          if (!addressId) {
+            throw new Error('Failed to create or update address');
+          }
+        } else {
+          // For guest checkout, we'll use the address text only
+          console.log('Guest checkout: using address text only (no PocketBase address record)');
         }
       } catch (error) {
         trackFormError('checkout_form', 'checkout-form', 'Failed to prepare shipping address');
@@ -910,22 +958,26 @@ export default function CheckoutPage() {
         throw new Error('Failed to prepare shipping address. Please try again.');
       }
 
-      console.log(`Using shipping address ID for order creation: ${addressId}`);
+      // For guest checkout, we'll only use the shipping_address_text field
+      // For logged-in users, we'll use both shipping_address and shipping_address_text
+      console.log(`${isGuestCheckout ? 'Guest checkout: No address ID' : `Using shipping address ID for order creation: ${addressId}`}`);
 
       // Create order in PocketBase
       const orderData = {
-        user: user.id,
+        // Only include user reference if user is logged in
+        ...(user ? { user: user.id } : {}),
         customer_name: formData.name,
         customer_email: formData.email,
         customer_phone: validatedPhone,
-        shipping_address: addressId, // Confirmed: This is the correct field name matching PocketBase schema
+        // Only include shipping_address for logged-in users
+        ...(user && addressId ? { shipping_address: addressId } : {}),
         shipping_address_text: JSON.stringify({
           street: formData.address,
           city: formData.city,
           state: formData.state,
           postalCode: formData.zipCode,
           country: 'India'
-        }), // Add a text backup of the address data
+        }), // Store address as text for all orders (including guest orders)
         products: JSON.stringify(items.map(item => ({
           productId: item.productId,
           product: item.product,
@@ -939,11 +991,12 @@ export default function CheckoutPage() {
         payment_status: 'pending',
         coupon_code: appliedCoupon?.code || null,
         discount_amount: appliedCoupon?.discountAmount || 0,
-        notes: 'Order created, awaiting payment',
+        notes: isGuestCheckout ? 'Guest checkout order' : 'Order created, awaiting payment',
         payment_id: '',
         razorpay_order_id: '',
         razorpay_payment_id: '',
         razorpay_signature: '',
+        is_guest_order: isGuestCheckout,
       };
 
       console.log('Creating order with data:', {
@@ -988,16 +1041,24 @@ export default function CheckoutPage() {
       appliedCoupon?.code
     );
     
-    // Use order.total as-is in rupees (₹)
-    // The createRazorpayOrder function will correctly convert it to paise (× 100)
-    // for the Razorpay API which expects amounts in the smallest currency unit
-    console.log(`Creating Razorpay order for amount: ₹${order.total} (will be converted to ${order.total * 100} paise)`);
+    // Ensure the order amount is positive - Razorpay doesn't accept negative amounts
+    const orderAmount = Math.max(1, order.total); // Minimum 1 rupee if total is zero or negative
+    
+    console.log(`Original order total: ₹${order.total}`);
+    console.log(`Creating Razorpay order for amount: ₹${orderAmount} (will be converted to ${orderAmount * 100} paise)`);
     
     try {
       const razorpayOrderResponse = await createRazorpayOrder(
-        order.total, // Original amount in rupees (will be converted to paise)
+        orderAmount, // Positive amount in rupees (will be converted to paise)
         'INR',       // currency
-        order.id     // receipt (using our order ID)
+        order.id,    // receipt (using our order ID)
+        // Add notes about guest checkout status
+        {
+          user_id: user?.id || 'guest',
+          email: formData.email,
+          name: formData.name,
+          is_guest: isGuestCheckout ? 'true' : 'false'
+        }
       );
       
       console.log('Razorpay order response details:');
@@ -1036,7 +1097,9 @@ export default function CheckoutPage() {
         },
         notes: {
           order_id: order.id,
-          address: `${formData.address}, ${formData.city}, ${formData.state} - ${formData.zipCode}`
+          address: `${formData.address}, ${formData.city}, ${formData.state} - ${formData.zipCode}`,
+          is_guest_checkout: isGuestCheckout ? 'true' : 'false',
+          user_id: user?.id || 'guest'
         },
         theme: {
           color: '#4F46E5', // Indigo color that matches Konipai theme
@@ -1075,6 +1138,187 @@ export default function CheckoutPage() {
     validateForm(updatedFormData);
   };
 
+  const handleDetectLocation = () => {
+    // Track button click
+    trackButtonClick('detect_location', 'Detect Location', window.location.pathname);
+    
+    // Show loading toast
+    const loadingToast = toast({
+      title: "Detecting Location",
+      description: "Please wait while we detect your location...",
+    });
+    
+    if (!navigator.geolocation) {
+      toast({
+        variant: "destructive",
+        title: "Not Supported",
+        description: "Geolocation is not supported by your browser.",
+      });
+      return;
+    }
+    
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        try {
+          const { latitude, longitude } = position.coords;
+          
+          // Use Google Maps Geocoding API to get address from coordinates
+          const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+          
+          if (!apiKey) {
+            toast({
+              variant: "destructive",
+              title: "API Key Missing",
+              description: "Google Maps API key is required for location detection.",
+            });
+            return;
+          }
+          
+          const response = await fetch(
+            `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latitude},${longitude}&key=${apiKey}`
+          );
+          
+          const data = await response.json();
+          
+          if (data.status !== "OK" || !data.results || data.results.length === 0) {
+            throw new Error("Could not retrieve address from your location.");
+          }
+          
+          // Parse the address components
+          const addressResult = data.results[0];
+          let street = "";
+          let city = "";
+          let state = "";
+          let postalCode = "";
+          let country = "";
+          let sublocality = "";
+          let landmark = "";
+          
+          console.log('Geocoding result:', addressResult);
+          
+          // Extract address components
+          addressResult.address_components.forEach((component: any) => {
+            const types = component.types;
+            console.log('Component:', component.long_name, types);
+            
+            if (types.includes("street_number")) {
+              street = component.long_name + " ";
+            } else if (types.includes("premise")) {
+              // Use premise if street_number is not available
+              if (!street) street = component.long_name + " ";
+            } else if (types.includes("route")) {
+              street += component.long_name;
+            } else if (types.includes("landmark")) {
+              landmark = component.long_name;
+            } else if (types.includes("sublocality_level_1") || types.includes("sublocality")) {
+              sublocality = component.long_name;
+            } else if (types.includes("locality")) {
+              city = component.long_name;
+            } else if (types.includes("administrative_area_level_1")) {
+              state = component.long_name;
+            } else if (types.includes("postal_code")) {
+              postalCode = component.long_name;
+            } else if (types.includes("country")) {
+              country = component.long_name;
+            }
+          });
+          
+          // Construct a complete street address
+          if (!street) {
+            // If no street information was found, use the formatted address up to the first comma
+            const formattedParts = addressResult.formatted_address.split(',');
+            street = formattedParts[0];
+          } else if (landmark) {
+            // Add landmark information if available
+            street = `${street} (near ${landmark})`;
+          }
+          
+          // If sublocality exists but no city, use sublocality as city
+          if (sublocality && !city) {
+            city = sublocality;
+          } else if (sublocality && city) {
+            // Add sublocality to street address for more precision
+            street = `${street}, ${sublocality}`;
+          }
+          
+          console.log('Parsed address:', { street, city, state, postalCode, country });
+          
+          // Create a complete address object for the form
+          const updatedFormData = {
+            ...formData,
+            address: street || addressResult.formatted_address.split(',')[0] || '',
+            city: city || '',
+            state: state || '',
+            zipCode: postalCode || ''
+          };
+          
+          console.log('Updating form data with:', updatedFormData);
+          
+          // Update form data state
+          setFormData(updatedFormData);
+          
+          // Also trigger the address select handler to ensure all components are updated
+          handleAddressSelect({
+            street: updatedFormData.address,
+            city: updatedFormData.city,
+            state: updatedFormData.state,
+            postalCode: updatedFormData.zipCode,
+            country: country || 'India'
+          });
+          
+          // Validate the form with updated data
+          validateForm(updatedFormData);
+          
+          // Show success toast
+          toast({
+            title: "Location Detected",
+            description: "Your address has been automatically filled.",
+          });
+        } catch (error) {
+          console.error('Error detecting location:', error);
+          toast({
+            variant: "destructive",
+            title: "Detection Failed",
+            description: error instanceof Error ? error.message : "Failed to detect your location.",
+          });
+        } finally {
+          toast.dismiss(loadingToast);
+        }
+      },
+      (error) => {
+        console.error('Geolocation error:', error);
+        toast.dismiss(loadingToast);
+        
+        let errorMessage = "Failed to detect your location.";
+        
+        if (error.code) {
+          switch (error.code) {
+            case error.PERMISSION_DENIED:
+              errorMessage = "You denied the request for geolocation.";
+              break;
+            case error.POSITION_UNAVAILABLE:
+              errorMessage = "Location information is unavailable.";
+              break;
+            case error.TIMEOUT:
+              errorMessage = "The request to get your location timed out.";
+              break;
+          }
+        }
+        
+        toast({
+          variant: "destructive",
+          title: "Permission Denied",
+          description: errorMessage + " Please enter your address manually.",
+        });
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0
+      }
+    );
+  };
+
   if (cartLoading) {
     return (
       <div className="container max-w-2xl mx-auto py-16 px-4 text-center">
@@ -1097,6 +1341,34 @@ export default function CheckoutPage() {
     );
   }
 
+  // Handle Google login
+  const handleGoogleLogin = async () => {
+    try {
+      await signInWithGoogle();
+      toast({
+        title: "Login Successful",
+        description: "You've been logged in with Google.",
+      });
+    } catch (error) {
+      console.error('Google login error:', error);
+      toast({
+        variant: "destructive",
+        title: "Login Failed",
+        description: "Could not log in with Google. Please try again or continue as guest.",
+      });
+    }
+  };
+
+  // Handle guest checkout selection
+  const handleGuestCheckoutSelect = () => {
+    setIsGuestCheckout(true);
+    setShowLoginOptions(false);
+    toast({
+      title: "Guest Checkout",
+      description: "You can complete your order without creating an account.",
+    });
+  };
+
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="max-w-6xl mx-auto">
@@ -1104,21 +1376,75 @@ export default function CheckoutPage() {
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-center mb-6">Checkout</h1>
           
-          {showOffer && (
-            <div className="bg-gradient-to-r from-amber-500 to-orange-500 text-white p-4 rounded-lg mb-6 shadow-lg">
-              <div className="flex flex-col md:flex-row justify-between items-center">
-                <div className="mb-3 md:mb-0">
-                  <h3 className="font-bold text-lg">⚡ Limited Time Offer!</h3>
-                  <p className="text-sm md:text-base">Complete your order in the next:</p>
+          {/* Login Options Section */}
+          {showLoginOptions && (
+            <div className="bg-white rounded-lg shadow-md p-6 mb-8 border border-gray-200">
+              <h2 className="text-xl font-semibold mb-4">Complete Your Purchase</h2>
+              <p className="mb-6 text-gray-600">Sign in for faster checkout and to save your information for next time.</p>
+              
+              <div className="flex flex-col md:flex-row gap-4 justify-between items-center">
+                <Button 
+                  onClick={handleGoogleLogin}
+                  className="w-full md:w-auto flex items-center justify-center gap-2 bg-white text-gray-800 border border-gray-300 hover:bg-gray-50"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 48 48">
+                    <path fill="#FFC107" d="M43.611,20.083H42V20H24v8h11.303c-1.649,4.657-6.08,8-11.303,8c-6.627,0-12-5.373-12-12c0-6.627,5.373-12,12-12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C12.955,4,4,12.955,4,24c0,11.045,8.955,20,20,20c11.045,0,20-8.955,20-20C44,22.659,43.862,21.35,43.611,20.083z"/>
+                    <path fill="#FF3D00" d="M6.306,14.691l6.571,4.819C14.655,15.108,18.961,12,24,12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C16.318,4,9.656,8.337,6.306,14.691z"/>
+                    <path fill="#4CAF50" d="M24,44c5.166,0,9.86-1.977,13.409-5.192l-6.19-5.238C29.211,35.091,26.715,36,24,36c-5.202,0-9.619-3.317-11.283-7.946l-6.522,5.025C9.505,39.556,16.227,44,24,44z"/>
+                    <path fill="#1976D2" d="M43.611,20.083H42V20H24v8h11.303c-0.792,2.237-2.231,4.166-4.087,5.571c0.001-0.001,0.002-0.001,0.003-0.002l6.19,5.238C36.971,39.205,44,34,44,24C44,22.659,43.862,21.35,43.611,20.083z"/>
+                  </svg>
+                  Continue with Google
+                </Button>
+                
+                <div className="flex items-center w-full md:w-auto">
+                  <div className="border-t border-gray-300 flex-grow md:w-20"></div>
+                  <span className="px-4 text-gray-500 text-sm">or</span>
+                  <div className="border-t border-gray-300 flex-grow md:w-20"></div>
                 </div>
+                
+                <Button 
+                  onClick={handleGuestCheckoutSelect}
+                  className="w-full md:w-auto bg-gray-100 text-gray-800 hover:bg-gray-200 border border-gray-300"
+                >
+                  Continue as Guest
+                </Button>
+              </div>
+            </div>
+          )}
+          
+          {showOffer && (
+            <div className="relative overflow-hidden bg-gradient-to-r from-slate-900 to-slate-800 text-white p-6 rounded-xl mb-8 shadow-xl border border-slate-700/50">
+              <div className="absolute top-0 left-0 w-full h-full opacity-10">
+                <svg className="absolute right-0 top-0 h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
+                  <polygon fill="currentColor" points="0,0 100,0 100,100" />
+                </svg>
+                <svg className="absolute left-0 bottom-0 h-full transform rotate-180" viewBox="0 0 100 100" preserveAspectRatio="none">
+                  <polygon fill="currentColor" points="0,0 100,0 100,100" />
+                </svg>
+              </div>
+              
+              <div className="relative z-10 flex flex-col md:flex-row justify-between items-center">
+                <div className="mb-4 md:mb-0 md:mr-8">
+                  <span className="inline-block px-3 py-1 bg-indigo-600 text-white text-xs font-medium rounded-full mb-2">EXCLUSIVE</span>
+                  <h3 className="font-bold text-xl md:text-2xl tracking-tight mb-1">Limited Time Offer</h3>
+                  <p className="text-slate-300 text-sm md:text-base">Complete your purchase in the next:</p>
+                </div>
+                
                 <div className="flex flex-col items-center">
                   <CountdownTimer 
                     expiryTime={offerExpiryTime} 
                     onExpire={() => setShowOffer(false)} 
-                    className="mb-2"
+                    className="mb-3 text-lg font-mono"
                   />
-                  <p className="text-sm font-bold">Get {offerDiscount}% OFF your order!</p>
+                  <div className="bg-white/10 backdrop-blur-sm px-4 py-2 rounded-lg border border-white/20">
+                    <p className="text-base md:text-lg font-bold">Save <span className="text-amber-400">{offerDiscount}%</span> on your order</p>
+                  </div>
                 </div>
+              </div>
+              
+              <div className="absolute -right-2 -top-2 w-16 h-16 md:w-20 md:h-20 flex items-center justify-center">
+                <div className="absolute inset-0 bg-amber-500 rounded-full transform rotate-45"></div>
+                <span className="relative z-10 text-white font-bold text-sm md:text-base transform -rotate-45">{offerDiscount}%</span>
               </div>
             </div>
           )}
@@ -1193,11 +1519,24 @@ export default function CheckoutPage() {
             Shipping Address
           </h2>
           <div className="space-y-4">
-            <AddressAutocomplete
-              onAddressSelect={handleAddressSelect}
-              defaultValue={formData.address}
-              error={errors?.address || (!formData.address ? "Address is required" : undefined)}
-            />
+            <div className="flex items-start gap-2">
+              <div className="flex-1">
+                <AddressAutocomplete
+                  onAddressSelect={handleAddressSelect}
+                  defaultValue={formData.address}
+                  error={errors?.address || (!formData.address ? "Address is required" : undefined)}
+                />
+              </div>
+              <Button 
+                type="button" 
+                variant="outline" 
+                className="mt-8" 
+                onClick={handleDetectLocation}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="1"/><path d="M12 7.5V6"/><path d="M12 18v-1.5"/><path d="M16.5 12H18"/><path d="M6 12h1.5"/></svg>
+                Detect Location
+              </Button>
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="city">City</Label>
