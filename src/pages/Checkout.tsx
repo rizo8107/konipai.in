@@ -92,16 +92,11 @@ export default function CheckoutPage() {
   const [showLoginOptions, setShowLoginOptions] = useState<boolean>(!user);
   
   // Limited time offer settings
-  const [offerExpiryTime] = useState(() => {
-    // Set expiry time to 15 minutes from now
-    const expiry = new Date();
-    expiry.setMinutes(expiry.getMinutes() + 15);
-    return expiry;
-  });
-  const [showOffer, setShowOffer] = useState(true);
-  
-  // Offer details
-  const offerDiscount = 5; // 5% discount
+  const [offerExpiryTime, setOfferExpiryTime] = useState<Date | null>(null);
+  const [showOffer, setShowOffer] = useState(false);
+  const [offerDiscount, setOfferDiscount] = useState(0);
+  const [offerTitle, setOfferTitle] = useState('');
+  const [offerLoading, setOfferLoading] = useState(true);
   
   const [formData, setFormData] = useState<CheckoutFormData>({
     name: user?.name || '',
@@ -113,12 +108,17 @@ export default function CheckoutPage() {
     phone: user?.phone || ''
   });
   
+  // Coupon state
   const [couponCode, setCouponCode] = useState('');
-  const [appliedCoupon, setAppliedCoupon] = useState<CouponData | null>(null);
-  const [couponLoading, setCouponLoading] = useState(false);
   const [couponError, setCouponError] = useState<string | null>(null);
+  const [couponLoading, setCouponLoading] = useState(false);
+  const [appliedCoupon, setAppliedCoupon] = useState<CouponData | null>(null);
+  const [suggestedCoupons, setSuggestedCoupons] = useState<any[]>([]);
+  const [suggestedCouponsLoading, setSuggestedCouponsLoading] = useState(false);
   const [errors, setErrors] = useState<{ [key: string]: string | null }>({});
 
+  // Calculate final total with all discounts and shipping - removed duplicate
+  
   // Load Razorpay script
   useEffect(() => {
     const loadScript = async () => {
@@ -130,6 +130,124 @@ export default function CheckoutPage() {
     };
     
     loadScript();
+  }, []);
+
+  // Fetch suggested coupons from PocketBase
+  useEffect(() => {
+    let isMounted = true;
+    
+    const fetchSuggestedCoupons = async () => {
+      try {
+        if (isMounted) setSuggestedCouponsLoading(true);
+        
+        // Get current date/time for comparison
+        const now = new Date();
+        
+        try {
+          // Fetch active coupons from PocketBase that are marked for display on checkout
+          const coupons = await pocketbase.collection('coupons').getList(1, 5, {
+            filter: `active = true && display_on_checkout = true && start_date <= "${now.toISOString()}" && end_date >= "${now.toISOString()}"`,
+            sort: '-display_priority'
+          });
+          
+          if (isMounted && coupons && coupons.items.length > 0) {
+            setSuggestedCoupons(coupons.items);
+            console.log('Suggested coupons found:', coupons.items.length);
+          }
+        } catch (collectionError) {
+          // Collection might not exist yet
+          console.warn('Coupons collection not found:', collectionError);
+        }
+      } catch (error) {
+        console.error('Error fetching suggested coupons:', error);
+      } finally {
+        if (isMounted) setSuggestedCouponsLoading(false);
+      }
+    };
+    
+    fetchSuggestedCoupons();
+    
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // Fetch special offers from PocketBase
+  useEffect(() => {
+    // Flag to prevent state updates if component unmounts during fetch
+    let isMounted = true;
+    
+    const fetchSpecialOffer = async () => {
+      try {
+        // Only set loading state if component is still mounted
+        if (isMounted) setOfferLoading(true);
+        
+        // Get current date/time for comparison
+        const now = new Date();
+        
+        // Check if collection exists before fetching
+        try {
+          // Fetch active offers from PocketBase
+          const offers = await pocketbase.collection('special_offers').getList(1, 1, {
+            filter: `active = true && start_date <= "${now.toISOString()}" && end_date >= "${now.toISOString()}"`,
+            sort: '-created'
+          });
+          
+          // Only update state if component is still mounted
+          if (isMounted) {
+            if (offers && offers.items.length > 0) {
+              const offer = offers.items[0];
+              setOfferDiscount(offer.discount_percentage || 0);
+              setOfferTitle(offer.title || '');
+              
+              // Make sure we have a valid date
+              if (offer.end_date) {
+                setOfferExpiryTime(new Date(offer.end_date));
+              } else {
+                // Default to 15 minutes from now if no end date
+                const defaultExpiry = new Date();
+                defaultExpiry.setMinutes(defaultExpiry.getMinutes() + 15);
+                setOfferExpiryTime(defaultExpiry);
+              }
+              
+              setShowOffer(true);
+              console.log('Active offer found:', offer.title, offer.discount_percentage + '%');
+            } else {
+              setShowOffer(false);
+              console.log('No active offers found');
+            }
+          }
+        } catch (collectionError) {
+          // Collection might not exist yet, use fallback
+          console.warn('Special offers collection not found, using fallback offer');
+          
+          if (isMounted) {
+            // Set default offer values
+            setOfferDiscount(5); // 5% discount
+            setOfferTitle('Limited Time Offer');
+            
+            // Set expiry to 15 minutes from now
+            const defaultExpiry = new Date();
+            defaultExpiry.setMinutes(defaultExpiry.getMinutes() + 15);
+            setOfferExpiryTime(defaultExpiry);
+            
+            setShowOffer(true);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching special offers:', error);
+        if (isMounted) setShowOffer(false);
+      } finally {
+        if (isMounted) setOfferLoading(false);
+      }
+    };
+    
+    fetchSpecialOffer();
+    
+    // Cleanup function to prevent state updates after unmount
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -737,13 +855,13 @@ export default function CheckoutPage() {
     
     // Apply limited time offer discount if active
     let offerDiscountAmount = 0;
-    if (showOffer) {
+    if (showOffer && offerDiscount > 0) {
       offerDiscountAmount = (finalSubtotal * offerDiscount) / 100;
       finalDiscount += offerDiscountAmount;
     }
     
     const shippingCost = subtotal >= 100 ? 0 : 10;
-    const finalTotal = finalSubtotal + shippingCost - finalDiscount;
+    const finalTotal = Math.max(0, finalSubtotal + shippingCost - finalDiscount);
     
     return {
       finalSubtotal,
@@ -1412,7 +1530,12 @@ export default function CheckoutPage() {
             </div>
           )}
           
-          {showOffer && (
+          {offerLoading ? (
+            <div className="flex justify-center items-center py-4 mb-8">
+              <Loader2 className="h-6 w-6 animate-spin text-primary mr-2" />
+              <span>Loading offers...</span>
+            </div>
+          ) : showOffer && (
             <div className="relative overflow-hidden bg-gradient-to-r from-slate-900 to-slate-800 text-white p-6 rounded-xl mb-8 shadow-xl border border-slate-700/50">
               <div className="absolute top-0 left-0 w-full h-full opacity-10">
                 <svg className="absolute right-0 top-0 h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
@@ -1426,14 +1549,17 @@ export default function CheckoutPage() {
               <div className="relative z-10 flex flex-col md:flex-row justify-between items-center">
                 <div className="mb-4 md:mb-0 md:mr-8">
                   <span className="inline-block px-3 py-1 bg-indigo-600 text-white text-xs font-medium rounded-full mb-2">EXCLUSIVE</span>
-                  <h3 className="font-bold text-xl md:text-2xl tracking-tight mb-1">Limited Time Offer</h3>
+                  <h3 className="font-bold text-xl md:text-2xl tracking-tight mb-1">{offerTitle || 'Limited Time Offer'}</h3>
                   <p className="text-slate-300 text-sm md:text-base">Complete your purchase in the next:</p>
                 </div>
                 
                 <div className="flex flex-col items-center">
                   <CountdownTimer 
                     expiryTime={offerExpiryTime} 
-                    onExpire={() => setShowOffer(false)} 
+                    onExpire={() => {
+                      console.log('Offer expired, hiding offer section');
+                      setShowOffer(false);
+                    }} 
                     className="mb-3 text-lg font-mono"
                   />
                   <div className="bg-white/10 backdrop-blur-sm px-4 py-2 rounded-lg border border-white/20">
@@ -1635,12 +1761,12 @@ export default function CheckoutPage() {
             {appliedCoupon && (
               <div className="flex justify-between py-1">
                 <span className="text-gray-600">Discount ({appliedCoupon.code})</span>
-                <span className="font-medium">-₹{appliedCoupon.discountAmount.toFixed(2)}</span>
+                <span className="font-medium">-₹{(appliedCoupon.discountAmount || 0).toFixed(2)}</span>
               </div>
             )}
             <div className="flex justify-between py-1 font-semibold">
               <span>Total</span>
-              <span>₹{calculateFinalTotal().finalTotal.toFixed(2)}</span>
+              <span>₹{(calculateFinalTotal()?.finalTotal || 0).toFixed(2)}</span>
             </div>
           </div>
         </div>
@@ -1675,8 +1801,36 @@ export default function CheckoutPage() {
               </Button>
             )}
           </div>
-          {couponError && (
-            <p className="text-red-600">{couponError}</p>
+          {couponError && <p className="text-red-500 text-sm">{couponError}</p>}
+          
+          {/* Suggested Coupons Section */}
+          {suggestedCouponsLoading ? (
+            <div className="flex items-center space-x-2 text-sm text-gray-500">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span>Loading available coupons...</span>
+            </div>
+          ) : suggestedCoupons.length > 0 && (
+            <div className="mt-3">
+              <p className="text-sm text-gray-500 mb-2">Available coupons:</p>
+              <div className="flex flex-wrap gap-2">
+                {suggestedCoupons.map((coupon) => (
+                  <button
+                    key={coupon.id}
+                    type="button"
+                    onClick={() => {
+                      setCouponCode(coupon.code);
+                      applyCoupon();
+                    }}
+                    className="inline-flex items-center px-3 py-1.5 bg-gray-100 hover:bg-gray-200 border border-gray-300 rounded-md text-sm transition-colors"
+                  >
+                    <span className="font-medium">{coupon.code}</span>
+                    {coupon.description && (
+                      <span className="ml-1 text-xs text-gray-500">- {coupon.description}</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
           )}
         </div>
 
@@ -1760,20 +1914,20 @@ export default function CheckoutPage() {
                 {appliedCoupon && (
                   <div className="flex justify-between text-green-600">
                     <span>Discount ({appliedCoupon.code})</span>
-                    <span>-₹{appliedCoupon.discountAmount.toFixed(2)}</span>
+                    <span>-₹{(appliedCoupon.discountAmount || 0).toFixed(2)}</span>
                   </div>
                 )}
-                {showOffer && calculateFinalTotal().offerDiscountAmount > 0 && (
+                {showOffer && calculateFinalTotal()?.offerDiscountAmount > 0 && (
                   <div className="flex justify-between text-green-600 font-medium">
                     <span>Limited Time Offer ({offerDiscount}%)</span>
-                    <span>-₹{calculateFinalTotal().offerDiscountAmount.toFixed(2)}</span>
+                    <span>-₹{(calculateFinalTotal()?.offerDiscountAmount || 0).toFixed(2)}</span>
                   </div>
                 )}
               </div>
               
               <div className="flex justify-between py-3 text-lg font-bold">
                 <span>Total</span>
-                <span>₹{calculateFinalTotal().finalTotal.toFixed(2)}</span>
+                <span>₹{(calculateFinalTotal()?.finalTotal || 0).toFixed(2)}</span>
               </div>
               
               <div className="mt-4 flex flex-wrap gap-2 justify-center">
