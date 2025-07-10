@@ -20,7 +20,8 @@ import {
   createRazorpayOrder,
   verifyRazorpayPayment,
   captureRazorpayPayment,
-  openRazorpayCheckout
+  openRazorpayCheckout,
+  getRazorpayKeySecret
 } from '@/lib/razorpay-client';
 import { trackEcommerceEvent } from '@/utils/analytics';
 import { 
@@ -38,6 +39,19 @@ import {
 } from '@/lib/analytics';
 import { AddressAutocomplete } from '@/components/AddressAutocomplete';
 
+interface CouponData {
+  id: string;
+  code: string;
+  type: 'percentage' | 'fixed';
+  amount: number;
+  active: boolean;
+  expiration_date?: string;
+  min_purchase?: number;
+  max_uses?: number;
+  current_uses?: number;
+  discountAmount?: number;
+}
+
 interface CheckoutFormData {
   name: string;
   email: string;
@@ -48,13 +62,7 @@ interface CheckoutFormData {
   phone: string;
 }
 
-interface CouponData {
-  couponId: string;
-  code: string;
-  type: 'percentage' | 'fixed_amount';
-  amount: number;
-  discountAmount: number;
-}
+// Using the more complete CouponData interface defined above
 
 interface OrderData {
   id: string;
@@ -334,8 +342,8 @@ export default function CheckoutPage() {
     
     setIsFormValid(isValid && isEmailValid && isPhoneValid);
   };
-
-  // New function to validate coupons directly in frontend
+  
+  // Function to validate coupons directly in frontend
   const validateCouponInFrontend = async (code: string, currentSubtotal: number) => {
     try {
       // Search for the coupon directly
@@ -369,12 +377,25 @@ export default function CheckoutPage() {
 
       // Calculate discount
       let discountAmount = 0;
-      if (coupon.type === 'percentage') {
-        discountAmount = (currentSubtotal * coupon.amount) / 100;
+      if (coupon.discount_type === 'percentage') {
+        console.log(`Calculating percentage discount: subtotal=${currentSubtotal}, coupon amount=${coupon.discount_value}, coupon type=${coupon.discount_type}`);
+        // Ensure coupon.discount_value is a number and not zero
+        const percentageAmount = Number(coupon.discount_value) || 0;
+        discountAmount = (currentSubtotal * percentageAmount) / 100;
+        console.log(`Frontend validation - percentage discount: ${currentSubtotal} * ${percentageAmount}% = ${discountAmount}`);
       } else {
         // Apply full fixed amount regardless of subtotal
-        discountAmount = coupon.amount;
+        discountAmount = Number(coupon.discount_value) || 0;
+        console.log(`Frontend validation - fixed discount: ${discountAmount}`);
       }
+      
+      // Ensure discount amount is a number and not too small
+      if (typeof discountAmount !== 'number' || isNaN(discountAmount)) {
+        console.warn('Invalid discount amount, setting to 0');
+        discountAmount = 0;
+      }
+      discountAmount = parseFloat(discountAmount.toFixed(2));
+      console.log('Frontend validation - final discount amount:', discountAmount);
 
       return {
         valid: true,
@@ -386,115 +407,79 @@ export default function CheckoutPage() {
       console.error('Error validating coupon:', error);
       return { valid: false, message: 'Failed to validate coupon' };
     }
-  };
+  }
 
-  // New function to apply coupon code
-  const applyCoupon = async () => {
-    // Reset previous coupon states
-    setCouponError(null);
-    setAppliedCoupon(null);
+// Function to apply coupon code from input field
+const applyCoupon = async () => {
+  if (!couponCode) {
+    setCouponError('Please enter a coupon code');
+    return;
+  }
+  
+  const code = couponCode.trim();
+  await handleApplyCoupon(code);
+};
+
+// Function to handle applying a coupon with a specific code
+const handleApplyCoupon = async (code: string) => {
+  setCouponCode(code); // Update the input field
+  setCouponLoading(true);
+  
+  try {
+    console.log('Validating coupon:', code, 'Subtotal:', subtotal);
     
-    if (!couponCode.trim()) {
-      setCouponError('Please enter a coupon code');
+    // Use frontend validation directly since server endpoint isn't available
+    const validationResult = await validateCouponInFrontend(code, subtotal);
+    console.log('Validation result:', validationResult);
+    
+    if (!validationResult.valid) {
+      setCouponError(validationResult.message);
+      setAppliedCoupon(null);
       return;
     }
     
-    setCouponLoading(true);
+    // Ensure discount amount is a number and properly formatted
+    let discountAmount = parseFloat((validationResult.discountAmount || 0).toFixed(2));
     
-    try {
-      try {
-        // First try the API endpoint if available
-        const baseUrl = pocketbase.baseUrl.endsWith('/') 
-          ? pocketbase.baseUrl.slice(0, -1) 
-          : pocketbase.baseUrl;
-        
-        const response = await fetch(`${baseUrl}/api/coupons/validate`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            code: couponCode.trim(),
-            subtotal: subtotal
-          }),
-        });
-        
-        if (response.status === 404) {
-          // API endpoint not found - fallback to frontend validation
-          console.warn('Coupon API endpoint not available, using frontend validation');
-          const result = await validateCouponInFrontend(couponCode.trim(), subtotal);
-          
-          if (result.valid) {
-            setAppliedCoupon({
-              couponId: result.coupon.id,
-              code: result.coupon.code,
-              type: result.coupon.type,
-              amount: result.coupon.amount,
-              discountAmount: result.discountAmount
-            });
-            setCouponError(null);
-            toast({
-              title: "Coupon Applied",
-              description: result.message,
-            });
-          } else {
-            setCouponError(result.message);
-            setAppliedCoupon(null);
-          }
-          return;
-        }
-        
-        const apiResult = await response.json();
-        
-        if (response.ok && apiResult.success) {
-          setAppliedCoupon(apiResult.data);
-          setCouponError(null);
-          toast({
-            title: "Coupon Applied",
-            description: apiResult.message,
-          });
-        } else {
-          setCouponError(apiResult.message || 'Invalid coupon code');
-          setAppliedCoupon(null);
-        }
-      } catch (fetchError) {
-        console.error('Error accessing coupon API:', fetchError);
-        // Fallback to frontend validation
-        const result = await validateCouponInFrontend(couponCode.trim(), subtotal);
-        
-        if (result.valid) {
-          setAppliedCoupon({
-            couponId: result.coupon.id,
-            code: result.coupon.code,
-            type: result.coupon.type,
-            amount: result.coupon.amount,
-            discountAmount: result.discountAmount
-          });
-          setCouponError(null);
-          toast({
-            title: "Coupon Applied",
-            description: result.message,
-          });
-        } else {
-          setCouponError(result.message);
-          setAppliedCoupon(null);
-        }
-      }
-    } catch (error) {
-      console.error('Error applying coupon:', error);
-      setCouponError('Failed to apply coupon. Please try again.');
-      setAppliedCoupon(null);
-    } finally {
-      setCouponLoading(false);
+    // Double-check that we have a valid discount amount
+    if (validationResult.coupon?.discount_type === 'percentage' && validationResult.coupon?.discount_value > 0) {
+      // Recalculate to ensure it's correct
+      const percentageAmount = Number(validationResult.coupon.discount_value);
+      discountAmount = parseFloat(((subtotal * percentageAmount) / 100).toFixed(2));
+      console.log(`Recalculated percentage discount: ${subtotal} * ${percentageAmount}% = ${discountAmount}`);
     }
-  };
-  
-  // Function to remove applied coupon
-  const removeCoupon = () => {
-    setAppliedCoupon(null);
-    setCouponCode('');
+    
+    console.log('Final discount amount to be applied:', discountAmount);
+    
+    setAppliedCoupon({
+      id: validationResult.coupon?.id || '',
+      code: validationResult.coupon?.code || code,
+      type: validationResult.coupon?.discount_type || 'percentage',
+      amount: validationResult.coupon?.discount_value || 0,
+      active: true,
+      discountAmount
+    });
+    
     setCouponError(null);
-  };
+    toast({
+      title: "Coupon Applied",
+      description: `Discount of ₹${discountAmount.toFixed(2)} has been applied`,
+    });
+  } catch (error) {
+    console.error('Coupon validation completely failed:', error);
+    setCouponError('Failed to apply coupon. Please try again.');
+    setAppliedCoupon(null);
+  } finally {
+    setCouponLoading(false);
+  }
+};
+
+// Function to remove applied coupon
+const removeCoupon = () => {
+  setAppliedCoupon(null);
+  setCouponCode('');
+  setCouponError(null);
+};
 
   const handlePaymentSuccess = async (response: RazorpayResponse, orderId: string) => {
     try {
@@ -849,33 +834,42 @@ export default function CheckoutPage() {
     const finalSubtotal = subtotal;
     let finalDiscount = 0;
     
-    if (appliedCoupon) {
-      finalDiscount = appliedCoupon.discountAmount;
+    // Apply coupon discount if available
+    let couponDiscountAmount = 0;
+    if (appliedCoupon && appliedCoupon.discountAmount) {
+      couponDiscountAmount = appliedCoupon.discountAmount;
+      finalDiscount += couponDiscountAmount;
+      console.log(`Applying coupon discount: ${couponDiscountAmount}`);
     }
     
     // Apply limited time offer discount if active
     let offerDiscountAmount = 0;
     if (showOffer && offerDiscount > 0) {
-      offerDiscountAmount = (finalSubtotal * offerDiscount) / 100;
+      offerDiscountAmount = parseFloat(((finalSubtotal * offerDiscount) / 100).toFixed(2));
       finalDiscount += offerDiscountAmount;
+      console.log(`Applying offer discount: ${offerDiscountAmount}`);
     }
+    
+    // Round the final discount to 2 decimal places
+    finalDiscount = parseFloat(finalDiscount.toFixed(2));
+    console.log(`Total discount: ${finalDiscount}`);
     
     const shippingCost = subtotal >= 100 ? 0 : 10;
     const finalTotal = Math.max(0, finalSubtotal + shippingCost - finalDiscount);
+    console.log(`Final calculation: ${finalSubtotal} + ${shippingCost} - ${finalDiscount} = ${finalTotal}`);
     
     return {
       finalSubtotal,
       finalDiscount,
+      couponDiscountAmount,
       offerDiscountAmount,
       shippingCost,
       finalTotal
     };
   };
-
+  
+  // Start tracking checkout form
   useEffect(() => {
-    document.title = 'Checkout | Konipai';
-    
-    // Start tracking the form
     if (items && items.length > 0) {
       trackFormStart('checkout_form', 'checkout-form');
     }
@@ -1010,7 +1004,7 @@ export default function CheckoutPage() {
           price: Number(item.product.price) || 0,
           quantity: item.quantity,
           item_variant: item.color || undefined,
-          discount: appliedCoupon ? (appliedCoupon.discountAmount / items.length) : 0
+          discount: appliedCoupon && appliedCoupon.discountAmount ? (appliedCoupon.discountAmount / items.length) : 0
         })),
         calculateFinalTotal().finalTotal,
         'standard',
@@ -1152,7 +1146,7 @@ export default function CheckoutPage() {
         price: Number(item.product.price) || 0,
         quantity: item.quantity,
         item_variant: item.color || undefined,
-        discount: appliedCoupon ? (appliedCoupon.discountAmount / items.length) : 0
+        discount: appliedCoupon && appliedCoupon.discountAmount ? (appliedCoupon.discountAmount / items.length) : 0
       })),
       order.total,
       'Razorpay',
@@ -1818,8 +1812,8 @@ export default function CheckoutPage() {
                     key={coupon.id}
                     type="button"
                     onClick={() => {
-                      setCouponCode(coupon.code);
-                      applyCoupon();
+                      // Apply the coupon directly with the code instead of relying on state update
+                      handleApplyCoupon(coupon.code);
                     }}
                     className="inline-flex items-center px-3 py-1.5 bg-gray-100 hover:bg-gray-200 border border-gray-300 rounded-md text-sm transition-colors"
                   >
