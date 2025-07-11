@@ -2,16 +2,32 @@
  * Facebook Pixel event tracking utility
  */
 
+// Store last event timestamps to prevent duplicate events
+const lastEventTimestamps: Record<string, number> = {};
+const EVENT_THROTTLE_MS = 2000; // 2 seconds throttle
+
 /**
  * Track a standard event with Facebook Pixel
  * @param eventName The standard Facebook event name
  * @param params Optional parameters for the event
  */
 export const trackPixelEvent = (eventName: string, params?: Record<string, unknown>): void => {
-  if (window.fbq) {
-    window.fbq('track', eventName, params);
-    console.log(`Meta Pixel: Tracked ${eventName} event`, params);
+  if (!window.fbq) return;
+  
+  // Create a unique key for this event
+  const eventKey = `${eventName}_${JSON.stringify(params || {})}`;
+  const now = Date.now();
+  
+  // Check if this exact event was fired recently
+  if (lastEventTimestamps[eventKey] && now - lastEventTimestamps[eventKey] < EVENT_THROTTLE_MS) {
+    console.log(`Meta Pixel: Skipped duplicate ${eventName} event (throttled)`);
+    return;
   }
+  
+  // Track the event and update timestamp
+  window.fbq('track', eventName, params);
+  lastEventTimestamps[eventKey] = now;
+  console.log(`Meta Pixel: Tracked ${eventName} event`, params);
 };
 
 /**

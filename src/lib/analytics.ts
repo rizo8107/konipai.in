@@ -14,6 +14,39 @@ import {
   pixelEvents
 } from './pixel';
 
+// Throttling and debouncing utilities
+const THROTTLE_DELAY = 2000; // 2 seconds
+const eventTimestamps: Record<string, number> = {};
+const sentEvents: Set<string> = new Set();
+
+// Clean up sent events periodically to prevent memory leaks
+setInterval(() => {
+  const now = Date.now();
+  // Remove events older than 10 minutes
+  for (const [key, timestamp] of Object.entries(eventTimestamps)) {
+    if (now - timestamp > 600000) { // 10 minutes
+      delete eventTimestamps[key];
+    }
+  }
+  // Clear sent events set if it gets too large
+  if (sentEvents.size > 1000) {
+    sentEvents.clear();
+  }
+}, 300000); // Clean up every 5 minutes
+
+// Generate a unique key for an event to prevent duplicates
+const getEventKey = (event: string, data: Record<string, any>): string => {
+  const keyParts = [event];
+  if (data.form_id) keyParts.push(data.form_id);
+  if (data.transaction_id) keyParts.push(data.transaction_id);
+  if (data.button_name) keyParts.push(data.button_name);
+  if (data.item_id) keyParts.push(data.item_id);
+  if (data.items && data.items.length > 0) {
+    keyParts.push(data.items.map((item: any) => item.item_id || '').join(','));
+  }
+  return keyParts.join('-');
+};
+
 // Define types for analytics events
 interface AnalyticsEvent {
   event: string;
@@ -58,18 +91,50 @@ if (typeof window !== 'undefined') {
   window.dataLayer = window.dataLayer || [];
 }
 
-// Helper function to push events to the dataLayer
+// Helper function to push events to the dataLayer with throttling
 export const pushToDataLayer = (data: AnalyticsEvent): void => {
   if (typeof window !== 'undefined' && window.dataLayer) {
-    // Add UTM parameters to all events
+    const now = Date.now();
+    const eventType = data.event || 'unknown';
+    const eventKey = getEventKey(eventType, data as Record<string, any>);
+    
+    // Check if this exact event was sent recently (deduplication)
+    if (sentEvents.has(eventKey)) {
+      console.log(`Skipping duplicate event: ${eventType}`);
+      return;
+    }
+    
+    // Check if we should throttle this event type
+    const lastTimestamp = eventTimestamps[eventType] || 0;
+    if (now - lastTimestamp < THROTTLE_DELAY) {
+      console.log(`Throttling event: ${eventType}`);
+      return;
+    }
+    
+    // Update timestamp and mark event as sent
+    eventTimestamps[eventType] = now;
+    sentEvents.add(eventKey);
+    
+    // Add UTM parameters and timestamp to ensure events are not batched together
     const utmParams = getUtmParamsForAnalytics();
     const enrichedData = {
       ...data,
-      ...utmParams
+      ...utmParams,
+      timestamp: now
     };
     
-    window.dataLayer.push(enrichedData);
-    console.log('Data pushed to dataLayer:', enrichedData);
+    // Push to dataLayer
+    try {
+      window.dataLayer.push(enrichedData);
+      console.log(`Event pushed to dataLayer: ${eventType}`);
+    } catch (error) {
+      console.error(`Error pushing event to dataLayer: ${error}`);
+    }
+    
+    // Clean up this specific event key after 10 seconds
+    setTimeout(() => {
+      sentEvents.delete(eventKey);
+    }, 10000);
   } else {
     console.warn('DataLayer not available');
   }
@@ -516,14 +581,23 @@ export const trackButtonClick = (buttonName: string, buttonText: string, pagePat
   });
 };
 
-// Form interaction tracking
+// Form interaction tracking - with debouncing
+let formStartTimeout: ReturnType<typeof setTimeout> | null = null;
 export const trackFormStart = (formName: string, formId: string): void => {
-  pushToDataLayer({
-    event: 'form_start',
-    form_name: formName,
-    form_id: formId,
-    timestamp: new Date().toISOString()
-  });
+  // Clear any pending form start events
+  if (formStartTimeout) {
+    clearTimeout(formStartTimeout);
+  }
+  
+  // Debounce form start events
+  formStartTimeout = setTimeout(() => {
+    pushToDataLayer({
+      event: 'form_start',
+      form_name: formName,
+      form_id: formId,
+      timestamp: new Date().toISOString()
+    });
+  }, 300); // 300ms debounce
 };
 
 export const trackFormCompletion = async (

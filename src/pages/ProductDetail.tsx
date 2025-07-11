@@ -282,16 +282,21 @@ const ProductDetail = () => {
           setSelectedColor(data.colors[0]);
         }
         
-        // Track product view with GTM
-        trackProductView({
-          item_id: data.id,
-          item_name: data.name,
-          price: Number(data.price) || 0,
-          quantity: 1,
-          item_category: data.category || 'Tote Bag',
-          item_brand: 'Konipai',
-          affiliation: 'Konipai Web Store'
-        });
+        // Track product view with GTM - only once per session
+        const viewedProductKey = `viewed_product_${data.id}`;
+        if (!sessionStorage.getItem(viewedProductKey)) {
+          trackProductView({
+            item_id: data.id,
+            item_name: data.name,
+            price: Number(data.price) || 0,
+            quantity: 1,
+            item_category: data.category || 'Tote Bag',
+            item_brand: 'Konipai',
+            affiliation: 'Konipai Web Store'
+          });
+          // Mark this product as viewed in this session
+          sessionStorage.setItem(viewedProductKey, 'true');
+        }
         
         // Load reviews to calculate average rating if product has reviews
         if (data.reviews && data.reviews > 0) {
@@ -429,6 +434,9 @@ const ProductDetail = () => {
     setQuantity(prev => prev + 1);
   };
   
+  // Track last add to cart time to prevent duplicate events
+  const lastAddToCartRef = useRef<number>(0);
+  
   const handleAddToCart = () => {
     if (!product) return;
     
@@ -439,20 +447,29 @@ const ProductDetail = () => {
       selectedColor?.name || ''
     );
     
-    // Track add to cart with enhanced properties
-    trackAddToCart({
-      item_id: product.id,
-      item_name: product.name,
-      price: Number(product.price) || 0,
-      quantity: quantity,
-      item_variant: selectedColor?.name,
-      item_category: product.category || 'Tote Bag',
-      item_brand: 'Konipai',
-      affiliation: 'Konipai Web Store'
-    });
+    // Prevent duplicate tracking events with throttling
+    const now = Date.now();
+    const THROTTLE_MS = 2000; // 2 seconds
     
-    // Track button click
-    trackButtonClick('add_to_cart_button', 'Add to Cart', window.location.pathname);
+    if (now - lastAddToCartRef.current > THROTTLE_MS) {
+      // Track add to cart with enhanced properties
+      trackAddToCart({
+        item_id: product.id,
+        item_name: product.name,
+        price: Number(product.price) || 0,
+        quantity: quantity,
+        item_variant: selectedColor?.name,
+        item_category: product.category || 'Tote Bag',
+        item_brand: 'Konipai',
+        affiliation: 'Konipai Web Store'
+      });
+      
+      // Only track button click if we're tracking the add to cart event
+      trackButtonClick('add_to_cart_button', 'Add to Cart', window.location.pathname);
+      
+      // Update last tracking time
+      lastAddToCartRef.current = now;
+    }
     
     toast({
       title: "Added to cart",
@@ -460,13 +477,25 @@ const ProductDetail = () => {
     });
   };
 
+  // Track last wishlist action time to prevent duplicate events
+  const lastWishlistActionRef = useRef<number>(0);
+  
   const toggleWishlist = async () => {
-    // Track wishlist button click
-    trackButtonClick(
-      isWishlisted ? 'remove_from_wishlist_button' : 'add_to_wishlist_button', 
-      isWishlisted ? 'Remove from Wishlist' : 'Add to Wishlist',
-      window.location.pathname
-    );
+    // Prevent duplicate tracking events with throttling
+    const now = Date.now();
+    const THROTTLE_MS = 2000; // 2 seconds
+    
+    if (now - lastWishlistActionRef.current > THROTTLE_MS) {
+      // Track wishlist button click
+      trackButtonClick(
+        isWishlisted ? 'remove_from_wishlist_button' : 'add_to_wishlist_button', 
+        isWishlisted ? 'Remove from Wishlist' : 'Add to Wishlist',
+        window.location.pathname
+      );
+      
+      // Update last tracking time
+      lastWishlistActionRef.current = now;
+    }
     
     try {
       if (!user) {

@@ -306,7 +306,7 @@ export default function CheckoutPage() {
         }
       } catch (error) {
         // Only log error if it's not a 404 (no address found)
-        if (error.status !== 404) {
+        if (error && typeof error === 'object' && 'status' in error && error.status !== 404) {
           console.warn('Failed to load saved address:', error);
         }
       }
@@ -765,20 +765,29 @@ const removeCoupon = () => {
         // Don't fail the order just because the webhook failed
       }
 
-      // Track payment success event
-      trackPaymentSuccess(orderId, paymentId, calculateFinalTotal().finalTotal, 'razorpay');
-      trackDynamicConversion({
-        conversion_type: 'Sale',
-        transaction_id: orderId,
-        value: calculateFinalTotal().finalTotal,
-        currency: 'INR',
-        items: items.map(item => ({
-          item_id: item.productId,
-          item_name: item.product.name,
-          price: item.product.price,
-          quantity: item.quantity
-        }))
-      });
+      // Track payment success event - use sessionStorage to prevent duplicate tracking
+      const paymentTrackedKey = `payment_tracked_${orderId}`;
+      if (!sessionStorage.getItem(paymentTrackedKey)) {
+        // Track payment success event
+        trackPaymentSuccess(orderId, paymentId, calculateFinalTotal().finalTotal, 'razorpay');
+        
+        // Track conversion
+        trackDynamicConversion({
+          conversion_type: 'Sale',
+          transaction_id: orderId,
+          value: calculateFinalTotal().finalTotal,
+          currency: 'INR',
+          items: items.map(item => ({
+            item_id: item.productId,
+            item_name: item.product.name,
+            price: item.product.price,
+            quantity: item.quantity
+          }))
+        });
+        
+        // Mark this payment as tracked to prevent duplicate events
+        sessionStorage.setItem(paymentTrackedKey, 'true');
+      }
 
       // Clear the cart after successful order
       clearCart();
@@ -806,7 +815,12 @@ const removeCoupon = () => {
       });
       
       // Track payment issue
-      trackPaymentFailure(error instanceof Error ? error.message : "Unknown error");
+      trackPaymentFailure(
+        orderId, 
+        calculateFinalTotal().finalTotal, 
+        'razorpay', 
+        error instanceof Error ? error.message : "Unknown error"
+      );
       
       // Attempt to update order status to note the issue if we have an order ID
       if (orderId) {
@@ -931,8 +945,8 @@ const removeCoupon = () => {
         item_variant: item.color || undefined,
         affiliation: 'Konipai Web Store'
       })),
-      calculateFinalTotal().finalTotal,
-      appliedCoupon?.code
+      calculateFinalTotal().finalTotal
+      // Removed third parameter as trackBeginCheckout only accepts two parameters
     );
     
     // Track the checkout button click
@@ -1394,12 +1408,25 @@ const removeCoupon = () => {
             description: error instanceof Error ? error.message : "Failed to detect your location.",
           });
         } finally {
-          toast.dismiss(loadingToast);
+          // Fix TypeScript error by using the correct toast dismiss approach
+          if (loadingToast) {
+            const { dismiss } = toast;
+            if (dismiss && typeof dismiss === 'function') {
+              dismiss(loadingToast);
+            }
+          }
         }
       },
       (error) => {
         console.error('Geolocation error:', error);
-        toast.dismiss(loadingToast);
+        
+        // Fix TypeScript error by using the correct toast dismiss approach
+        if (loadingToast) {
+          const { dismiss } = toast;
+          if (dismiss && typeof dismiss === 'function') {
+            dismiss(loadingToast);
+          }
+        }
         
         let errorMessage = "Failed to detect your location.";
         
@@ -1639,7 +1666,7 @@ const removeCoupon = () => {
             Shipping Address
           </h2>
           <div className="space-y-4">
-            <div className="flex items-start gap-2">
+            <div className="space-y-2 sm:space-y-0 sm:flex sm:items-start sm:gap-2">
               <div className="flex-1">
                 <AddressAutocomplete
                   onAddressSelect={handleAddressSelect}
@@ -1650,7 +1677,7 @@ const removeCoupon = () => {
               <Button 
                 type="button" 
                 variant="outline" 
-                className="mt-8" 
+                className="w-full sm:w-auto sm:mt-8" 
                 onClick={handleDetectLocation}
               >
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="1"/><path d="M12 7.5V6"/><path d="M12 18v-1.5"/><path d="M16.5 12H18"/><path d="M6 12h1.5"/></svg>

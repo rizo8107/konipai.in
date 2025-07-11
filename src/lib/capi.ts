@@ -5,6 +5,26 @@ const PIXEL_ID = '504160516081802'; // Meta Pixel ID
 const ACCESS_TOKEN = 'EAAS7f3ZCpw5UBO9iFeBY1t34n4zElc2IL5T9ZCcPpiWG83p6ZC4jJBekPYZA5w9qLpwUhGju8t5zZBog9h0ZBj2KUtQjyZBmGd5yZBJld36sCkDUz5msSIxOhtvZBmDV4FxJFkYDNzuf1WboMA7YVSZCAd6Dxg0kv1lZAQC6m94s9V4ddlJ2NhH6qiIivi1TQ3bZC4ZCpyAZDZD';
 const API_ENDPOINT = `https://graph.facebook.com/${CAPI_VERSION}/${PIXEL_ID}/events`;
 
+// Throttling and deduplication for CAPI events
+const CAPI_THROTTLE_MS = 3000; // 3 seconds throttle
+const lastEventTimestamps: Record<string, number> = {};
+const sentEvents: Set<string> = new Set();
+
+// Clean up sent events periodically to prevent memory leaks
+setInterval(() => {
+  const now = Date.now();
+  // Remove events older than 10 minutes
+  for (const [key, timestamp] of Object.entries(lastEventTimestamps)) {
+    if (now - timestamp > 600000) { // 10 minutes
+      delete lastEventTimestamps[key];
+    }
+  }
+  // Clear sent events set if it gets too large
+  if (sentEvents.size > 1000) {
+    sentEvents.clear();
+  }
+}, 300000); // Clean up every 5 minutes
+
 interface UserData {
   em?: string[]; // Hashed email addresses
   ph?: string[]; // Hashed phone numbers
@@ -120,11 +140,33 @@ export const sendConversionEvent = async (
   customData?: CustomData
 ): Promise<void> => {
   try {
+    // Create a unique event key for throttling and deduplication
+    const eventKey = `${eventName}-${userData.email || ''}-${userData.phone || ''}-${customData?.value || ''}`;
+    
+    // Check if this event was recently sent
+    const now = Date.now();
+    const lastSent = lastEventTimestamps[eventKey] || 0;
+    
+    if (now - lastSent < CAPI_THROTTLE_MS) {
+      console.log(`CAPI event throttled (sent ${now - lastSent}ms ago):`, eventName);
+      return;
+    }
+    
+    // Check for duplicate events
+    if (sentEvents.has(eventKey)) {
+      console.log(`CAPI duplicate event skipped:`, eventName);
+      return;
+    }
+    
+    // Update timestamps and mark as sent
+    lastEventTimestamps[eventKey] = now;
+    sentEvents.add(eventKey);
+    
     const hashedUserData = await prepareUserData(userData);
     
     const event: ServerEvent = {
       event_name: eventName,
-      event_time: Math.floor(Date.now() / 1000),
+      event_time: Math.floor(now / 1000),
       action_source: 'website',
       event_source_url: window.location.href,
       user_data: hashedUserData,
