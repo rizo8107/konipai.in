@@ -105,6 +105,7 @@ export default function CheckoutPage() {
   const [offerDiscount, setOfferDiscount] = useState(0);
   const [offerTitle, setOfferTitle] = useState('');
   const [offerLoading, setOfferLoading] = useState(true);
+  const [hideOfferBanner, setHideOfferBanner] = useState(false);
   
   const [formData, setFormData] = useState<CheckoutFormData>({
     name: user?.name || '',
@@ -208,15 +209,10 @@ export default function CheckoutPage() {
               setOfferDiscount(offer.discount_percentage || 0);
               setOfferTitle(offer.title || '');
               
-              // Make sure we have a valid date
-              if (offer.end_date) {
-                setOfferExpiryTime(new Date(offer.end_date));
-              } else {
-                // Default to 15 minutes from now if no end date
-                const defaultExpiry = new Date();
-                defaultExpiry.setMinutes(defaultExpiry.getMinutes() + 15);
-                setOfferExpiryTime(defaultExpiry);
-              }
+              // Always set to 30 minutes from now regardless of database end_date
+              const expiryTime = new Date();
+              expiryTime.setMinutes(expiryTime.getMinutes() + 30);
+              setOfferExpiryTime(expiryTime);
               
               setShowOffer(true);
               console.log('Active offer found:', offer.title, offer.discount_percentage + '%');
@@ -234,9 +230,9 @@ export default function CheckoutPage() {
             setOfferDiscount(5); // 5% discount
             setOfferTitle('Limited Time Offer');
             
-            // Set expiry to 15 minutes from now
+            // Set expiry to 30 minutes from now
             const defaultExpiry = new Date();
-            defaultExpiry.setMinutes(defaultExpiry.getMinutes() + 15);
+            defaultExpiry.setMinutes(defaultExpiry.getMinutes() + 30);
             setOfferExpiryTime(defaultExpiry);
             
             setShowOffer(true);
@@ -1264,200 +1260,6 @@ const removeCoupon = () => {
     validateForm(updatedFormData);
   };
 
-  const handleDetectLocation = () => {
-    // Track button click
-    trackButtonClick('detect_location', 'Detect Location', window.location.pathname);
-    
-    // Show loading toast
-    const loadingToast = toast({
-      title: "Detecting Location",
-      description: "Please wait while we detect your location...",
-    });
-    
-    if (!navigator.geolocation) {
-      toast({
-        variant: "destructive",
-        title: "Not Supported",
-        description: "Geolocation is not supported by your browser.",
-      });
-      return;
-    }
-    
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        try {
-          const { latitude, longitude } = position.coords;
-          
-          // Use Google Maps Geocoding API to get address from coordinates
-          const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
-          
-          if (!apiKey) {
-            toast({
-              variant: "destructive",
-              title: "API Key Missing",
-              description: "Google Maps API key is required for location detection.",
-            });
-            return;
-          }
-          
-          const response = await fetch(
-            `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latitude},${longitude}&key=${apiKey}`
-          );
-          
-          const data = await response.json();
-          
-          if (data.status !== "OK" || !data.results || data.results.length === 0) {
-            throw new Error("Could not retrieve address from your location.");
-          }
-          
-          // Parse the address components
-          const addressResult = data.results[0];
-          let street = "";
-          let city = "";
-          let state = "";
-          let postalCode = "";
-          let country = "";
-          let sublocality = "";
-          let landmark = "";
-          
-          console.log('Geocoding result:', addressResult);
-          
-          // Extract address components
-          addressResult.address_components.forEach((component: any) => {
-            const types = component.types;
-            console.log('Component:', component.long_name, types);
-            
-            if (types.includes("street_number")) {
-              street = component.long_name + " ";
-            } else if (types.includes("premise")) {
-              // Use premise if street_number is not available
-              if (!street) street = component.long_name + " ";
-            } else if (types.includes("route")) {
-              street += component.long_name;
-            } else if (types.includes("landmark")) {
-              landmark = component.long_name;
-            } else if (types.includes("sublocality_level_1") || types.includes("sublocality")) {
-              sublocality = component.long_name;
-            } else if (types.includes("locality")) {
-              city = component.long_name;
-            } else if (types.includes("administrative_area_level_1")) {
-              state = component.long_name;
-            } else if (types.includes("postal_code")) {
-              postalCode = component.long_name;
-            } else if (types.includes("country")) {
-              country = component.long_name;
-            }
-          });
-          
-          // Construct a complete street address
-          if (!street) {
-            // If no street information was found, use the formatted address up to the first comma
-            const formattedParts = addressResult.formatted_address.split(',');
-            street = formattedParts[0];
-          } else if (landmark) {
-            // Add landmark information if available
-            street = `${street} (near ${landmark})`;
-          }
-          
-          // If sublocality exists but no city, use sublocality as city
-          if (sublocality && !city) {
-            city = sublocality;
-          } else if (sublocality && city) {
-            // Add sublocality to street address for more precision
-            street = `${street}, ${sublocality}`;
-          }
-          
-          console.log('Parsed address:', { street, city, state, postalCode, country });
-          
-          // Create a complete address object for the form
-          const updatedFormData = {
-            ...formData,
-            address: street || addressResult.formatted_address.split(',')[0] || '',
-            city: city || '',
-            state: state || '',
-            zipCode: postalCode || ''
-          };
-          
-          console.log('Updating form data with:', updatedFormData);
-          
-          // Update form data state
-          setFormData(updatedFormData);
-          
-          // Also trigger the address select handler to ensure all components are updated
-          handleAddressSelect({
-            street: updatedFormData.address,
-            city: updatedFormData.city,
-            state: updatedFormData.state,
-            postalCode: updatedFormData.zipCode,
-            country: country || 'India'
-          });
-          
-          // Validate the form with updated data
-          validateForm(updatedFormData);
-          
-          // Show success toast
-          toast({
-            title: "Location Detected",
-            description: "Your address has been automatically filled.",
-          });
-        } catch (error) {
-          console.error('Error detecting location:', error);
-          toast({
-            variant: "destructive",
-            title: "Detection Failed",
-            description: error instanceof Error ? error.message : "Failed to detect your location.",
-          });
-        } finally {
-          // Fix TypeScript error by using the correct toast dismiss approach
-          if (loadingToast) {
-            const { dismiss } = toast;
-            if (dismiss && typeof dismiss === 'function') {
-              dismiss(loadingToast);
-            }
-          }
-        }
-      },
-      (error) => {
-        console.error('Geolocation error:', error);
-        
-        // Fix TypeScript error by using the correct toast dismiss approach
-        if (loadingToast) {
-          const { dismiss } = toast;
-          if (dismiss && typeof dismiss === 'function') {
-            dismiss(loadingToast);
-          }
-        }
-        
-        let errorMessage = "Failed to detect your location.";
-        
-        if (error.code) {
-          switch (error.code) {
-            case error.PERMISSION_DENIED:
-              errorMessage = "You denied the request for geolocation.";
-              break;
-            case error.POSITION_UNAVAILABLE:
-              errorMessage = "Location information is unavailable.";
-              break;
-            case error.TIMEOUT:
-              errorMessage = "The request to get your location timed out.";
-              break;
-          }
-        }
-        
-        toast({
-          variant: "destructive",
-          title: "Permission Denied",
-          description: errorMessage + " Please enter your address manually.",
-        });
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 0
-      }
-    );
-  };
-
   if (cartLoading) {
     return (
       <div className="container max-w-2xl mx-auto py-16 px-4 text-center">
@@ -1556,11 +1358,11 @@ const removeCoupon = () => {
               <Loader2 className="h-6 w-6 animate-spin text-primary mr-2" />
               <span>Loading offers...</span>
             </div>
-          ) : showOffer && (
-            <div className="relative overflow-hidden bg-gradient-to-r from-slate-900 to-slate-800 text-white p-6 rounded-xl mb-8 shadow-xl border border-slate-700/50">
-              <div className="absolute top-0 left-0 w-full h-full opacity-10">
-                <svg className="absolute right-0 top-0 h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
-                  <polygon fill="currentColor" points="0,0 100,0 100,100" />
+          ) : showOffer && offerExpiryTime && !hideOfferBanner && (
+            <div className="relative overflow-hidden bg-gradient-to-r from-indigo-500 to-purple-600 text-white p-4 md:p-6 rounded-lg mb-8 shadow-lg">
+              <div className="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 opacity-20">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M9.37,5.51C9.19,6.15,9.1,6.82,9.1,7.5c0,4.08,3.32,7.4,7.4,7.4c0.68,0,1.35-0.09,1.99-0.27C17.45,17.19,14.93,19,12,19 c-3.86,0-7-3.14-7-7C5,9.07,6.81,6.55,9.37,5.51z M12,3c-4.97,0-9,4.03-9,9s4.03,9,9,9s9-4.03,9-9c0-0.46-0.04-0.92-0.1-1.36 c-0.98,1.37-2.58,2.26-4.4,2.26c-2.98,0-5.4-2.42-5.4-5.4c0-1.81,0.89-3.42,2.26-4.4C12.92,3.04,12.46,3,12,3L12,3z"/>
                 </svg>
                 <svg className="absolute left-0 bottom-0 h-full transform rotate-180" viewBox="0 0 100 100" preserveAspectRatio="none">
                   <polygon fill="currentColor" points="0,0 100,0 100,100" />
@@ -1593,6 +1395,32 @@ const removeCoupon = () => {
                 <div className="absolute inset-0 bg-amber-500 rounded-full transform rotate-45"></div>
                 <span className="relative z-10 text-white font-bold text-sm md:text-base transform -rotate-45">{offerDiscount}%</span>
               </div>
+              
+              <button 
+                onClick={() => setHideOfferBanner(true)} 
+                className="absolute top-2 right-2 text-white/80 hover:text-white focus:outline-none"
+                aria-label="Close offer banner"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+              </button>
+            </div>
+          )}
+          {showOffer && offerExpiryTime && hideOfferBanner && (
+            <div className="flex justify-end mb-4">
+              <button 
+                onClick={() => setHideOfferBanner(false)} 
+                className="text-sm text-primary hover:text-primary/80 flex items-center gap-1 focus:outline-none"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
+                  <path d="M2 17l10 5 10-5"></path>
+                  <path d="M2 12l10 5 10-5"></path>
+                </svg>
+                Show Limited Time Offer ({offerDiscount}% discount)
+              </button>
             </div>
           )}
           <div className="flex justify-center items-center mb-8">
@@ -1666,23 +1494,12 @@ const removeCoupon = () => {
             Shipping Address
           </h2>
           <div className="space-y-4">
-            <div className="space-y-2 sm:space-y-0 sm:flex sm:items-start sm:gap-2">
-              <div className="flex-1">
-                <AddressAutocomplete
-                  onAddressSelect={handleAddressSelect}
-                  defaultValue={formData.address}
-                  error={errors?.address || (!formData.address ? "Address is required" : undefined)}
-                />
-              </div>
-              <Button 
-                type="button" 
-                variant="outline" 
-                className="w-full sm:w-auto sm:mt-8" 
-                onClick={handleDetectLocation}
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="1"/><path d="M12 7.5V6"/><path d="M12 18v-1.5"/><path d="M16.5 12H18"/><path d="M6 12h1.5"/></svg>
-                Detect Location
-              </Button>
+            <div className="space-y-2">
+              <AddressAutocomplete
+                onAddressSelect={handleAddressSelect}
+                defaultValue={formData.address}
+                error={errors?.address || (!formData.address ? "Address is required" : undefined)}
+              />
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-2">

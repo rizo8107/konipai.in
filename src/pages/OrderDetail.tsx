@@ -115,7 +115,6 @@ export default function OrderDetail() {
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [unauthorized, setUnauthorized] = useState(false);
 
   // Define fetchOrderDetails with useCallback to avoid dependency cycle
   const fetchOrderDetails = useCallback(async () => {
@@ -125,28 +124,13 @@ export default function OrderDetail() {
       return;
     }
 
-    if (!user) {
-      setUnauthorized(true);
-      setLoading(false);
-      return;
-    }
-
     try {
-      // Get the user's email for security check
-      const userEmail = pocketbase.authStore.model?.email;
-      
-      // Fetch the order details
+      // Fetch the order details - no authentication required
       const orderData = await pocketbase.collection('orders').getOne(orderId, {
         expand: 'shipping_address',
       });
-
-      // Security check: only allow users to view their own orders
-      if (orderData.customer_email !== userEmail) {
-        console.error('Unauthorized: This order does not belong to the current user');
-        setUnauthorized(true);
-        setLoading(false);
-        return;
-      }
+      
+      // No security check needed - order details are public
 
       setOrder(orderData as unknown as Order);
       setError(null);
