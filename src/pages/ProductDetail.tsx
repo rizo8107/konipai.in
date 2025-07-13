@@ -71,6 +71,10 @@ const ProductDetail = () => {
   const [selectedColor, setSelectedColor] = useState<ProductColor | null>(null);
   const { toast } = useToast();
   const relatedLoaded = useRef(false);
+  // Track last add to cart time to prevent duplicate events
+  const lastAddToCartRef = useRef<number>(0);
+  // Track last wishlist action time to prevent duplicate events
+  const lastWishlistActionRef = useRef<number>(0);
   const { user } = useAuth();
   
   const [showSizeGuide, setShowSizeGuide] = useState(false);
@@ -434,9 +438,6 @@ const ProductDetail = () => {
     setQuantity(prev => prev + 1);
   };
   
-  // Track last add to cart time to prevent duplicate events
-  const lastAddToCartRef = useRef<number>(0);
-  
   const handleAddToCart = () => {
     if (!product) return;
     
@@ -477,9 +478,6 @@ const ProductDetail = () => {
     });
   };
 
-  // Track last wishlist action time to prevent duplicate events
-  const lastWishlistActionRef = useRef<number>(0);
-  
   const toggleWishlist = async () => {
     // Prevent duplicate tracking events with throttling
     const now = Date.now();
